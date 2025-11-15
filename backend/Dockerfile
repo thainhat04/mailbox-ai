@@ -1,16 +1,24 @@
-# Builder
-FROM oven/bun:latest AS builder
+FROM node:20-alpine
+
 WORKDIR /app
 
-COPY package.json bun.lockb ./
-RUN bun install
+# Copy package files
+COPY package.json yarn.lock ./
 
+# Install dependencies
+RUN yarn install --frozen-lockfile
+
+# Copy source code
 COPY . .
-RUN bun run build
 
-# Production
-FROM oven/bun:latest
-WORKDIR /app
-COPY --from=builder /app ./
-EXPOSE 8080
-CMD ["bun", "run", "start"]
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Build application
+RUN yarn build
+
+# Expose port
+EXPOSE 3001
+
+# Start application
+CMD ["node", "dist/main"]

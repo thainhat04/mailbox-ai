@@ -1,98 +1,161 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Backend Setup Guide
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Installation
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
+1. **Install dependencies**
 ```bash
-$ yarn install
+yarn install
 ```
 
-## Compile and run the project
-
+2. **Setup environment variables**
 ```bash
-# development
-$ yarn run start
-
-# watch mode
-$ yarn run start:dev
-
-# production mode
-$ yarn run start:prod
+cp .env.example .env
 ```
 
-## Run tests
-
+3. **Setup Husky**
 ```bash
-# unit tests
-$ yarn run test
-
-# e2e tests
-$ yarn run test:e2e
-
-# test coverage
-$ yarn run test:cov
+yarn prepare
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
+4. **Generate Prisma Client**
 ```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
+yarn prisma:generate
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+5. **Run database migrations**
+```bash
+yarn prisma:migrate
+```
 
-## Resources
+## Development
 
-Check out a few resources that may come in handy when working with NestJS:
+```bash
+yarn start:dev
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Database
 
-## Support
+```bash
+# Generate Prisma client
+yarn prisma:generate
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+# Create migration
+yarn prisma:migrate
 
-## Stay in touch
+# Open Prisma Studio
+yarn prisma:studio
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## Code Quality
 
-## License
+```bash
+# Lint code
+yarn lint
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+# Format code
+yarn format
+```
+
+## Docker
+
+```bash
+# Build image
+docker build -t mailbox-backend .
+
+# Run container
+docker run -p 3001:3001 mailbox-backend
+```
+
+## API Documentation
+
+Once the server is running, access Swagger documentation at:
+- URL: http://localhost:3001/api/docs
+
+
+## Architecture
+
+This project follows a 3-layer architecture:
+
+1. **Controller Layer**: Handles HTTP requests and responses
+2. **Service Layer**: Contains business logic
+3. **Repository Layer**: Handles data access via Prisma
+
+
+
+## Key Features
+
+- ✅ Husky pre-commit hooks (lint + format staged files)
+- ✅ Joi validation for environment variables
+- ✅ Global exception filter with custom error codes
+- ✅ JWT authentication with guards
+- ✅ Swagger API documentation with authentication
+- ✅ Prisma ORM with PostgreSQL
+- ✅ Global validation pipe
+- ✅ Custom decorators (@CurrentUser, @Public, @Roles)
+- ✅ Base DTOs (Pagination, Response, Error)
+- ✅ Repository pattern with interfaces
+
+## Usage Examples
+
+### Using @CurrentUser Decorator
+```typescript
+@Get('profile')
+@ApiBearerAuth('JWT-auth')
+async getProfile(@CurrentUser() user: JwtPayload) {
+  return user;
+}
+```
+
+### Using @Public Decorator
+```typescript
+@Post('login')
+@Public()
+async login(@Body() dto: LoginDto) {
+  return this.authService.login(dto);
+}
+```
+
+### Using @Roles Decorator
+```typescript
+@Get('admin')
+@Roles(UserRole.ADMIN)
+@ApiBearerAuth('JWT-auth')
+async adminOnly() {
+  return { message: 'Admin only route' };
+}
+```
+
+### Using Response DTO
+```typescript
+@Get()
+async findAll() {
+  const users = await this.userService.findAll();
+  return ResponseDto.success(users, 'Users retrieved successfully');
+}
+```
+
+### Using Pagination
+```typescript
+@Get()
+async findAll(@Query() pagination: PaginationDto) {
+  const { data, total } = await this.userService.findWithPagination(
+    pagination.page,
+    pagination.limit,
+  );
+
+  const meta = PaginationUtil.calculateMeta(
+    pagination.page,
+    pagination.limit,
+    total,
+  );
+
+  return ResponseDto.success(data, 'Users retrieved', meta);
+}
+```
+
+## Notes
+
+- By default, all routes are protected by JWT guard. Use `@Public()` decorator to make routes public.
+- All exceptions are caught by the global exception filter and returned in a consistent format.
+- Validation is automatically applied to all DTOs using class-validator.
+- Swagger requires JWT token for protected routes - click "Authorize" button and enter your token.
