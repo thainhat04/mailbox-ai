@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum Provider {
+  GOOGLE
+  BASIC
+}
+
+enum AccountType {
+  PERSONAL
+  BUSINESS
+}
+
+enum VerifyCodeType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+enum VerifyCodeStatus {
+  PENDING
+  USED
+  EXPIRED
+}
+
+model User {
+  id            String      @id @default(uuid())
+  sub           String?     @unique
+  email         String      @unique
+  password      String?
+  roles         Role[]      @default([USER])
+  emailVerified Boolean     @default(false)
+  fullName      String?
+  givenName     String?
+  familyName    String?
+  picture       String?
+  provider      Provider    @default(BASIC)
+  identities    Json?
+  isActive      Boolean     @default(true)
+  locale        String?
+  phone         String?
+  accountType   AccountType @default(PERSONAL)
+  lastLoginAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  deletedAt     DateTime?
+
+  userTokens   UserToken[]
+  verifyCodes  VerifyCode[]
+
+  @@index([email])
+  @@index([sub])
+  @@map("users")
+}
+
+model UserToken {
+  id         String    @id @default(uuid())
+  userId     String
+  token      String    @unique
+  familyId   String
+  parentId   String?
+  expiredAt  DateTime
+  lastUsedAt DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([token])
+  @@map("user_tokens")
+}
+
+model VerifyCode {
+  id        String           @id @default(uuid())
+  value     String
+  email     String
+  type      VerifyCodeType
+  status    VerifyCodeStatus @default(PENDING)
+  expiredAt DateTime
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user User @relation(fields: [email], references: [email], onDelete: Cascade)
+
+  @@index([email, value])
+  @@index([email, type, status])
+  @@map("verify_codes")
+}
