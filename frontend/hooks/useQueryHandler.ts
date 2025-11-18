@@ -5,7 +5,6 @@ import type { QueryOptions } from "@/types/optional-query";
 
 import { ErrorResponse } from "@/types/error-response";
 import { isCustomError } from "@/helper/error/deprecated";
-import { FieldError } from "@/types/error-response";
 
 export function useQueryHandler<T, A = void>(
     queryHook: (arg: A, options?: any) => TypedUseQueryHookResult<T, any, any>,
@@ -24,7 +23,7 @@ export function useQueryHandler<T, A = void>(
 
     const [result, setResult] = useState<T | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [errors, setErrors] = useState<FieldError[] | null>(null);
+
     const [message, setMessage] = useState<string | null>(null);
 
     // cập nhật result khi có data
@@ -40,25 +39,23 @@ export function useQueryHandler<T, A = void>(
             const err = rawError as any;
             if (err.status !== 0) {
                 const errData = err.data as ErrorResponse;
-                if (errData.error.message) setMessage(errData.error.message);
-                if (errData?.error) setError(errData.error.code);
-                if (errData?.error?.details) setErrors(errData.error.details);
+                setMessage(errData.message);
+                setError(errData.errorCode);
+                //dùng translate ở Error
             }
         } else {
             setError(null);
-            setErrors(null);
             setMessage(null);
         }
     }, [rawError]);
 
     const errorInfo = useMemo(() => {
         if (!rawError) return null;
-        if (error || message || (errors && errors.length > 0)) {
-            return { error, message, errors };
+        if (error || message) {
+            return { error, message };
         }
         return null;
-    }, [rawError, error, message, errors]);
-
+    }, [rawError, error, message]);
     return {
         result, // kiểu của data Query bạn truyền vào
         error: errorInfo, // { error: string | null, message: string | null } | null

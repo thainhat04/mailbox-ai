@@ -6,83 +6,45 @@
         "vietnamese": "Tiếng Việt",
         "loading": "Loading..."
     },
-    "home": {
-        "brand": "Student360",
-        "tagline": "AI-Powered Learning Assistant",
-        "hero_title": "Accelerate Your Learning with AI Mentoring",
-        "hero_subtitle": "Get personalized guidance, smart insights, and 24/7 support from our AI-powered learning platform designed for students.",
-        "get_started": "Get Started",
-        "login": "Log In",
-        "signup": "Sign Up",
-        "features": {
-            "smart_learning": {
-                "title": "Smart Learning",
-                "description": "AI-powered study plans tailored to your learning style and goals."
-            },
-            "expert_mentoring": {
-                "title": "Expert Mentoring",
-                "description": "Connect with AI mentors and human experts for personalized guidance."
-            },
-            "track_progress": {
-                "title": "Track Progress",
-                "description": "Monitor your learning journey with detailed analytics and insights."
+    "DEFAULT_ERROR_MESSAGE": "An error occurred",
+    "UNAUTHORIZED_ERROR_MESSAGE": "Session has expired. Please log in again.",
+    "NETWORK_ERROR_MESSAGE": "Network error. Please check your connection.",
+    "TIMEOUT_ERROR_MESSAGE": "The request timed out. Please try again.",
+    "auth": {
+        "1": "Come us to your",
+        "2": "adventure!",
+        "login": {
+            "1": "Sign in",
+            "2": "Sign in with email address",
+            "3": "Email address",
+            "4": "Password",
+            "5": "Or continue with",
+            "6": "Don't have an account?",
+            "7": "Sign up",
+            "error": {
+                "requiredEmail": "Email address is required.",
+                "requiredPassword": "Password is required."
             }
         },
-        "cta": {
-            "title": "Ready to Transform Your Learning Experience?",
-            "subtitle": "Join thousands of students already using Student360 to achieve their academic goals.",
-            "action": "Start Learning Today"
+        "signup": {
+            "1": "Create your account",
+            "2": "Sign up with email address",
+            "3": "Email address",
+            "4": "Username",
+            "5": "Password",
+            "6": "Confirm Password",
+            "7": "Or continue with",
+            "8": "Already have an account?",
+            "9": "Sign in",
+            "error": {
+                "invalidEmail": "Please enter a valid email address.",
+                "requiredEmail": "Email address is required.",
+                "requiredPassword": "Password is required.",
+                "invalidPassword": "Password must be at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character. Minimum 8 characters.",
+                "requiredUsername": "Username is required.",
+                "requiredConfirmPassword": "Please confirm your password.",
+                "invalidConfirmPassword": "Passwords do not match."
+            }
         }
-    },
-    "auth": {
-        "welcome_back": "Welcome Back to Your Learning Journey",
-        "welcome_back_subtitle": "Access your personalized AI mentoring platform designed to accelerate your academic success and career growth.",
-        "begin_adventure": "Begin Your Learning Adventure",
-        "begin_adventure_subtitle": "Join thousands of students who are accelerating their academic success with AI-powered mentoring.",
-        "login_title": "Log in into Your Account",
-        "login_subtitle": "Welcome back!",
-        "signup_title": "Create New Account",
-        "signup_subtitle": "Join Student360 today",
-        "email": "Email",
-        "password": "Password",
-        "confirm_password": "Confirm Password",
-        "first_name": "First Name",
-        "last_name": "Last Name",
-        "remember_me": "Remember Me",
-        "forgot_password": "Forgot Password",
-        "min_8_chars": "Min 8 characters",
-        "login_button": "Log in",
-        "signup_button": "Create Account",
-        "logging_in": "Logging in...",
-        "creating_account": "Creating Account...",
-        "no_account": "Don't have an Account yet?",
-        "have_account": "Already have an Account?",
-        "agree_terms": "I agree to the terms and conditions and privacy policy",
-        "terms_conditions": "Terms & Conditions",
-        "email_required": "Email is required",
-        "password_required": "Password is required",
-        "first_name_required": "First name is required",
-        "last_name_required": "Last name is required",
-        "first_name_too_short": "First name must be at least 2 characters",
-        "last_name_too_short": "Last name must be at least 2 characters",
-        "confirm_password_required": "Password confirmation is required",
-        "google_login": "Login by Google",
-        "microsoft_login": "Login by Microsoft"
-    },
-    "errors": {
-        "VAL001": "Email must be a valid email address",
-        "VAL002": "Password must be at least 8 characters long",
-        "VAL003": "This field is required",
-        "PASS01": "Password must contain at least one uppercase letter, one number, and one special character",
-        "AUTH001": "Invalid email or password",
-        "AUTH002": "An account with this email already exists",
-        "AUTH003": "Your session has expired, please login again",
-        "AUTH004": "Invalid token provided",
-        "PASSWORD_MISMATCH": "Passwords do not match",
-        "AGREE_TERMS": "You must agree to the Terms & Conditions",
-        "NETWORK_ERROR": "Network error, please check your connection",
-        "UNKNOWN_ERROR": "An unexpected error occurred",
-        "NOT_FOUND": "The requested resource was not found",
-        "SERVER_ERROR": "Server error, please try again later"
     }
 }

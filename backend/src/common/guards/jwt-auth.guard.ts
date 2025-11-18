@@ -11,6 +11,7 @@ import { ConfigService } from "@nestjs/config";
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
 import { BaseException } from "../exceptions";
 import { CODES } from "../constants";
+import { HTTP_STATUS } from "../constants/http-status.constant";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -46,7 +47,11 @@ export class JwtAuthGuard implements CanActivate {
       // Attach user to request
       request["user"] = payload;
     } catch (error) {
-      throw new BaseException("Invalid or expired token", CODES.TOKEN_INVALID);
+      throw new BaseException(
+        "Invalid or expired token",
+        CODES.TOKEN_INVALID,
+        HTTP_STATUS.UNAUTHORIZED,
+      );
     }
 
     return true;

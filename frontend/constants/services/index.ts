@@ -1,8 +1,24 @@
 const SERVICES = {
     STATUS_NOT_CLIENT_ERROR: 0,
-    DEFAULT_ERROR_MESSAGE: "An error occurred",
+    DEFAULT_ERROR_MESSAGE: "DEFAULT_ERROR_MESSAGE",
     STATUS_INTERNAL_ERROR: 500,
     STATUS_UNAUTHORIZED: 401,
+    accessToken: "accessToken",
+    refreshToken: "refreshToken",
+    URL_GET_PROFILE: "/auth/me",
+    URL_REFRESH_TOKEN: "/auth/refresh",
+    URL_LOGIN: "/auth/login",
+    UNAUTHORIZED_ERROR_MESSAGE: "UNAUTHORIZED_ERROR_MESSAGE",
+    NETWORK_ERROR_MESSAGE: "NETWORK_ERROR_MESSAGE",
+    TIMEOUT_ERROR_MESSAGE: "TIMEOUT_ERROR_MESSAGE",
 };
+
+export enum HTTP_METHOD {
+    GET = "GET",
+    POST = "POST",
+    PUT = "PUT",
+    DELETE = "DELETE",
+    PATCH = "PATCH",
+}
 
 export default SERVICES;

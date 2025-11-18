@@ -1,7 +1,7 @@
 "use client";
 import { useState, useCallback, useMemo } from "react";
 import type { TypedMutationTrigger } from "@reduxjs/toolkit/query/react";
-import { FieldError, ErrorResponse } from "@/types/error-response";
+import { ErrorResponse } from "@/types/error-response";
 import { isCustomError } from "@/helper/error/deprecated";
 
 export function useMutationHandler<
@@ -16,7 +16,6 @@ export function useMutationHandler<
     const [result, setResult] = useState<Result | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
-    const [errors, setErrors] = useState<FieldError[] | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
     const handleAction = useCallback(
@@ -24,7 +23,6 @@ export function useMutationHandler<
             setIsLoading(true);
             setError(null);
             setMessage(null);
-            setErrors(null);
             setResult(null);
             try {
                 const res = await trigger(args).unwrap();
@@ -35,11 +33,9 @@ export function useMutationHandler<
                     const e = err as any;
                     if (e.status !== 0) {
                         const errData = e.data as ErrorResponse;
-                        if (errData?.error.code) setError(errData.error.code);
-                        if (errData?.error.message)
-                            setMessage(errData.error.message);
-                        if (errData?.error.details)
-                            setErrors(errData.error.details);
+                        setMessage(errData.message);
+                        setError(errData.errorCode);
+                        //dùng translate ở Error
                     }
                     if (throwOnError) throw e;
                 }
@@ -61,11 +57,11 @@ export function useMutationHandler<
         useCallback((args) => handleAction(args, true), [handleAction]);
 
     const errorInfo = useMemo(() => {
-        if (error || message || (errors && errors.length > 0)) {
-            return { error, errors, message };
+        if (error || message) {
+            return { error, message };
         }
         return null;
-    }, [error, errors, message]);
+    }, [error, message]);
 
     return {
         [name]: action,

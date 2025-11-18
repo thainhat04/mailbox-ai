@@ -6,83 +6,45 @@
         "vietnamese": "Tiếng Việt",
         "loading": "Đang tải..."
     },
-    "home": {
-        "brand": "Student360",
-        "tagline": "Trợ Lý Học Tập AI",
-        "hero_title": "Tăng Tốc Học Tập với Cố Vấn AI",
-        "hero_subtitle": "Nhận hướng dẫn cá nhân hóa, thông tin chi tiết thông minh và hỗ trợ 24/7 từ nền tảng học tập AI được thiết kế dành cho sinh viên.",
-        "get_started": "Bắt Đầu",
-        "login": "Đăng Nhập",
-        "signup": "Đăng Ký",
-        "features": {
-            "smart_learning": {
-                "title": "Học Tập Thông Minh",
-                "description": "Kế hoạch học tập được AI cá nhân hóa theo phong cách và mục tiêu của bạn."
-            },
-            "expert_mentoring": {
-                "title": "Cố Vấn Chuyên Gia",
-                "description": "Kết nối với cố vấn AI và chuyên gia con người để được hướng dẫn cá nhân."
-            },
-            "track_progress": {
-                "title": "Theo Dõi Tiến Độ",
-                "description": "Giám sát hành trình học tập của bạn với phân tích chi tiết và thông tin chi tiết."
+    "DEFAULT_ERROR_MESSAGE": "Đã xảy ra lỗi",
+    "UNAUTHORIZED_ERROR_MESSAGE": "Phiên đã hết hạn. Vui lòng đăng nhập lại.",
+    "NETWORK_ERROR_MESSAGE": "Lỗi mạng. Vui lòng kiểm tra kết nối của bạn.",
+    "TIMEOUT_ERROR_MESSAGE": "Yêu cầu đã hết thời gian chờ. Vui lòng thử lại.",
+    "auth": {
+        "1": "Hãy cùng chúng tôi tới",
+        "2": "cuộc phiêu lưu!",
+        "login": {
+            "1": "Đăng nhập",
+            "2": "Đăng nhập bằng địa chỉ email",
+            "3": "Địa chỉ email",
+            "4": "Mật khẩu",
+            "5": "Hoặc tiếp tục với",
+            "6": "Chưa có tài khoản?",
+            "7": "Đăng ký",
+            "error": {
+                "requiredEmail": "Địa chỉ email là bắt buộc.",
+                "requiredPassword": "Mật khẩu là bắt buộc."
             }
         },
-        "cta": {
-            "title": "Sẵn Sàng Thay Đổi Trải Nghiệm Học Tập?",
-            "subtitle": "Tham gia cùng hàng nghìn sinh viên đã sử dụng Student360 để đạt được mục tiêu học tập.",
-            "action": "Bắt Đầu Học Hôm Nay"
+        "signup": {
+            "1": "Tạo tài khoản của bạn",
+            "2": "Đăng ký bằng địa chỉ email",
+            "3": "Địa chỉ email",
+            "4": "Tên người dùng",
+            "5": "Mật khẩu",
+            "6": "Xác nhận mật khẩu",
+            "7": "Hoặc tiếp tục với",
+            "8": "Đã có tài khoản?",
+            "9": "Đăng nhập",
+            "error": {
+                "invalidEmail": "Vui lòng nhập địa chỉ email hợp lệ.",
+                "requiredEmail": "Địa chỉ email là bắt buộc.",
+                "requiredPassword": "Mật khẩu là bắt buộc.",
+                "invalidPassword": "Mật khẩu phải chứa ít nhất 1 chữ cái viết hoa, 1 chữ cái viết thường, 1 số và 1 ký tự đặc biệt. Tối thiểu 8 ký tự.",
+                "requiredUsername": "Tên người dùng là bắt buộc.",
+                "requiredConfirmPassword": "Vui lòng xác nhận mật khẩu của bạn.",
+                "invalidConfirmPassword": "Mật khẩu không khớp."
+            }
         }
-    },
-    "auth": {
-        "welcome_back": "Chào Mừng Trở Lại Hành Trình Học Tập",
-        "welcome_back_subtitle": "Truy cập nền tảng cố vấn AI cá nhân được thiết kế để tăng tốc thành công học tập và phát triển sự nghiệp.",
-        "begin_adventure": "Bắt Đầu Cuộc Phiêu Lưu Học Tập",
-        "begin_adventure_subtitle": "Tham gia cùng hàng nghìn sinh viên đang tăng tốc thành công học tập với cố vấn AI.",
-        "login_title": "Đăng Nhập Vào Tài Khoản",
-        "login_subtitle": "Chào mừng trở lại!",
-        "signup_title": "Tạo Tài Khoản Mới",
-        "signup_subtitle": "Tham gia Student360 ngay hôm nay",
-        "email": "Email",
-        "password": "Mật khẩu",
-        "confirm_password": "Xác nhận mật khẩu",
-        "first_name": "Tên",
-        "last_name": "Họ",
-        "remember_me": "Ghi nhớ tôi",
-        "forgot_password": "Quên mật khẩu",
-        "min_8_chars": "Tối thiểu 8 ký tự",
-        "login_button": "Đăng nhập",
-        "signup_button": "Tạo tài khoản",
-        "logging_in": "Đang đăng nhập...",
-        "creating_account": "Đang tạo tài khoản...",
-        "no_account": "Chưa có tài khoản?",
-        "have_account": "Đã có tài khoản?",
-        "agree_terms": "Tôi đồng ý với các điều khoản và chính sách bảo mật",
-        "terms_conditions": "Điều khoản & Điều kiện",
-        "email_required": "Email là bắt buộc",
-        "password_required": "Mật khẩu là bắt buộc",
-        "first_name_required": "Tên là bắt buộc",
-        "last_name_required": "Họ là bắt buộc",
-        "first_name_too_short": "Tên phải có ít nhất 2 ký tự",
-        "last_name_too_short": "Họ phải có ít nhất 2 ký tự",
-        "confirm_password_required": "Xác nhận mật khẩu là bắt buộc",
-        "google_login": "Đăng nhập bằng Google",
-        "microsoft_login": "Đăng nhập bằng Microsoft"
-    },
-    "errors": {
-        "VAL001": "Email phải là địa chỉ email hợp lệ",
-        "VAL002": "Mật khẩu phải có ít nhất 8 ký tự",
-        "VAL003": "Trường này là bắt buộc",
-        "PASS01": "Mật khẩu phải chứa ít nhất một chữ hoa, một số và một ký tự đặc biệt",
-        "AUTH001": "Email hoặc mật khẩu không hợp lệ",
-        "AUTH002": "Đã tồn tại tài khoản với email này",
-        "AUTH003": "Phiên của bạn đã hết hạn, vui lòng đăng nhập lại",
-        "AUTH004": "Token không hợp lệ",
-        "PASSWORD_MISMATCH": "Mật khẩu không khớp",
-        "AGREE_TERMS": "Bạn phải đồng ý với Điều khoản & Điều kiện",
-        "NETWORK_ERROR": "Lỗi mạng, vui lòng kiểm tra kết nối",
-        "UNKNOWN_ERROR": "Đã xảy ra lỗi không mong muốn",
-        "NOT_FOUND": "Không tìm thấy tài nguyên được yêu cầu",
-        "SERVER_ERROR": "Lỗi máy chủ, vui lòng thử lại sau"
     }
 }

@@ -1,16 +1,9 @@
-import { GeneralResponse } from "./response";
-export type FieldError = {
-    field: string;
+export interface ErrorResponse {
+    success: false;
     message: string;
-    code: string;
-};
-
-export type ErrorDetail = {
-    code: string;
-    message: string;
-    details?: FieldError[];
-};
-
-export type ErrorResponse = GeneralResponse & {
-    error: ErrorDetail;
-};
+    errorCode: string;
+    statusCode: number;
+    details?: any;
+    timestamp: string;
+    path: string;
+}

@@ -1,11 +1,5 @@
-import { GeneralResponse } from "./response";
-export type SuccessResponse<T> = GeneralResponse & {
+export interface SuccessResponse<T = any> {
+    success: true;
+    message: string;
     data: T;
-    pagination?: Pagination;
-};
-
-type Pagination = {
-    page: number;
-    limit: number;
-    total: number;
-};
+}
