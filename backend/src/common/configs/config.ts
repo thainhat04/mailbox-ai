@@ -21,6 +21,11 @@ export const validationSchema = Joi.object({
 
   // CORS
   CORS_ORIGIN: Joi.string().default("http://localhost:3000"),
+
+  // Google Provider
+  GOOGLE_CLIENT_ID: Joi.string().required(),
+  GOOGLE_CLIENT_SECRET: Joi.string().required(),
+  GOOGLE_CALLBACK_URL: Joi.string().required(),
 });
 
 export interface EnvironmentVariables {
@@ -34,4 +39,7 @@ export interface EnvironmentVariables {
   JWT_REFRESH_EXPIRATION: string;
   SWAGGER_ENABLED: boolean;
   CORS_ORIGIN: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  GOOGLE_CALLBACK_URL: string;
 }

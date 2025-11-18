@@ -19,6 +19,9 @@ async function bootstrap() {
     }),
   );
 
+  // Set global prefix
+  app.setGlobalPrefix("api/v1");
+
   const configService = app.get(ConfigService);
 
   // Global exception filter

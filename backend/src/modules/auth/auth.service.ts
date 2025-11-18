@@ -12,6 +12,11 @@ import {
 } from "./dto";
 import { BaseException } from "../../common/exceptions";
 import { CODES } from "../../common/constants";
+import { OAuthProvider, OAuthSignInResponseDto } from "./dto/providers";
+import { OIDCService } from "../oidc/oidc.service";
+import { GoogleOIDCConfig } from "../oidc/providers/google.provider";
+import { MicrosoftOIDCConfig } from "../oidc/providers/microsoft.provider";
+import { GenerateUtil } from "../../common/utils";
 
 @Injectable()
 export class AuthService {
@@ -19,6 +24,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly oidcService: OIDCService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<TokenResponseDto> {
@@ -152,6 +158,30 @@ export class AuthService {
     return this.mapUserToResponse(user);
   }
 
+  async oauthSignIn(
+    provider: OAuthProvider,
+    domain: string,
+  ): Promise<OAuthSignInResponseDto> {
+    const state = await GenerateUtil.generateState(domain);
+    switch (provider) {
+      case OAuthProvider.GOOGLE:
+        return {
+          response: this.oidcService.createAuthUrl(GoogleOIDCConfig, state),
+        };
+      case OAuthProvider.MICROSOFT:
+        return {
+          response: this.oidcService.createAuthUrl(MicrosoftOIDCConfig, state),
+        };
+      default:
+        throw new BaseException(
+          "Invalid provider",
+          CODES.INVALID_PROVIDER,
+          400,
+          "Invalid provider",
+        );
+    }
+  }
+
   private async generateTokens(user: User): Promise<TokenResponseDto> {
     const payload = {
       sub: user.id,
@@ -161,13 +191,15 @@ export class AuthService {
 
     // Generate access token (60 minutes)
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: (this.configService.get<string>("JWT_ACCESS_EXPIRATION") || "60m") as any,
+      expiresIn: (this.configService.get<string>("JWT_ACCESS_EXPIRATION") ||
+        "60m") as any,
     });
 
     // Generate refresh token (30 days)
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>("JWT_REFRESH_SECRET") as any,
-      expiresIn: (this.configService.get<string>("JWT_REFRESH_EXPIRATION") || "30d") as any,
+      expiresIn: (this.configService.get<string>("JWT_REFRESH_EXPIRATION") ||
+        "30d") as any,
     });
 
     // Calculate expiration date for refresh token

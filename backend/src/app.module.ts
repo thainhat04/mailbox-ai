@@ -7,6 +7,7 @@ import { AppService } from "./app.service";
 import { validationSchema } from "./common/configs/config";
 import { DatabaseModule } from "./database/database.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { EmailModule } from "./modules/email/email.module";
 import { JwtAuthGuard } from "./common/guards";
 
 @Module({
@@ -32,6 +33,7 @@ import { JwtAuthGuard } from "./common/guards";
 
     // Feature modules
     AuthModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [

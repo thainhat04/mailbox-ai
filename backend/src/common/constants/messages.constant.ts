@@ -16,6 +16,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
 
   // Validation
   [CODES.VALIDATION_ERROR]: "Validation error",
+  [CODES.INVALID_PROVIDER]: "Invalid provider",
   // Server
   [CODES.INTERNAL_SERVER_ERROR]: "Internal server error",
   [CODES.BAD_REQUEST]: "Bad request",
