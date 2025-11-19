@@ -33,8 +33,8 @@ export default function EmailRow({
                 active
                     ? "bg-linear-to-r from-cyan-300/30 via-indigo-300/30 to-purple-300/30 border-l-4 border-cyan-400 shadow-md ring-1 ring-cyan-400/30"
                     : !email.isRead
-                    ? "bg-cyan-100/10 hover:bg-cyan-200/15 ring-1 ring-cyan-300/20"
-                    : "bg-black/10 hover:bg-black/15 ring-1 ring-white/10"
+                    ? "bg-cyan-100/10 ring-1 ring-cyan-300/20"
+                    : "bg-black/10 ring-1 ring-white/10"
             )}
             onClick={() => onSelect(email)}
         >

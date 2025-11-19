@@ -3,7 +3,7 @@
         "language": "Language",
         "english": "English",
         "spanish": "Español",
-        "vietnamese": "Tiếng Việt",
+        "vietnamese": "Việt",
         "loading": "Loading..."
     },
     "DEFAULT_ERROR_MESSAGE": "An error occurred",
@@ -21,6 +21,7 @@
             "5": "Or continue with",
             "6": "Don't have an account?",
             "7": "Sign up",
+            "8": "Login successful. Redirecting...",
             "error": {
                 "requiredEmail": "Email address is required.",
                 "requiredPassword": "Password is required."
@@ -46,5 +47,24 @@
                 "invalidConfirmPassword": "Passwords do not match."
             }
         }
+    },
+    "home": {
+        "1": "Signed in",
+        "2": "Guest",
+        "3": "Intelligent Email Workflow",
+        "4": "Automate email processes, organize your inbox, and boost productivity with Mailbox AI.",
+        "5": "Sign In",
+        "6": "Sign Up",
+        "7": "Automation",
+        "8": "Flexible email handling flows.",
+        "9": "AI Categorization",
+        "10": "Smart content labeling.",
+        "11": "Tracking",
+        "12": "Clear send / receive status.",
+        "13": "Go to inbox"
+    },
+    "user": {
+        "1": "Logout",
+        "2": "Go Home"
     }
 }

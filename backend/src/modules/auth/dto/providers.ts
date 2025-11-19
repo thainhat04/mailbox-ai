@@ -13,7 +13,6 @@ export class OAuthSignInDto {
   })
   @IsString({ message: "Domain must be a string" })
   @IsNotEmpty({ message: "Domain is required" })
-  @IsUrl({}, { message: "Domain must be a valid URL" })
   domain: string;
 }
 

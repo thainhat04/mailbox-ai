@@ -1,62 +1,55 @@
-function LoadingApp() {
-    return (
-        <div
-            style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100vh",
-                gap: 16,
-                background: "linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)",
-            }}
-        >
-            <img
-                src="/vercel.svg" // thay đường dẫn nếu cần
-                alt="App logo"
-                color="black"
-                style={{ width: 96, height: 96, objectFit: "contain" }}
-            />
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a" }}>
-                Mailbox AI
-            </div>
+"use client";
 
-            <svg
-                width="48"
-                height="48"
-                viewBox="0 0 50 50"
-                style={{ marginTop: 8 }}
-            >
-                <circle
-                    cx="25"
-                    cy="25"
-                    r="20"
-                    fill="none"
-                    stroke="#e6eef8"
-                    strokeWidth="5"
+export default function LoadingApp() {
+    return (
+        <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden text-white">
+            {/* Background */}
+            <div className="absolute inset-0 bg-linear-to-br from-[#0f111a] via-[#1a1b2b] to-[#2c1e4f]" />
+            <div className="pointer-events-none absolute -top-32 -left-24 h-72 w-72 rounded-full bg-cyan-500/15 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-40 -right-32 h-96 w-96 rounded-full bg-fuchsia-500/20 blur-[110px]" />
+            <div className="absolute inset-0 bg-[radial-gradient(60%_40%_at_50%_0%,rgba(255,255,255,0.07),transparent)]" />
+
+            {/* Content */}
+            <div className="relative z-10 flex flex-col items-center gap-4">
+                <img
+                    src="/vercel.svg"
+                    alt="Logo"
+                    className="w-20 h-20 opacity-90"
                 />
-                <circle
-                    cx="25"
-                    cy="25"
-                    r="20"
-                    fill="none"
-                    stroke="#2563eb"
-                    strokeWidth="5"
-                    strokeLinecap="round"
-                    strokeDasharray="31.4 31.4"
-                >
-                    <animateTransform
-                        attributeName="transform"
-                        type="rotate"
-                        from="0 25 25"
-                        to="360 25 25"
-                        dur="1s"
-                        repeatCount="indefinite"
-                    />
-                </circle>
-            </svg>
+
+                <div className="text-lg font-semibold text-white/80">
+                    Mailbox AI
+                </div>
+
+                {/* Spinner */}
+                <div className="mt-2">
+                    <svg
+                        className="animate-spin"
+                        width="48"
+                        height="48"
+                        viewBox="0 0 50 50"
+                    >
+                        <circle
+                            cx="25"
+                            cy="25"
+                            r="20"
+                            className="stroke-white/10"
+                            strokeWidth="5"
+                            fill="none"
+                        />
+                        <circle
+                            cx="25"
+                            cy="25"
+                            r="20"
+                            strokeWidth="5"
+                            fill="none"
+                            strokeLinecap="round"
+                            className="stroke-cyan-400"
+                            strokeDasharray="31.4 31.4"
+                        />
+                    </svg>
+                </div>
+            </div>
         </div>
     );
 }
-
-export default LoadingApp;

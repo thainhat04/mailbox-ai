@@ -43,7 +43,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly oidcService: OIDCService,
-  ) {}
+  ) { }
 
   @Public()
   @Post("register")
@@ -126,7 +126,7 @@ export class AuthController {
     @Query() query: OAuthSignInDto,
     @Param("provider") provider: string,
   ): Promise<ResponseDto<OAuthSignInResponseDto>> {
-    const response = await this.authService.oauthSignIn(
+    const response = await this.oidcService.oauthSignIn(
       provider as OAuthProvider,
       query.domain,
     );
@@ -140,43 +140,60 @@ export class AuthController {
     @Param("provider") provider: OAuthProvider,
     @Res() res: FastifyReply,
   ) {
-    const { randomPart, domain } = await GenerateUtil.decodeState(query.state);
-    if (!randomPart || !domain) {
-      return this.rediectWithError(res, domain, "Invalid state");
-    }
+    let domain: string | undefined;
 
     try {
+      const decoded = await GenerateUtil.decodeState(query.state);
+      domain = decoded.domain;
+
+      if (!decoded.randomPart || !domain) {
+        return await this.redirectWithError(
+          res,
+          domain || "http://localhost:3000",
+          "Invalid state",
+        );
+      }
+
       const tokens = await this.oidcService.authenticationWithCode(
         provider,
         query.code,
       );
       const { access_token, id_token, refresh_token } = tokens;
-      // save tokens before redirect
+
+      // Set cookies before redirect
       res.header(
         "Set-Cookie",
-        `access_token=${access_token}; HttpOnly; Secure; Path=/`,
-      );
-      res.header(
-        "Set-Cookie",
-        `id_token=${id_token}; HttpOnly; Secure; Path=/`,
+        `access_token=${access_token}; HttpOnly; Secure; Path=/; SameSite=Lax`,
       );
       res.header(
         "Set-Cookie",
-        `refresh_token=${refresh_token}; HttpOnly; Secure; Path=/`,
+        `id_token=${id_token}; HttpOnly; Secure; Path=/; SameSite=Lax`,
       );
-      return res.redirect(
-        `${domain}?access_token=${access_token}&id_token=${id_token}&refresh_token=${refresh_token}`,
+      res.header(
+        "Set-Cookie",
+        `refresh_token=${refresh_token}; HttpOnly; Secure; Path=/; SameSite=Lax`,
       );
+
+      // Redirect with tokens in URL
+      const redirectUrl = `${domain}?access_token=${encodeURIComponent(access_token)}&id_token=${encodeURIComponent(id_token)}&refresh_token=${encodeURIComponent(refresh_token)}`;
+
+      return res.status(302).redirect(redirectUrl);
     } catch (error) {
-      return this.rediectWithError(res, domain, "Authentication failed");
+      console.error("OAuth callback error:", error);
+      return await this.redirectWithError(
+        res,
+        domain || "http://localhost:3000",
+        error instanceof Error ? error.message : "Authentication failed",
+      );
     }
   }
 
-  private async rediectWithError(
+  private async redirectWithError(
     res: FastifyReply,
     domain: string,
     error: string,
   ) {
-    return res.redirect(`${domain}?error=${error}`);
+    const redirectUrl = `${domain}?error=${encodeURIComponent(error)}`;
+    return res.status(302).redirect(redirectUrl);
   }
 }

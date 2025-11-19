@@ -9,3 +9,6 @@ export interface SignInResponse {
     refreshToken: string;
     user: User;
 }
+export interface OAuthResponse {
+    response: string;
+}

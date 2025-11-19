@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Inject, forwardRef } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { User } from "@prisma/client";
@@ -24,8 +24,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly oidcService: OIDCService,
-  ) {}
+  ) { }
 
   async register(registerDto: RegisterDto): Promise<TokenResponseDto> {
     const { email, password } = registerDto;
@@ -158,31 +157,8 @@ export class AuthService {
     return this.mapUserToResponse(user);
   }
 
-  async oauthSignIn(
-    provider: OAuthProvider,
-    domain: string,
-  ): Promise<OAuthSignInResponseDto> {
-    const state = await GenerateUtil.generateState(domain);
-    switch (provider) {
-      case OAuthProvider.GOOGLE:
-        return {
-          response: this.oidcService.createAuthUrl(GoogleOIDCConfig, state),
-        };
-      case OAuthProvider.MICROSOFT:
-        return {
-          response: this.oidcService.createAuthUrl(MicrosoftOIDCConfig, state),
-        };
-      default:
-        throw new BaseException(
-          "Invalid provider",
-          CODES.INVALID_PROVIDER,
-          400,
-          "Invalid provider",
-        );
-    }
-  }
 
-  private async generateTokens(user: User): Promise<TokenResponseDto> {
+  async generateTokens(user: User): Promise<TokenResponseDto> {
     const payload = {
       sub: user.id,
       email: user.email,
