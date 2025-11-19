@@ -26,7 +26,7 @@ import {
 import { Public } from "../../common/decorators/public.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { ResponseDto } from "../../common/dtos/response.dto";
-import { JwtAuthGuard } from "src/common/guards";
+import { JwtAuthGuard } from "../../common/guards";
 import {
   OAuthProvider,
   OAuthSignInDto,
