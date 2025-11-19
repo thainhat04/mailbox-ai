@@ -4,7 +4,7 @@ A full-stack application demonstrating secure authentication (Email+Password + G
 
 ## Public Hosting URL
 
-**Live Demo:** [PLACEHOLDER - Add deployment URL here]
+**Live Demo:** [Link Frontend](https://mailbox-ai-pv3e.vercel.app/)
 
 **Demo Credentials:**
 
@@ -26,22 +26,24 @@ Password: 13dLd@gmail.com
 1. **Clone the repository**
 
     ```bash
-    git clone [REPOSITORY_URL]
+    git clone https://github.com/thainhat04/mailbox-ai
     cd mailbox-ai
     ```
 
 2. **Backend Setup**
 
     ```bash
-    4d backend
+    cd backend
     yarn install
 
     # Setup environment variables
     cp .env.example .env
     # Edit .env with your configuration:
+    # - PORT=8080
     # - DATABASE_URL=postgresql://user:password@localhost:5432/mailbox_ai
     # - JWT_SECRET=your_jwt_secret_key
     # - JWT_ACCESS_EXPIRATION=60m
+    # - JWT_REFRESH_SECRET=your_jwt_refresh_secret_key
     # - JWT_REFRESH_EXPIRATION=30d
     # - GOOGLE_CLIENT_ID=your_google_client_id
     # - GOOGLE_CLIENT_SECRET=your_google_client_secret
@@ -64,8 +66,8 @@ Password: 13dLd@gmail.com
     # Setup environment variables
     cp .env.example .env
     # Edit .env with:
-    # - NEXT_PUBLIC_API_URL=http://localhost:8080
-    # - NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id
+    # - NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1
+    # - NEXT_PUBLIC_DOMAIN_NAME=http://localhost:4300
 
     # Start development server (runs on port 4300)
     npm run dev
@@ -80,42 +82,29 @@ Password: 13dLd@gmail.com
 
 ### Token Storage Strategy
 
-| Token Type        | Storage Location                | Justification                                                                                                                                                                                                            |
-| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Access Token**  | In-memory (React State/Context) | - Short-lived (30 minutes)`<br>`- Not accessible via JavaScript after page refresh `<br>`- Immune to XSS attacks `<br>`- Lost on page reload → triggers automatic refresh `<br>`- Most secure for short-term credentials |
-| **Refresh Token** | localStorage                    | - Long-lived (30 days)`<br>`- Persists across page refreshes `<br>`- Enables seamless user experience `<br>`- **Trade-off:** Vulnerable to XSS attacks                                                                   |
+| Token Type        | Storage Location | Justification                                                                                                                                                                                                            |
+| ----------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Access Token**  | localStorage     | - Short-lived (60 minutes)<br> - Stored for automatic API authentication <br>- Cleared on logout |
+| **Refresh Token** | localStorage     | - Long-lived (30 days)<br>- Persists across page refreshes <br>- Enables seamless user experience|
 
 ### Why localStorage for Refresh Token?
 
 **Advantages:**
 
--   ✅ **User Experience:** Users remain logged in across browser sessions
--   ✅ **No Page Refresh Login:** Automatic token refresh prevents re-authentication
--   ✅ **Simplicity:** Works with any backend (cross-origin compatible)
--   ✅ **Multi-tab Support:** Same token accessible across browser tabs
+-   **User Experience:** Users remain logged in across browser sessions
+-   **No Page Refresh Login:** Automatic token refresh prevents re-authentication
+-   **Simplicity:** Works with any backend (cross-origin compatible)
+-   **Multi-tab Support:** Same token accessible across browser tabs
 
 **Security Mitigations Implemented:**
 
--   ✅ **Token Rotation:** New refresh token issued on every refresh request (soft-deleted in database)
--   ✅ **Token Expiration:** Access token expires after 60 minutes, refresh token after 30 days
--   ✅ **Refresh Token Revocation:** Logout invalidates token on server (soft delete in database)
--   ✅ **Database Tracking:** All refresh tokens stored in database with expiration tracking
--   ✅ **XSS Protection:** React's built-in sanitization
--   ✅ **Input Validation:** All inputs validated with class-validator DTOs
--   ✅ **HTTPS Only:** Tokens only transmitted over secure connections in production
-
-**Alternative Considered: HttpOnly Cookies**
-
-We considered storing refresh tokens in HttpOnly cookies, which would be more secure:
-
-| Aspect          | localStorage  | HttpOnly Cookie                  |
-| --------------- | ------------- | -------------------------------- |
-| XSS Protection  | ❌ Vulnerable | ✅ Immune                        |
-| CSRF Protection | ✅ Immune     | ❌ Requires CSRF tokens          |
-| Cross-Origin    | ✅ Easy       | ❌ Complex CORS setup            |
-| Implementation  | ✅ Simple     | ❌ Requires same-origin or proxy |
-
-**Decision:** We chose localStorage for this project to prioritize development speed and cross-origin compatibility. For production systems with higher security requirements, **HttpOnly cookies with CSRF protection** would be the recommended approach.
+-   **Token Rotation:** New refresh token issued on every refresh request (soft-deleted in database)
+-   **Token Expiration:** Access token expires after 60 minutes, refresh token after 30 days
+-   **Refresh Token Revocation:** Logout invalidates token on server (soft delete in database)
+-   **Database Tracking:** All refresh tokens stored in database with expiration tracking
+-   **XSS Protection:** React's built-in sanitization
+-   **Input Validation:** All inputs validated with class-validator DTOs
+-   **HTTPS Only:** Tokens only transmitted over secure connections in production
 
 ### Token Refresh Flow
 
@@ -145,7 +134,7 @@ Our implementation handles token expiration automatically:
 1. **JWT Configuration:**
 
     - Algorithm: HS256 (HMAC with SHA-256)
-    - Access token: 30 minutes expiration
+    - Access token: 60 minutes expiration
     - Refresh token: 30 days expiration
     - Tokens stored in database with soft-delete support
 
@@ -166,10 +155,11 @@ Our implementation handles token expiration automatically:
 
 4. **OAuth 2.0 (Google):**
 
-    - OpenID Connect (OIDC) implementation with passport-openidconnect
+    - OpenID Connect (OIDC) implementation with custom provider
     - Scopes: `openid`, `email`, `profile`
     - Offline access support (`access_type=offline`)
     - Callback URL: `http://localhost:8080/api/v1/auth/callback/google`
+    - Auto user creation on first Google sign-in
 
 ## Third-Party Services Used
 
@@ -205,27 +195,24 @@ Our implementation handles token expiration automatically:
     GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
     GOOGLE_CLIENT_SECRET=your_client_secret
     GOOGLE_CALLBACK_URL=http://localhost:8080/api/v1/auth/callback/google
-
-    # Frontend (.env)
-    NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
     ```
 
 **Integration:**
 
--   Frontend: Next.js 16 (OAuth flow handled by backend redirect)
--   Backend: Passport.js with `passport-openidconnect` strategy
+-   Frontend: Next.js 16.0.3 (OAuth flow handled by backend redirect)
+-   Backend: NestJS with custom OIDC implementation
 -   Provider: Custom Google OIDC provider configuration
--   Flow: Authorization Code Flow with PKCE
+-   Flow: Authorization Code Flow
 
 ### Hosting Providers
 
 **Frontend Hosting:**
 
--   **Service:** [Vercel / Netlify / Firebase Hosting - PLACEHOLDER]
+-   **Service:** Vercel
 
 **Backend Hosting:**
 
--   **Service:** [Railway / Heroku / Render - PLACEHOLDER]
+-   **Service:** Render
 
 **Database:**
 
