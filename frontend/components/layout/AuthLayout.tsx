@@ -19,26 +19,30 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
     }, [contentRef]);
     return (
         <AuthRoute>
-            <div className="h-screen w-screen flex bg-[#160430]">
-                <div className="w-3/5 h-full relative">
+            <div className="h-screen w-screen flex flex-col lg:flex-row bg-[#160430]">
+                {/* Background Image - Hidden on mobile, shown on lg+ */}
+                <div className="hidden lg:flex lg:w-3/5 h-full relative">
                     <Image
                         src="/images/auth-background.png"
                         alt="Auth Background"
                         fill
                         className="object-cover"
                     />
-                    <div className="absolute bottom-15 left-15 text-white uppercase">
-                        <h2 className="text-3xl">{t("auth.1")}</h2>
-                        <h1 className="text-5xl bg-linear-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">
+                    <div className="absolute bottom-6 md:bottom-12 lg:bottom-15 left-6 md:left-12 lg:left-15 text-white uppercase">
+                        <h2 className="text-xl md:text-2xl lg:text-3xl">
+                            {t("auth.1")}
+                        </h2>
+                        <h1 className="text-2xl md:text-4xl lg:text-5xl bg-linear-to-r from-green-400 to-blue-500 bg-clip-text text-transparent mt-2">
                             {t("auth.2")}
                         </h1>
                     </div>
                 </div>
 
+                {/* Content Area - Full width on mobile, 2/5 on lg+ */}
                 <div
                     ref={contentRef}
                     className={clsx(
-                        "w-2/5 h-full overflow-y-scroll custom-scroll p-8 flex justify-center",
+                        "w-full lg:w-2/5 h-full overflow-y-auto custom-scroll p-4 sm:p-6 lg:p-8 flex justify-center",
                         {
                             "items-center": isAlignItemCenter,
                             "items-start": !isAlignItemCenter,

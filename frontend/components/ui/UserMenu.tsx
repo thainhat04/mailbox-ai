@@ -48,7 +48,7 @@ export default function UserDropdown({
 
             {open && (
                 <div
-                    className={`absolute left-0 ${
+                    className={`absolute z-10000 left-0 ${
                         isTop ? "bottom-full mb-2" : "top-full mt-2"
                     } w-40 bg-neutral-900 rounded-xl shadow-lg border border-neutral-700 overflow-hidden`}
                 >

@@ -36,7 +36,7 @@ export default function Home() {
             </header>
 
             {/* Hero */}
-            <main className="relative z-10 mx-auto flex min-h-[calc(100vh-120px)] max-w-5xl flex-col items-center justify-center px-6 py-12 text-center">
+            <main className="relative z-1 mx-auto flex min-h-[calc(100vh-120px)] max-w-5xl flex-col items-center justify-center px-6 py-12 text-center">
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/5 ring-1 ring-white/10 px-4 py-1 text-[11px] text-white/70 backdrop-blur">
                     <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(16,185,129,0.5)]" />
                     {isLoggedIn ? t("home.1") : t("home.2")}

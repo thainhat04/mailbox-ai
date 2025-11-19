@@ -10,9 +10,9 @@ import { PrismaService } from "../../database/prisma.service";
 import { JwtService } from "@nestjs/jwt";
 import { UserRole } from "@prisma/client";
 import { AuthService } from "../auth/auth.service";
-import { BaseException } from "src/common/exceptions";
-import { CODES } from "src/common/constants";
-import { GenerateUtil } from "src/common/utils";
+import { BaseException } from "../../common/exceptions";
+import { CODES } from "../../common/constants";
+import { GenerateUtil } from "../../common/utils";
 
 export interface OidcUserInfo {
   sub: string;
