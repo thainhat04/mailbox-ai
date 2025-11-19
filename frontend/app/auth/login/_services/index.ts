@@ -1,4 +1,4 @@
-import type { SignIn, SignInResponse } from "../_types";
+import type { SignIn, SignInResponse, OAuthResponse } from "../_types";
 import type { SuccessResponse } from "@/types/success-response";
 import { api } from "@/services/index";
 import { HTTP_METHOD } from "@/constants/services";
@@ -13,8 +13,17 @@ const loginApi = api.injectEndpoints({
                 body,
             }),
         }),
+        oAuthSignIn: builder.mutation<
+            SuccessResponse<OAuthResponse>,
+            { urlOAuth: string }
+        >({
+            query: ({ urlOAuth }) => ({
+                url: `${urlOAuth}`,
+                method: HTTP_METHOD.GET,
+            }),
+        }),
     }),
     overrideExisting: false,
 });
 
-export const { useSignInMutation } = loginApi;
+export const { useSignInMutation, useOAuthSignInMutation } = loginApi;

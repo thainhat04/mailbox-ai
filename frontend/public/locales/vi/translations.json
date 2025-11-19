@@ -21,6 +21,7 @@
             "5": "Hoặc tiếp tục với",
             "6": "Chưa có tài khoản?",
             "7": "Đăng ký",
+            "8": "Đăng nhập thành công. Đang chuyển hướng...",
             "error": {
                 "requiredEmail": "Địa chỉ email là bắt buộc.",
                 "requiredPassword": "Mật khẩu là bắt buộc."

@@ -16,7 +16,7 @@ export default function EmailToolbar({
     actions,
 }: EmailToolbarProps) {
     return (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-white/10">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-white/10 flex-wrap">
             {actions.map((action, idx) => (
                 <button
                     key={idx}
