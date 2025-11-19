@@ -17,7 +17,16 @@ const languageSlice = createSlice({
     initialState,
     reducers: {
         setLanguage: (state, action: PayloadAction<string>) => {
+            if (action.payload !== "vi" && action.payload !== "en") return;
+            if (state.language === action.payload) return;
             state.language = action.payload;
+            if (typeof window !== "undefined") {
+                localStorage.setItem("i18nextLng", action.payload);
+            }
+            const i18n = require("@/lib/i18n").default;
+            if (i18n && typeof i18n.changeLanguage === "function") {
+                i18n.changeLanguage(action.payload);
+            }
         },
     },
 });
@@ -32,10 +41,10 @@ export const { setLanguage } = languageSlice.actions;
  * - dispatch setAppLoading({ language: true })
  */
 export const initLanguage = () => (dispatch: AppDispatch) => {
-    let lng = "vi";
+    let lng = "en";
 
     if (typeof window !== "undefined") {
-        lng = localStorage.getItem("NEXT_LOCALE") || "vi";
+        lng = localStorage.getItem("i18nextLng") || "en";
     }
 
     try {

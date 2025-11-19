@@ -3,7 +3,7 @@
         "language": "Ngôn ngữ",
         "english": "English",
         "spanish": "Español",
-        "vietnamese": "Tiếng Việt",
+        "vietnamese": "Việt",
         "loading": "Đang tải..."
     },
     "DEFAULT_ERROR_MESSAGE": "Đã xảy ra lỗi",
@@ -46,5 +46,24 @@
                 "invalidConfirmPassword": "Mật khẩu không khớp."
             }
         }
+    },
+    "home": {
+        "1": "Đã đăng nhập",
+        "2": "Khách",
+        "3": "Quy trình làm việc email thông minh",
+        "4": "Tự động hóa quy trình email, tổ chức hộp thư đến của bạn và tăng năng suất với Mailbox AI.",
+        "5": "Đăng nhập",
+        "6": "Đăng ký",
+        "7": "Tự động hóa",
+        "8": "Các luồng xử lý email linh hoạt.",
+        "9": "Phân loại AI",
+        "10": "Gắn nhãn nội dung thông minh.",
+        "11": "Theo dõi",
+        "12": "Trạng thái gửi / nhận rõ ràng.",
+        "13": "Đến trang Inbox"
+    },
+    "user": {
+        "1": "Đăng xuất",
+        "2": "Về trang chủ"
     }
 }
