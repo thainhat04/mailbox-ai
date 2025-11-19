@@ -5,6 +5,7 @@ import { setAppLoading } from "./app.slice";
 import type { AppDispatch } from "../index";
 import SERVICES from "@/constants/services";
 import { userApi } from "@/services/User";
+import { RouterClient } from "@/helper/client-router";
 
 export interface User {
     id: string;
@@ -36,6 +37,7 @@ const authSlice = createSlice({
             reducer: (state) => {
                 state.user = null;
                 state.isLoggedIn = false;
+                RouterClient.replace(SERVICES.URL_LOGIN);
             },
             prepare: () => {
                 if (typeof window !== "undefined") {
