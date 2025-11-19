@@ -21,6 +21,7 @@
             "5": "Or continue with",
             "6": "Don't have an account?",
             "7": "Sign up",
+            "8": "Login successful. Redirecting...",
             "error": {
                 "requiredEmail": "Email address is required.",
                 "requiredPassword": "Password is required."

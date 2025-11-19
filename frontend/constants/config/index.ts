@@ -8,6 +8,7 @@ const ERROR_DEFAULT = "An error occurred";
 const ERROR_NOT_FOUND = "Not found";
 const ERROR_EMAIL_NOT_VERIFIED = "Email not verified";
 const STATUS_AUTH_ERROR = 400;
+const MISSING_DOMAIN_NAME = "Missing NEXT_DOMAIN_NAME in environment variables";
 export default {
     MISSING_BASE_URL,
     PROVIDER_REQUIRED,
@@ -19,4 +20,5 @@ export default {
     ERROR_NOT_FOUND,
     ERROR_EMAIL_NOT_VERIFIED,
     STATUS_AUTH_ERROR,
+    MISSING_DOMAIN_NAME,
 };
