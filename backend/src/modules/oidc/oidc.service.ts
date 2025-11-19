@@ -1,16 +1,18 @@
 import axios from "axios";
 import { Injectable } from "@nestjs/common";
 import { OIDCProviderConfig } from "./dto/oidc.dto";
-import { OAuthProvider } from "../auth/dto/providers";
+import { OAuthProvider, OAuthSignInResponseDto } from "../auth/dto/providers";
 import { GoogleOIDCConfig } from "./providers/google.provider";
 import { MicrosoftOIDCConfig } from "./providers/microsoft.provider";
 import * as jwt from "jsonwebtoken";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../database/prisma.service";
 import { JwtService } from "@nestjs/jwt";
-import { HashUtil } from "../../common/utils/hash.util";
-import crypto from "crypto";
 import { UserRole } from "@prisma/client";
+import { AuthService } from "../auth/auth.service";
+import { BaseException } from "src/common/exceptions";
+import { CODES } from "src/common/constants";
+import { GenerateUtil } from "src/common/utils";
 
 export interface OidcUserInfo {
   sub: string;
@@ -28,10 +30,11 @@ export class OIDCService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-  ) {}
+    private readonly authService: AuthService,
+  ) { }
 
   // STEP 1: Create Auth URL (Redirect User -> Provider)
-  createAuthUrl(provider: OIDCProviderConfig, state: string): string {
+  private createAuthUrl(provider: OIDCProviderConfig, state: string): string {
     const params = new URLSearchParams({
       client_id: provider.clientId,
       redirect_uri: provider.redirectUri,
@@ -50,7 +53,7 @@ export class OIDCService {
   }
 
   // STEP 2: Exchange Code For Tokens (CALL TOKEN ENDPOINT)
-  async exchangeCodeForTokens(provider: OIDCProviderConfig, code: string) {
+  private async exchangeCodeForTokens(provider: OIDCProviderConfig, code: string) {
     const data = new URLSearchParams({
       client_id: provider.clientId,
       client_secret: provider.clientSecret ?? "",
@@ -174,9 +177,36 @@ export class OIDCService {
       });
     }
 
+    const tokenResponse = await this.authService.generateTokens(user);
     return {
-      ...tokens,
-      userInfo,
+      access_token: tokenResponse.accessToken,
+      id_token: idToken,
+      refresh_token: tokenResponse.refreshToken,
     };
+  }
+
+
+  async oauthSignIn(
+    provider: OAuthProvider,
+    domain: string,
+  ): Promise<OAuthSignInResponseDto> {
+    const state = await GenerateUtil.generateState(domain);
+    switch (provider) {
+      case OAuthProvider.GOOGLE:
+        return {
+          response: this.createAuthUrl(GoogleOIDCConfig, state),
+        };
+      case OAuthProvider.MICROSOFT:
+        return {
+          response: this.createAuthUrl(MicrosoftOIDCConfig, state),
+        };
+      default:
+        throw new BaseException(
+          "Invalid provider",
+          CODES.INVALID_PROVIDER,
+          400,
+          "Invalid provider",
+        );
+    }
   }
 }
