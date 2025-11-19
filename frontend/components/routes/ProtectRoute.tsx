@@ -13,7 +13,7 @@ function ProtectRoute({ children }: { children: React.ReactNode }) {
         if (!isAuthenticated) {
             router.push(constantServices.URL_LOGIN);
         }
-    }, [isAuthenticated, router]);
+    }, [router]);
 
     if (!isAuth) return null;
 
