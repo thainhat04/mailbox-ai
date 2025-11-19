@@ -3,10 +3,11 @@ import Link from "next/link";
 import { useSelector } from "@/store";
 import { RootState } from "@/store";
 import UserMenu from "@/components/ui/UserMenu";
+import { useTranslation } from "react-i18next";
 
 export default function Home() {
     const { isLoggedIn, user } = useSelector((s: RootState) => s.auth);
-
+    const { t } = useTranslation();
     return (
         <div className="relative min-h-screen w-full text-white font-sans overflow-hidden">
             {/* Background */}
@@ -28,7 +29,7 @@ export default function Home() {
                             href="/auth/login"
                             className="rounded-lg px-3 py-2 text-xs font-medium bg-white/10 hover:bg-white/15 ring-1 ring-white/15 transition"
                         >
-                            Sign in
+                            {t("home.5")}
                         </Link>
                     )}
                 </div>
@@ -38,15 +39,14 @@ export default function Home() {
             <main className="relative z-10 mx-auto flex min-h-[calc(100vh-120px)] max-w-5xl flex-col items-center justify-center px-6 py-12 text-center">
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/5 ring-1 ring-white/10 px-4 py-1 text-[11px] text-white/70 backdrop-blur">
                     <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(16,185,129,0.5)]" />
-                    {isLoggedIn ? "Signed in" : "Guest"}
+                    {isLoggedIn ? t("home.1") : t("home.2")}
                 </div>
 
                 <h2 className="mt-6 bg-linear-to-r from-cyan-300 via-sky-300 to-fuchsia-300 bg-clip-text text-4xl font-bold tracking-tight text-transparent sm:text-5xl">
-                    Intelligent Email Workflow
+                    {t("home.3")}
                 </h2>
                 <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-white/60">
-                    Automate email processes, organize your inbox, and boost
-                    productivity with Mailbox AI.
+                    {t("home.4")}
                 </p>
 
                 {/* CTAs */}
@@ -57,13 +57,13 @@ export default function Home() {
                                 href="/auth/login"
                                 className="inline-flex items-center rounded-full bg-linear-to-r from-cyan-500 to-sky-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/40 transition"
                             >
-                                Sign in
+                                {t("home.5")}
                             </Link>
                             <Link
                                 href="/auth/sign-up"
                                 className="inline-flex items-center rounded-full px-6 py-3 text-sm font-semibold text-white/80 ring-1 ring-white/15 hover:bg-white/10 hover:text-white transition"
                             >
-                                Sign up
+                                {t("home.6")}
                             </Link>
                         </>
                     )}
@@ -72,25 +72,16 @@ export default function Home() {
                             href="/inbox"
                             className="inline-flex items-center rounded-full bg-white/10 px-6 py-3 text-sm font-semibold text-white ring-1 ring-white/15 hover:bg-white/20 transition"
                         >
-                            Go to Inbox
+                            {t("home.13")}
                         </Link>
                     )}
                 </div>
 
                 {/* Features */}
                 <div className="mt-14 grid w-full max-w-4xl grid-cols-1 gap-5 sm:grid-cols-3">
-                    <FeatureCard
-                        title="Automation"
-                        desc="Flexible email handling flows."
-                    />
-                    <FeatureCard
-                        title="AI Categorization"
-                        desc="Smart content labeling."
-                    />
-                    <FeatureCard
-                        title="Tracking"
-                        desc="Clear send / receive status."
-                    />
+                    <FeatureCard title={t("home.7")} desc={t("home.8")} />
+                    <FeatureCard title={t("home.9")} desc={t("home.10")} />
+                    <FeatureCard title={t("home.11")} desc={t("home.12")} />
                 </div>
 
                 {/* Footer */}
