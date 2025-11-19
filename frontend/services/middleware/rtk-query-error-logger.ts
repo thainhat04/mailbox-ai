@@ -5,7 +5,6 @@ import { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { toastManager } from "@/helper/toast/toast-manager";
 import serviceConstants from "@/constants/services";
 import { logout } from "@/store/slice/auth.slice";
-import { RouterClient } from "@/helper/client-router";
 
 export const rtkQueryErrorLogger: Middleware =
     (storeAPI) => (next) => (action) => {
@@ -20,7 +19,6 @@ export const rtkQueryErrorLogger: Middleware =
                 toastManager.show(error.data as string, "error");
                 storeAPI.dispatch(logout());
                 error.status = serviceConstants.STATUS_NOT_CLIENT_ERROR;
-                RouterClient.replace(serviceConstants.URL_LOGIN);
             }
         }
 
