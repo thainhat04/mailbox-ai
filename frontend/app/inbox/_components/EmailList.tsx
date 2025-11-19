@@ -197,7 +197,7 @@ export default function EmailList({
                     </div>
                 )}
 
-                {emails.length === 0 ? (
+                {!isLoading && !isFetching && emails.length === 0 ? (
                     <div className="p-4 text-center text-sm text-white/60">
                         No emails found.
                     </div>
