@@ -69,4 +69,13 @@ export class OAuthCallbackDto {
   @IsOptional()
   @IsString({ message: "Prompt must be a string" })
   prompt?: string;
+
+  @ApiProperty({
+    description: "Session state parameter (optional, provider may include)",
+    example: "session_state_value",
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: "Session state must be a string" })
+  session_state?: string;
 }

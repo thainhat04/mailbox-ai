@@ -26,6 +26,11 @@ export const validationSchema = Joi.object({
   GOOGLE_CLIENT_ID: Joi.string().required(),
   GOOGLE_CLIENT_SECRET: Joi.string().required(),
   GOOGLE_CALLBACK_URL: Joi.string().required(),
+
+  // Microsoft Provider
+  MICROSOFT_CLIENT_ID: Joi.string().required(),
+  MICROSOFT_CLIENT_SECRET: Joi.string().required(),
+  MICROSOFT_CALLBACK_URL: Joi.string().required(),
 });
 
 export interface EnvironmentVariables {
@@ -42,4 +47,7 @@ export interface EnvironmentVariables {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_CALLBACK_URL: string;
+  MICROSOFT_CLIENT_ID: string;
+  MICROSOFT_CLIENT_SECRET: string;
+  MICROSOFT_CALLBACK_URL: string;
 }
