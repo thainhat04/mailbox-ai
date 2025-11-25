@@ -22,12 +22,10 @@ export function InitProvider({ children }: Props) {
     const mounted = Object.values(loading).every((v) => v === true);
     const router = useRouter();
 
-    useEffect(() => {
-        RouterClient.set({
-            push: router.push,
-            replace: router.replace,
-        });
-    }, [router]);
+    RouterClient.set({
+        push: router.push,
+        replace: router.replace,
+    });
 
     useLayoutEffect(() => {
         // dispatch all init thunks you need
