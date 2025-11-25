@@ -147,7 +147,7 @@ export class OIDCService {
 
     // Extract and verify ID token
     const idToken = tokens.id_token;
-    console.log("idToken", idToken);
+
     if (!idToken) {
       throw new Error("No id_token in token response");
     }
@@ -178,11 +178,29 @@ export class OIDCService {
     }
 
     const tokenResponse = await this.authService.generateTokens(user);
-    return {
+
+    if (!tokenResponse || !tokenResponse.accessToken || !tokenResponse.refreshToken) {
+      console.error("Token generation failed:", {
+        hasTokenResponse: !!tokenResponse,
+        hasAccessToken: !!tokenResponse?.accessToken,
+        hasRefreshToken: !!tokenResponse?.refreshToken,
+      });
+      throw new Error("Failed to generate access and refresh tokens");
+    }
+
+    const result = {
       access_token: tokenResponse.accessToken,
       id_token: idToken,
       refresh_token: tokenResponse.refreshToken,
     };
+
+    console.log("Tokens generated successfully:", {
+      hasAccessToken: !!result.access_token,
+      hasRefreshToken: !!result.refresh_token,
+      hasIdToken: !!result.id_token,
+    });
+
+    return result;
   }
 
 
