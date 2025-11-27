@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { formatEmailDate } from "@/helper/dateFormatter";
 import EmailBody from "./EmailBody";
+import { useTranslation } from "react-i18next";
 
 interface EmailDetailWithBackProps extends EmailDetailProps {
     onBack?: () => void;
@@ -37,6 +38,7 @@ export default function EmailDetail({
     email,
     onBack,
 }: EmailDetailWithBackProps) {
+    const { t } = useTranslation();
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
 
     return (
@@ -46,7 +48,7 @@ export default function EmailDetail({
                     <div className="rounded-full bg-white/10 p-4">
                         <Forward className="text-white/50" />
                     </div>
-                    <p className="text-sm">Chọn một email để xem nội dung</p>
+                    <p className="text-sm">{t("inbox.9")}</p>
                 </div>
             ) : (
                 <div className="flex flex-col h-full">
@@ -70,20 +72,20 @@ export default function EmailDetail({
 
                         <div className="flex flex-col gap-1 text-xs w-full">
                             <p className="text-white/70">
-                                From:{" "}
+                                {t("inbox.detail.1")}:{" "}
                                 <span className="font-medium text-white break-all">
                                     {displayAddress(email.from)}
                                 </span>
                             </p>
                             <p className="text-white/70">
-                                To:{" "}
+                                {t("inbox.detail.2")}:{" "}
                                 <span className="font-medium text-white break-all">
                                     {email.to?.map(displayAddress).join(", ")}
                                 </span>
                             </p>
                             {!!email.cc?.length && (
                                 <p className="text-white/70">
-                                    Cc:{" "}
+                                    {t("inbox.detail.3")}:{" "}
                                     <span className="font-medium text-white break-all">
                                         {email.cc
                                             .map(displayAddress)
@@ -92,7 +94,8 @@ export default function EmailDetail({
                                 </p>
                             )}
                             <p className="text-white/60 mt-1">
-                                Received: {formatEmailDate(email.timestamp)}
+                                {t("inbox.detail.4")}:{" "}
+                                {formatEmailDate(email.timestamp)}
                             </p>
                         </div>
                     </header>
@@ -115,7 +118,8 @@ export default function EmailDetail({
                                         size={16}
                                         className="text-white/70"
                                     />
-                                    Attachments ({email.attachments.length})
+                                    {t("inbox.detail.9")} (
+                                    {email.attachments.length})
                                 </div>
                                 <ul className="space-y-2">
                                     {email.attachments.map((att) => (
@@ -151,7 +155,7 @@ export default function EmailDetail({
                                                         size={12}
                                                         className="hidden sm:block"
                                                     />
-                                                    Download
+                                                    {t("inbox.detail.10")}
                                                 </a>
                                                 <a
                                                     href={att.url}
@@ -159,7 +163,7 @@ export default function EmailDetail({
                                                     rel="noreferrer"
                                                     className="flex-1 sm:flex-none inline-flex items-center justify-center rounded-md border border-white/15 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white/85 hover:bg-white/8 transition"
                                                 >
-                                                    Open
+                                                    {t("inbox.detail.11")}
                                                 </a>
                                             </div>
                                         </li>
@@ -173,26 +177,34 @@ export default function EmailDetail({
                     <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-white/15 flex flex-wrap gap-2 sm:gap-3">
                         <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition">
                             <Reply size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">Reply</span>
+                            <span className="hidden sm:inline">
+                                {t("inbox.detail.5")}
+                            </span>
                         </button>
                         <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition">
                             <Forward size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">Forward</span>
+                            <span className="hidden sm:inline">
+                                {t("inbox.detail.6")}
+                            </span>
                         </button>
                         <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-red-600/20 transition">
                             <Trash2 size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">Delete</span>
+                            <span className="hidden sm:inline">
+                                {t("inbox.detail.7")}
+                            </span>
                         </button>
                         <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-yellow-500/20 transition">
                             <Star size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">Star</span>
+                            <span className="hidden sm:inline">
+                                {t("inbox.detail.8")}
+                            </span>
                         </button>
                     </div>
 
                     {/* Unread badge */}
                     {!email.isRead && (
                         <span className="absolute top-4 right-4 sm:right-6 rounded-full bg-cyan-400/15 px-2 py-1 text-[10px] font-medium text-cyan-300 ring-1 ring-cyan-300/30">
-                            Chưa đọc
+                            {t("inbox.detail.12")}
                         </span>
                     )}
                 </div>

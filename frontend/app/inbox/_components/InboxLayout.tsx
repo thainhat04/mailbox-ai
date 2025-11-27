@@ -5,7 +5,7 @@ import FolderList from "./FolderList";
 import EmailList from "./EmailList";
 import EmailDetail from "./EmailDetail";
 import { Email } from "../_types";
-import UserMenu from "@/components/ui/UserMenu";
+import HeaderInbox from "@/components/common/HeaderInbox";
 import { ArrowLeft } from "lucide-react";
 
 type ViewType = "folders" | "list" | "detail";
@@ -36,21 +36,20 @@ export default function InboxLayout() {
     };
 
     return (
-        <div className="relative h-screen w-full flex overflow-hidden text-white">
+        <div className="relative h-screen w-full flex flex-col overflow-hidden text-white">
             {/* Gradient background */}
             <div className="absolute inset-0 bg-linear-to-br from-[#0f111a] via-[#1a1b2b] to-[#2c1e4f] backdrop-blur-sm" />
 
+            <HeaderInbox />
+
             {/* Desktop Layout (≥768px) - 3 columns always visible */}
-            <div className="hidden md:flex relative z-10 h-full w-full">
+            <div className="hidden md:flex relative z-10 flex-1 w-full overflow-hidden">
                 {/* Folders */}
-                <div className="w-1/5 z-10000 h-full border-r border-white/10 backdrop-blur-md flex flex-col">
+                <div className="w-1/5 h-full border-r border-white/10 backdrop-blur-md flex flex-col">
                     <FolderList
                         selected={selectedFolder}
                         onSelect={handleFolderSelect}
                     />
-                    <div className="bg-white/5 p-4 border-t border-white/10 flex justify-center">
-                        <UserMenu isTop={true} isHideEmail={true} />
-                    </div>
                 </div>
 
                 {/* Email List */}
@@ -69,16 +68,13 @@ export default function InboxLayout() {
             </div>
 
             {/* Mobile Layout (<768px) - One view at a time */}
-            <div className="md:hidden relative z-10 h-full w-full flex flex-col">
+            <div className="md:hidden relative z-10 flex-1 w-full flex flex-col overflow-hidden">
                 {view === "folders" && (
                     <div className="flex-1 overflow-hidden flex flex-col">
                         <FolderList
                             selected={selectedFolder}
                             onSelect={handleFolderSelect}
                         />
-                        <div className="bg-white/5 p-4 border-t border-white/10 flex justify-center">
-                            <UserMenu isTop={true} isHideEmail={true} />
-                        </div>
                     </div>
                 )}
 

@@ -6,8 +6,10 @@ import clsx from "clsx";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useGetMailBoxesQuery } from "../_services";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function FolderList({ selected, onSelect }: FolderListProps) {
+    const { t } = useTranslation();
     const { result, error, isLoading, isFetching } = useQueryHandler(
         useGetMailBoxesQuery,
         undefined
@@ -15,13 +17,13 @@ export default function FolderList({ selected, onSelect }: FolderListProps) {
     const folders: Folder[] = result?.data || [];
     const domFolders = useMemo(() => {
         if (isLoading || isFetching) {
-            return <li>Loading folders...</li>;
+            return <li>{t("inbox.11")}</li>;
         }
         if (error) {
-            return <li>Error loading folders</li>;
+            return <li>{t("inbox.12")}</li>;
         }
         if (folders.length === 0) {
-            return <li>No folders found</li>;
+            return <li>{t("inbox.13")}</li>;
         }
         return folders.map((f) => {
             const isActive = selected === f.id;
@@ -51,7 +53,7 @@ export default function FolderList({ selected, onSelect }: FolderListProps) {
     return (
         <aside className="flex-1 custom-scroll overflow-y-auto border-r border-white/10 bg-white/5 backdrop-blur-md relative">
             <h2 className="px-5 py-4 text-xs font-semibold tracking-wide text-white/70 uppercase">
-                Mailboxes
+                {t("inbox.1")}
             </h2>
             <ul role="list" className="space-y-1 px-2 pb-6">
                 {domFolders}

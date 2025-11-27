@@ -9,6 +9,7 @@ import EmailToolbar from "./EmailToolbar";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useGetMailInOneBoxQuery } from "../_services";
 import { useKeyboardNavigation } from "@/hooks/useKeyboardNavigation";
+import { useTranslation } from "react-i18next";
 
 interface EmailListProps {
     selectedFolder: string;
@@ -21,6 +22,7 @@ export default function EmailList({
     selectedEmail,
     onSelectEmail,
 }: EmailListProps) {
+    const { t } = useTranslation();
     const { result, isLoading, isFetching } = useQueryHandler(
         useGetMailInOneBoxQuery,
         { mailboxId: selectedFolder },
@@ -140,19 +142,19 @@ export default function EmailList({
 
     const toolbarActions = [
         {
-            label: "Compose",
+            label: t("inbox.2"),
             onClick: () => setIsComposeOpen(true),
             style: "cursor-pointer rounded-full bg-linear-to-r from-cyan-500 to-sky-500 px-3 py-1 text-xs font-semibold text-white shadow-md shadow-cyan-500/20 transition hover:shadow-cyan-500/30",
         },
-        { label: "Refresh", onClick: refreshEmails },
-        { label: "Select All", onClick: selectAll },
+        { label: t("inbox.3"), onClick: refreshEmails },
+        { label: t("inbox.4"), onClick: selectAll },
         {
-            label: "Delete",
+            label: t("inbox.5"),
             onClick: deleteSelected,
             style: "rounded-full cursor-pointer border border-red-500/50 px-3 py-1 text-xs text-red-400 hover:bg-red-500/20 hover:shadow-md hover:shadow-red-500/30 transition",
         },
-        { label: "Mark Read", onClick: () => markSelected(true) },
-        { label: "Mark Unread", onClick: () => markSelected(false) },
+        { label: t("inbox.6"), onClick: () => markSelected(true) },
+        { label: t("inbox.7"), onClick: () => markSelected(false) },
     ];
 
     return (
@@ -191,7 +193,7 @@ export default function EmailList({
                                 />
                             </svg>
                             <span className="text-xs text-white/80">
-                                Loading...
+                                {t("inbox.14")}
                             </span>
                         </div>
                     </div>
@@ -199,7 +201,7 @@ export default function EmailList({
 
                 {!isLoading && !isFetching && emails.length === 0 ? (
                     <div className="p-4 text-center text-sm text-white/60">
-                        No emails found.
+                        {t("inbox.8")}
                     </div>
                 ) : (
                     emails.map((email, index) => (
