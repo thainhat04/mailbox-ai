@@ -51,16 +51,42 @@ export class ImapService {
     return `${userId}:${provider}:${email}`;
   }
 
+  /**
+   * Format OAuth2 token for XOAUTH2 IMAP authentication
+   * The imap library expects base64-encoded XOAUTH2 format:
+   * Format: user=<email>\x01auth=Bearer <token>\x01\x01
+   * Then base64 encode it
+   *
+   * Reference: https://developers.google.com/gmail/imap/xoauth2-protocol
+   */
+  private formatXoauth2Token(email: string, accessToken: string): string {
+    // XOAUTH2 format: user=<email>\x01auth=Bearer <token>\x01\x01
+    const authString = `user=${email}\x01auth=Bearer ${accessToken}\x01\x01`;
+    const base64Token = Buffer.from(authString).toString("base64");
+    this.logger.debug(
+      `Formatted XOAUTH2 token (length: ${base64Token.length})`,
+    );
+    return base64Token;
+  }
+
   private async getImapConfig(
     provider: MailProvider,
     email: string,
     accessToken: string,
   ): Promise<Imap.Config> {
+    // Format the OAuth2 token for XOAUTH2 authentication
+    // Some imap library versions expect base64-encoded XOAUTH2 format
+    const xoauth2Token = this.formatXoauth2Token(email, accessToken);
+
+    this.logger.debug(`Creating IMAP config for ${email} (${provider})`);
+
     const baseConfig: Partial<Imap.Config> = {
       user: email,
-      xoauth2: accessToken,
+      xoauth2: xoauth2Token,
       tls: true,
       tlsOptions: { rejectUnauthorized: false },
+      connTimeout: 10000, // 10 seconds connection timeout
+      authTimeout: 5000, // 5 seconds auth timeout
     };
 
     if (provider === MailProvider.GOOGLE) {
@@ -124,8 +150,14 @@ export class ImapService {
       throw new Error("No OAuth2 token found");
     }
 
+    // Log token info for debugging (without exposing the actual token)
+    this.logger.debug(
+      `Token found: expiresAt=${token.expiresAt}, scope=${token.scope?.substring(0, 50)}...`,
+    );
+
     // Check if token is expired and refresh if needed
     if (await this.oauth2TokenService.isTokenExpired(token)) {
+      this.logger.log(`Token expired, refreshing for ${email}`);
       const newAccessToken = await this.oauth2TokenService.refreshToken(
         userId,
         provider,
@@ -140,6 +172,25 @@ export class ImapService {
         expiresAt: new Date(Date.now() + 3600 * 1000), // 1 hour from now
         scope: token.scope ?? undefined,
       });
+      this.logger.log(`Token refreshed successfully for ${email}`);
+    }
+
+    // Validate token has required scopes for IMAP
+    if (token.scope) {
+      const requiredScopes =
+        provider === MailProvider.GOOGLE
+          ? ["https://mail.google.com/", "gmail.modify"]
+          : ["IMAP.AccessAsUser.All"];
+
+      const hasRequiredScope = requiredScopes.some((scope) =>
+        token.scope?.toLowerCase().includes(scope.toLowerCase()),
+      );
+
+      if (!hasRequiredScope) {
+        this.logger.warn(
+          `Token may not have required IMAP scopes. Current scope: ${token.scope}`,
+        );
+      }
     }
 
     // Get IMAP configuration
@@ -150,22 +201,53 @@ export class ImapService {
     );
     console.log("IMAP Config:", imapConfig);
 
+    this.logger.log(`Attempting IMAP connection for ${email} (${provider})`);
+    this.logger.debug(
+      `IMAP config: host=${imapConfig.host}, port=${imapConfig.port}, user=${imapConfig.user}`,
+    );
+
     // Create IMAP connection
     const imap = new Imap(imapConfig);
 
     return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        imap.end();
+        reject(new Error("IMAP connection timeout"));
+      }, 30000); // 30 seconds timeout
+
       imap.once("ready", () => {
+        clearTimeout(timeout);
         this.logger.log(`IMAP connection established for ${email}`);
         this.connections.set(key, imap);
         resolve(imap);
       });
 
       imap.once("error", (err) => {
+        clearTimeout(timeout);
         this.logger.error(`IMAP connection error for ${email}:`, err);
+        this.logger.error(`Error details: ${err.message}`);
+        if (err.message.includes("SASL")) {
+          this.logger.error(
+            "SASL authentication error - check OAuth2 token format and scopes",
+          );
+        }
         reject(err);
       });
 
-      imap.connect();
+      imap.once("end", () => {
+        clearTimeout(timeout);
+        this.logger.log(`IMAP connection ended for ${email}`);
+      });
+
+      try {
+        imap.connect();
+      } catch (connectError) {
+        clearTimeout(timeout);
+        this.logger.error(
+          `Failed to initiate IMAP connection: ${connectError}`,
+        );
+        reject(connectError);
+      }
     });
   }
 

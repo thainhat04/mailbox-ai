@@ -2,9 +2,10 @@ import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { Email, Mailbox } from "./entities";
 import { MOCK_EMAILS, MOCK_MAILBOXES } from "./data";
 import { EmailListQueryDto } from "./dto";
+import { ModifyEmailFlagsDto } from "./dto/modify.dto";
 import { ImapService } from "./services/imap.service";
 import { OAuth2TokenService } from "./services/oauth2-token.service";
-import { ModifyEmailFlagsDto } from "./dto/modify.dto";
+import { MailProvider } from "@prisma/client";
 
 @Injectable()
 export class EmailService {
@@ -379,5 +380,95 @@ export class EmailService {
       email: userEmail,
       provider: "GOOGLE",
     });
+  }
+
+  /**
+   * Test IMAP connection for the current user
+   */
+  async testImapConnection(userId: string): Promise<{
+    success: boolean;
+    message: string;
+    email?: string;
+    provider?: string;
+    host?: string;
+    port?: number;
+    details?: string;
+    testEmailCount?: number;
+    testedAt?: string;
+  }> {
+    try {
+      // Check if user has OAuth2 tokens
+      const tokens = await this.oauth2TokenService.getUserTokens(userId);
+      if (!tokens || tokens.length === 0) {
+        return {
+          success: false,
+          message:
+            "No OAuth2 tokens found. Please connect your email account first.",
+        };
+      }
+
+      // Use the first available token
+      const token = tokens[0];
+      const config = {
+        userId,
+        provider: token.provider,
+        email: token.email,
+      };
+
+      // Try to connect to IMAP
+      this.logger.log(
+        `Testing IMAP connection for ${token.email} (${token.provider})`,
+      );
+      const imap = await this.imapService.connect(config);
+
+      // Get IMAP config details
+      const imapConfig = await this.imapService.getImapConfigs(userId);
+      const configDetails = imapConfig.find(
+        (c) => c.provider === token.provider && c.email === token.email,
+      );
+
+      // Try to fetch a few emails to verify the connection works
+      let testEmailCount = 0;
+      try {
+        const testEmails = await this.imapService.fetchEmails(
+          config,
+          "INBOX",
+          5,
+        );
+        testEmailCount = testEmails.length;
+      } catch (fetchError) {
+        this.logger.warn(`Failed to fetch test emails: ${fetchError.message}`);
+      }
+
+      // Disconnect
+      await this.imapService.disconnect(config);
+
+      return {
+        success: true,
+        message: "IMAP connection successful",
+        email: token.email,
+        provider: token.provider,
+        host:
+          configDetails?.imapHost ||
+          (token.provider === MailProvider.GOOGLE
+            ? "imap.gmail.com"
+            : "outlook.office365.com"),
+        port: configDetails?.imapPort || 993,
+        details: `Successfully connected to ${token.provider} IMAP server and fetched ${testEmailCount} test emails`,
+        testEmailCount,
+        testedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error(
+        `IMAP connection test failed: ${error.message}`,
+        error.stack,
+      );
+      return {
+        success: false,
+        message: `IMAP connection failed: ${error.message}`,
+        details: error.stack,
+        testedAt: new Date().toISOString(),
+      };
+    }
   }
 }
