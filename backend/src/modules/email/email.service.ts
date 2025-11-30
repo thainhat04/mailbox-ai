@@ -1,12 +1,20 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { Email, Mailbox } from "./entities";
 import { MOCK_EMAILS, MOCK_MAILBOXES } from "./data";
 import { EmailListQueryDto } from "./dto";
+import { ImapService } from './services/imap.service';
+import { OAuth2TokenService } from './services/oauth2-token.service';
 
 @Injectable()
 export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
   private emails: Email[] = MOCK_EMAILS;
   private mailboxes: Mailbox[] = MOCK_MAILBOXES;
+
+  constructor(
+    private readonly imapService: ImapService,
+    private readonly oauth2TokenService: OAuth2TokenService,
+  ) {}
 
   /**
    * Get all mailboxes for the current user
@@ -28,20 +36,115 @@ export class EmailService {
 
   /**
    * Get emails by mailbox ID with pagination and filtering
+   * If OAuth2 token is available, fetch from IMAP, otherwise use mock data
    */
-  findEmailsByMailbox(
+  async findEmailsByMailbox(
     mailboxId: string,
     query: EmailListQueryDto,
-  ): {
+    userId?: string,
+  ): Promise<{
     emails: Email[];
     page: number;
     limit: number;
     total: number;
     totalPages: number;
-  } {
+  }> {
     // Verify mailbox exists
     this.findMailboxById(mailboxId);
 
+    // Check if user has OAuth2 tokens for IMAP access
+    if (userId) {
+      const tokens = await this.oauth2TokenService.getUserTokens(userId);
+      if (tokens && tokens.length > 0) {
+        try {
+          // Try to fetch from IMAP
+          return await this.fetchEmailsFromImap(userId, mailboxId, query, tokens);
+        } catch (error) {
+          this.logger.warn(`Failed to fetch emails from IMAP: ${error.message}, falling back to mock data`);
+        }
+      }
+    }
+
+    // Fallback to mock data
+    return this.fetchEmailsFromMock(mailboxId, query);
+  }
+
+  /**
+   * Fetch emails from IMAP server
+   */
+  private async fetchEmailsFromImap(
+    userId: string,
+    mailboxId: string,
+    query: EmailListQueryDto,
+    tokens: any[],
+  ) {
+    // Use the first available token
+    const token = tokens[0];
+
+    // Map mailbox ID to IMAP folder
+    const imapFolder = this.mapMailboxToImapFolder(mailboxId);
+
+    const page = query.page || 1;
+    const limit = query.limit || 50;
+
+    // Fetch emails from IMAP
+    const imapMessages = await this.imapService.fetchEmails(
+      {
+        userId,
+        provider: token.provider,
+        email: token.email,
+      },
+      imapFolder,
+      limit,
+    );
+
+    // Convert IMAP messages to Email entities
+    const emails: Email[] = imapMessages.map((msg) => ({
+      id: msg.id,
+      mailboxId,
+      from: {
+        name: msg.from.split('<')[0].trim(),
+        email: msg.from.match(/<(.+)>/)?.[1] || msg.from,
+        avatar: '',
+      },
+      to: msg.to.map(t => ({
+        name: t.split('<')[0].trim(),
+        email: t.match(/<(.+)>/)?.[1] || t,
+      })),
+      subject: msg.subject,
+      preview: msg.body.substring(0, 150),
+      body: msg.body,
+      timestamp: msg.date.toISOString(),
+      isRead: false,
+      isStarred: false,
+      isImportant: false,
+      hasAttachments: (msg.attachments?.length || 0) > 0,
+      attachments: (msg.attachments || []).map((att, idx) => ({
+        id: `${msg.id}-att-${idx}`,
+        filename: att.filename,
+        mimeType: att.contentType,
+        size: att.size,
+        url: '',
+      })),
+      labels: [],
+    }));
+
+    return {
+      emails,
+      page,
+      limit,
+      total: emails.length,
+      totalPages: Math.ceil(emails.length / limit),
+    };
+  }
+
+  /**
+   * Fetch emails from mock data
+   */
+  private fetchEmailsFromMock(
+    mailboxId: string,
+    query: EmailListQueryDto,
+  ) {
     // Filter emails by mailbox
     let filteredEmails = this.emails.filter((e) => e.mailboxId === mailboxId);
 
@@ -77,6 +180,21 @@ export class EmailService {
       total,
       totalPages,
     };
+  }
+
+  /**
+   * Map mailbox ID to IMAP folder name
+   */
+  private mapMailboxToImapFolder(mailboxId: string): string {
+    const mapping: Record<string, string> = {
+      'inbox': 'INBOX',
+      'sent': 'Sent',
+      'drafts': 'Drafts',
+      'trash': 'Trash',
+      'spam': 'Spam',
+      'starred': 'Starred',
+    };
+    return mapping[mailboxId] || 'INBOX';
   }
 
   /**

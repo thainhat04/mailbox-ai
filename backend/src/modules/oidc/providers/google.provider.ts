@@ -8,5 +8,11 @@ export const GoogleOIDCConfig: OIDCProviderConfig = {
   tokenEndpoint: "https://oauth2.googleapis.com/token",
   userInfoEndpoint: "https://openidconnect.googleapis.com/v1/userinfo",
   redirectUri: process.env.GOOGLE_CALLBACK_URL!,
-  scopes: ["openid", "email", "profile"],
+  scopes: [
+    "openid",
+    "email",
+    "profile",
+    "https://mail.google.com/", // Full Gmail access (read/send/delete)
+    "https://www.googleapis.com/auth/gmail.modify", // Read/send/modify Gmail
+  ],
 };
