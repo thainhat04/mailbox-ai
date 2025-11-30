@@ -1,7 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ImapService, ImapConnectionConfig, MailMessage } from '../email/services/imap.service';
-import { OAuth2TokenService, OAuth2TokenData } from '../email/services/oauth2-token.service';
-import { MailProvider } from '@prisma/client';
+import { Injectable, Logger } from "@nestjs/common";
+import {
+  ImapService,
+  ImapConnectionConfig,
+  MailMessage,
+} from "../email/services/imap.service";
+import {
+  OAuth2TokenService,
+  OAuth2TokenData,
+} from "../email/services/oauth2-token.service";
+import { MailProvider } from "@prisma/client";
 
 @Injectable()
 export class MailService {
@@ -10,7 +17,7 @@ export class MailService {
   constructor(
     private readonly imapService: ImapService,
     private readonly oauth2TokenService: OAuth2TokenService,
-  ) { }
+  ) {}
 
   async saveOAuth2Token(tokenData: OAuth2TokenData) {
     await this.oauth2TokenService.saveToken(tokenData);
@@ -43,24 +50,11 @@ export class MailService {
     userId: string,
     provider: MailProvider,
     email: string,
-    mailbox: string = 'INBOX',
+    mailbox: string = "INBOX",
     limit: number = 50,
   ): Promise<MailMessage[]> {
     const config: ImapConnectionConfig = { userId, provider, email };
     return this.imapService.fetchEmails(config, mailbox, limit);
-  }
-
-  async sendEmail(
-    userId: string,
-    provider: MailProvider,
-    fromEmail: string,
-    to: string | string[],
-    subject: string,
-    body: string,
-    html?: string,
-  ): Promise<void> {
-    const config: ImapConnectionConfig = { userId, provider, email: fromEmail };
-    await this.imapService.sendEmail(config, to, subject, body, html);
   }
 
   async disconnectMailAccount(

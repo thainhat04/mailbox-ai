@@ -1,4 +1,15 @@
-import { Controller, Get, Param, Query, Patch, Delete, UseGuards } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  Patch,
+  Delete,
+  UseGuards,
+  Post,
+  Body,
+  NotFoundException,
+} from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,
@@ -6,6 +17,7 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
+  ApiBody,
 } from "@nestjs/swagger";
 import { EmailService } from "./email.service";
 import {
@@ -18,9 +30,13 @@ import { ResponseDto } from "../../common/dtos/response.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { JwtPayload } from "../../common/decorators/current-user.decorator";
+import { SendEmailDto } from "./dto/send-email.dto";
+import { ReplyEmailDto } from "./dto/reply-emai.dto";
+import { ModifyEmailFlagsDto } from "./dto/modify.dto";
+import { SendEmailResponse } from "./dto/send-email-response";
 
 @ApiTags("Email")
-@Controller("api")
+@Controller()
 @ApiBearerAuth("JWT-auth")
 @UseGuards(JwtAuthGuard)
 export class EmailController {
@@ -75,7 +91,11 @@ export class EmailController {
     @CurrentUser() user?: JwtPayload,
   ): Promise<ResponseDto<EmailListResponseDto>> {
     const userId = user?.sub;
-    const result = await this.emailService.findEmailsByMailbox(id, query, userId);
+    const result = await this.emailService.findEmailsByMailbox(
+      id,
+      query,
+      userId,
+    );
     return ResponseDto.success(result, "Emails retrieved successfully");
   }
 
@@ -165,5 +185,62 @@ export class EmailController {
       emails,
       `Found ${emails.length} matching emails`,
     );
+  }
+  @Post("emails/send")
+  @ApiOperation({ summary: "Send an email" })
+  @ApiResponse({
+    status: 200,
+    description: "Email sent successfully",
+    type: SendEmailResponse,
+  })
+  async send(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: SendEmailDto,
+  ): Promise<ResponseDto<SendEmailResponse>> {
+    const result = await this.emailService.sendEmail(user.sub, user.email, dto);
+    return ResponseDto.success(result, "Email sent successfully");
+  }
+  @Post("emails/:id/reply")
+  async reply(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: number,
+    @Body() dto: ReplyEmailDto,
+  ): Promise<ResponseDto<SendEmailResponse>> {
+    const original = await this.emailService.getEmailDetail(
+      user.sub,
+      user.email,
+      id,
+    );
+    if (!original) {
+      throw new NotFoundException("Original email not found");
+    }
+    const result = await this.emailService.replyEmail(
+      user.sub,
+      user.email,
+      original,
+      dto,
+    );
+    return ResponseDto.success(result, "Email replied successfully");
+  }
+
+  @Post("emails/:id/modify")
+  async modifyEmail(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: number,
+    @Body() dto: ModifyEmailFlagsDto,
+  ) {
+    const original = await this.emailService.getEmailDetail(
+      user.sub,
+      user.email,
+      id,
+    );
+    if (!original) {
+      throw new NotFoundException("Original email not found");
+    }
+    return this.emailService.modifyEmail(user.sub, user.email, id, dto);
+  }
+  @Get("email-all")
+  async getAllEmails(@CurrentUser() user: JwtPayload) {
+    return this.emailService.getAllEmails(user.sub, user.email);
   }
 }

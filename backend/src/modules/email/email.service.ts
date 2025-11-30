@@ -2,8 +2,9 @@ import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { Email, Mailbox } from "./entities";
 import { MOCK_EMAILS, MOCK_MAILBOXES } from "./data";
 import { EmailListQueryDto } from "./dto";
-import { ImapService } from './services/imap.service';
-import { OAuth2TokenService } from './services/oauth2-token.service';
+import { ImapService } from "./services/imap.service";
+import { OAuth2TokenService } from "./services/oauth2-token.service";
+import { ModifyEmailFlagsDto } from "./dto/modify.dto";
 
 @Injectable()
 export class EmailService {
@@ -58,9 +59,16 @@ export class EmailService {
       if (tokens && tokens.length > 0) {
         try {
           // Try to fetch from IMAP
-          return await this.fetchEmailsFromImap(userId, mailboxId, query, tokens);
+          return await this.fetchEmailsFromImap(
+            userId,
+            mailboxId,
+            query,
+            tokens,
+          );
         } catch (error) {
-          this.logger.warn(`Failed to fetch emails from IMAP: ${error.message}, falling back to mock data`);
+          this.logger.warn(
+            `Failed to fetch emails from IMAP: ${error.message}, falling back to mock data`,
+          );
         }
       }
     }
@@ -103,12 +111,12 @@ export class EmailService {
       id: msg.id,
       mailboxId,
       from: {
-        name: msg.from.split('<')[0].trim(),
+        name: msg.from.split("<")[0].trim(),
         email: msg.from.match(/<(.+)>/)?.[1] || msg.from,
-        avatar: '',
+        avatar: "",
       },
-      to: msg.to.map(t => ({
-        name: t.split('<')[0].trim(),
+      to: msg.to.map((t) => ({
+        name: t.split("<")[0].trim(),
         email: t.match(/<(.+)>/)?.[1] || t,
       })),
       subject: msg.subject,
@@ -124,7 +132,7 @@ export class EmailService {
         filename: att.filename,
         mimeType: att.contentType,
         size: att.size,
-        url: '',
+        url: "",
       })),
       labels: [],
     }));
@@ -141,10 +149,7 @@ export class EmailService {
   /**
    * Fetch emails from mock data
    */
-  private fetchEmailsFromMock(
-    mailboxId: string,
-    query: EmailListQueryDto,
-  ) {
+  private fetchEmailsFromMock(mailboxId: string, query: EmailListQueryDto) {
     // Filter emails by mailbox
     let filteredEmails = this.emails.filter((e) => e.mailboxId === mailboxId);
 
@@ -187,14 +192,14 @@ export class EmailService {
    */
   private mapMailboxToImapFolder(mailboxId: string): string {
     const mapping: Record<string, string> = {
-      'inbox': 'INBOX',
-      'sent': 'Sent',
-      'drafts': 'Drafts',
-      'trash': 'Trash',
-      'spam': 'Spam',
-      'starred': 'Starred',
+      inbox: "INBOX",
+      sent: "Sent",
+      drafts: "Drafts",
+      trash: "Trash",
+      spam: "Spam",
+      starred: "Starred",
     };
-    return mapping[mailboxId] || 'INBOX';
+    return mapping[mailboxId] || "INBOX";
   }
 
   /**
@@ -313,6 +318,66 @@ export class EmailService {
       );
       mailbox.totalCount = mailboxEmails.length;
       mailbox.unreadCount = mailboxEmails.filter((e) => !e.isRead).length;
+    });
+  }
+  async sendEmail(userId: string, userEmail: string, dto: any) {
+    // Here you would integrate with an SMTP service to send the email.
+    const result = await this.imapService.sendEmail(
+      {
+        userId,
+        email: userEmail,
+        provider: "GOOGLE",
+      },
+      dto,
+    );
+    return result;
+  }
+  async getEmailDetail(userId: string, userEmail: string, id: number) {
+    return this.imapService.getMailDetail(
+      {
+        userId,
+        email: userEmail,
+        provider: "GOOGLE",
+      },
+      id,
+    );
+  }
+  async replyEmail(userId: string, userEmail: string, original: any, dto: any) {
+    const result = await this.imapService.replyEmail(
+      {
+        userId,
+        email: userEmail,
+        provider: "GOOGLE",
+      },
+      original,
+      dto,
+    );
+    return result;
+  }
+  async modifyEmail(
+    userId: string,
+    userEmail: string,
+    id: number,
+    dto: ModifyEmailFlagsDto,
+  ) {
+    await this.imapService.modifyEmailFlags(
+      {
+        userId,
+        email: userEmail,
+        provider: "GOOGLE",
+      },
+      id,
+      dto,
+    );
+    return {
+      success: true,
+    };
+  }
+  async getAllEmails(userId: string, userEmail: string) {
+    return this.imapService.fetchEmails({
+      userId,
+      email: userEmail,
+      provider: "GOOGLE",
     });
   }
 }
