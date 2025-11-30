@@ -13,6 +13,7 @@ import {
   MailboxDto,
   EmailListQueryDto,
   EmailListResponseDto,
+  ImapTestResponseDto,
 } from "./dto";
 import { ResponseDto } from "../../common/dtos/response.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
@@ -24,7 +25,7 @@ import type { JwtPayload } from "../../common/decorators/current-user.decorator"
 @ApiBearerAuth("JWT-auth")
 @UseGuards(JwtAuthGuard)
 export class EmailController {
-  constructor(private readonly emailService: EmailService) {}
+  constructor(private readonly emailService: EmailService) { }
 
   // ==================== MAILBOX ENDPOINTS ====================
 
@@ -165,5 +166,30 @@ export class EmailController {
       emails,
       `Found ${emails.length} matching emails`,
     );
+  }
+
+  // ==================== IMAP TEST ENDPOINT ====================
+
+  @Get("imap/test")
+  @ApiOperation({ summary: "Test IMAP connection" })
+  @ApiResponse({
+    status: 200,
+    description: "IMAP connection test result",
+    type: ImapTestResponseDto,
+  })
+  async testImapConnection(
+    @CurrentUser() user?: JwtPayload,
+  ): Promise<ResponseDto<ImapTestResponseDto>> {
+    if (!user?.sub) {
+      const errorResult: ImapTestResponseDto = {
+        success: false,
+        message: "User not authenticated",
+        testedAt: new Date().toISOString(),
+      };
+      return ResponseDto.success(errorResult, errorResult.message);
+    }
+
+    const result = await this.emailService.testImapConnection(user.sub);
+    return ResponseDto.success(result, result.message);
   }
 }
