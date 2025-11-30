@@ -8,7 +8,7 @@ import * as jwt from "jsonwebtoken";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../database/prisma.service";
 import { JwtService } from "@nestjs/jwt";
-import { UserRole } from "@prisma/client";
+import { UserRole, MailProvider } from "@prisma/client";
 import { AuthService } from "../auth/auth.service";
 import { BaseException } from "../../common/exceptions";
 import { CODES } from "../../common/constants";
@@ -177,6 +177,14 @@ export class OIDCService {
       });
     }
 
+    // Save OAuth2 tokens for mail access
+    await this.saveOAuth2Tokens(
+      user.id,
+      provider,
+      userInfo.email,
+      tokens,
+    );
+
     const tokenResponse = await this.authService.generateTokens(user);
 
     if (!tokenResponse || !tokenResponse.accessToken || !tokenResponse.refreshToken) {
@@ -201,6 +209,84 @@ export class OIDCService {
     });
 
     return result;
+  }
+
+  // Save OAuth2 tokens for mail server access
+  private async saveOAuth2Tokens(
+    userId: string,
+    provider: OAuthProvider,
+    email: string,
+    tokens: any,
+  ) {
+    const mailProvider = provider === OAuthProvider.GOOGLE ? MailProvider.GOOGLE : MailProvider.MICROSOFT;
+
+    // Calculate expiration time (default to 1 hour if not provided)
+    const expiresIn = tokens.expires_in || 3600;
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    // Save OAuth2 token
+    await this.prisma.oAuth2Token.upsert({
+      where: {
+        userId_provider_email: {
+          userId,
+          provider: mailProvider,
+          email,
+        },
+      },
+      update: {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        tokenType: tokens.token_type || 'Bearer',
+        expiresAt,
+        scope: tokens.scope,
+        idToken: tokens.id_token,
+        updatedAt: new Date(),
+      },
+      create: {
+        userId,
+        provider: mailProvider,
+        email,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        tokenType: tokens.token_type || 'Bearer',
+        expiresAt,
+        scope: tokens.scope,
+        idToken: tokens.id_token,
+      },
+    });
+
+    // Save IMAP configuration
+    const imapSettings = mailProvider === MailProvider.GOOGLE
+      ? { host: 'imap.gmail.com', port: 993, smtpHost: 'smtp.gmail.com', smtpPort: 587 }
+      : { host: 'outlook.office365.com', port: 993, smtpHost: 'smtp.office365.com', smtpPort: 587 };
+
+    await this.prisma.imapConfig.upsert({
+      where: {
+        userId_provider_email: {
+          userId,
+          provider: mailProvider,
+          email,
+        },
+      },
+      update: {
+        imapHost: imapSettings.host,
+        imapPort: imapSettings.port,
+        smtpHost: imapSettings.smtpHost,
+        smtpPort: imapSettings.smtpPort,
+        updatedAt: new Date(),
+      },
+      create: {
+        userId,
+        provider: mailProvider,
+        email,
+        imapHost: imapSettings.host,
+        imapPort: imapSettings.port,
+        smtpHost: imapSettings.smtpHost,
+        smtpPort: imapSettings.smtpPort,
+      },
+    });
+
+    console.log(`OAuth2 tokens and IMAP config saved for ${email} (${mailProvider})`);
   }
 
 

@@ -18,6 +18,8 @@ model User {
 
   // Relations
   refreshTokens RefreshToken[]
+  oauth2Tokens  OAuth2Token[]
+  imapConfigs   ImapConfig[]
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -41,8 +43,71 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+// OAuth2 Token model - stores OAuth2 tokens from Google/Microsoft for mail access
+model OAuth2Token {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     MailProvider // GOOGLE or MICROSOFT
+  email        String       // The email account this token is for
+
+  // OAuth2 token fields
+  accessToken  String       @db.Text
+  refreshToken String?      @db.Text
+  tokenType    String       @default("Bearer")
+  expiresAt    DateTime
+  scope        String?      @db.Text
+  idToken      String?      @db.Text
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([userId, provider, email])
+  @@index([userId])
+  @@index([email])
+  @@index([expiresAt])
+  @@map("oauth2_tokens")
+}
+
+// IMAP Configuration model - stores IMAP/SMTP connection settings
+model ImapConfig {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     MailProvider
+  email        String
+
+  // IMAP settings
+  imapHost     String
+  imapPort     Int
+  imapSecure   Boolean      @default(true)
+
+  // SMTP settings
+  smtpHost     String
+  smtpPort     Int
+  smtpSecure   Boolean      @default(true)
+
+  // Sync settings
+  lastSyncAt   DateTime?
+  syncEnabled  Boolean      @default(true)
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([userId, provider, email])
+  @@index([userId])
+  @@index([syncEnabled])
+  @@map("imap_configs")
+}
+
 // User role enum
 enum UserRole {
   ADMIN
   USER
+}
+
+// Mail provider enum
+enum MailProvider {
+  GOOGLE
+  MICROSOFT
 }

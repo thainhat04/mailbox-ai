@@ -9,5 +9,14 @@ export const MicrosoftOIDCConfig: OIDCProviderConfig = {
   tokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
   userInfoEndpoint: "https://graph.microsoft.com/oidc/userinfo",
   redirectUri: process.env.MICROSOFT_CALLBACK_URL!,
-  scopes: ["openid", "email", "profile", "offline_access"], // REQUIRED
+  scopes: [
+    "openid",
+    "email",
+    "profile",
+    "offline_access", // Get refresh token
+    "https://outlook.office.com/IMAP.AccessAsUser.All", // IMAP access
+    "https://outlook.office.com/SMTP.Send", // SMTP send access
+    "https://outlook.office.com/Mail.ReadWrite", // Read/write mail via Graph API
+    "https://outlook.office.com/Mail.Send", // Send mail via Graph API
+  ],
 };

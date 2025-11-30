@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Patch, Delete } from "@nestjs/common";
+import { Controller, Get, Param, Query, Patch, Delete, UseGuards } from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,
@@ -15,10 +15,14 @@ import {
   EmailListResponseDto,
 } from "./dto";
 import { ResponseDto } from "../../common/dtos/response.dto";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import type { JwtPayload } from "../../common/decorators/current-user.decorator";
 
 @ApiTags("Email")
 @Controller("api")
 @ApiBearerAuth("JWT-auth")
+@UseGuards(JwtAuthGuard)
 export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
@@ -68,8 +72,10 @@ export class EmailController {
   async getEmailsByMailbox(
     @Param("id") id: string,
     @Query() query: EmailListQueryDto,
+    @CurrentUser() user?: JwtPayload,
   ): Promise<ResponseDto<EmailListResponseDto>> {
-    const result = this.emailService.findEmailsByMailbox(id, query);
+    const userId = user?.sub;
+    const result = await this.emailService.findEmailsByMailbox(id, query, userId);
     return ResponseDto.success(result, "Emails retrieved successfully");
   }
 
