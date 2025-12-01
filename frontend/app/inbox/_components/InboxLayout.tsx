@@ -7,6 +7,7 @@ import EmailDetail from "./EmailDetail";
 import { Email } from "../_types";
 import HeaderInbox from "@/components/common/HeaderInbox";
 import { ArrowLeft } from "lucide-react";
+import ComposeModal from "./ComposeModal";
 
 type ViewType = "folders" | "list" | "detail";
 
@@ -34,12 +35,16 @@ export default function InboxLayout() {
         setSelectedEmail(null);
         setView("list");
     };
+    const [isComposeOpen, setIsComposeOpen] = useState(false);
 
     return (
         <div className="relative h-screen w-full flex flex-col overflow-hidden text-white">
             {/* Gradient background */}
             <div className="absolute inset-0 bg-linear-to-br from-[#0f111a] via-[#1a1b2b] to-[#2c1e4f] backdrop-blur-sm" />
-
+            <ComposeModal
+                isOpen={isComposeOpen}
+                onClose={() => setIsComposeOpen(false)}
+            />
             <HeaderInbox />
 
             {/* Desktop Layout (≥768px) - 3 columns always visible */}
@@ -58,6 +63,8 @@ export default function InboxLayout() {
                         selectedFolder={selectedFolder}
                         selectedEmail={selectedEmail}
                         onSelectEmail={handleEmailSelect}
+                        isComposeOpen={isComposeOpen}
+                        setIsComposeOpen={setIsComposeOpen}
                     />
                 </div>
 
@@ -100,6 +107,8 @@ export default function InboxLayout() {
                                 selectedFolder={selectedFolder}
                                 selectedEmail={selectedEmail}
                                 onSelectEmail={handleEmailSelect}
+                                isComposeOpen={isComposeOpen}
+                                setIsComposeOpen={setIsComposeOpen}
                             />
                         </div>
                     </div>

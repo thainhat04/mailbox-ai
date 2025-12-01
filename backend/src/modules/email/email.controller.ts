@@ -33,7 +33,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { JwtPayload } from "../../common/decorators/current-user.decorator";
 import { SendEmailDto } from "./dto/send-email.dto";
 import { ReplyEmailDto } from "./dto/reply-emai.dto";
-import { ModifyEmailFlagsDto } from "./dto/modify.dto";
+import { ModifyEmailDto } from "./dto/modify.dto";
 import { SendEmailResponse } from "./dto/send-email-response";
 
 @ApiTags("Email")
@@ -207,10 +207,12 @@ export class EmailController {
     @Param("id") id: number,
     @Body() dto: ReplyEmailDto,
   ): Promise<ResponseDto<SendEmailResponse>> {
+    console.log("id", id);
     const original = await this.emailService.getEmailDetail(
       user.sub,
       user.email,
       id,
+      dto.mailBox,
     );
     if (!original) {
       throw new NotFoundException("Original email not found");
@@ -228,16 +230,18 @@ export class EmailController {
   async modifyEmail(
     @CurrentUser() user: JwtPayload,
     @Param("id") id: number,
-    @Body() dto: ModifyEmailFlagsDto,
+    @Body() dto: ModifyEmailDto,
   ) {
     const original = await this.emailService.getEmailDetail(
       user.sub,
       user.email,
       id,
+      dto.mailBox,
     );
     if (!original) {
       throw new NotFoundException("Original email not found");
     }
+    console.log("Original email:", original);
     return this.emailService.modifyEmail(user.sub, user.email, id, dto);
   }
   @Get("email-all")

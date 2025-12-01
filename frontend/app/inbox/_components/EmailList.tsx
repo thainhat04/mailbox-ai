@@ -15,12 +15,16 @@ interface EmailListProps {
     selectedFolder: string;
     selectedEmail: Email | null;
     onSelectEmail: (email: Email) => void;
+    isComposeOpen: boolean;
+    setIsComposeOpen: (open: boolean) => void;
 }
 
 export default function EmailList({
     selectedFolder,
     selectedEmail,
     onSelectEmail,
+    isComposeOpen,
+    setIsComposeOpen,
 }: EmailListProps) {
     const { t } = useTranslation();
     const { result, isLoading, isFetching } = useQueryHandler(
@@ -33,7 +37,7 @@ export default function EmailList({
     const [selectedEmails, setSelectedEmails] = useState<Set<string>>(
         new Set()
     );
-    const [isComposeOpen, setIsComposeOpen] = useState(false);
+
     const [focusedIndex, setFocusedIndex] = useState<number>(-1);
     const emailListRef = useRef<HTMLDivElement>(null);
 
@@ -225,11 +229,6 @@ export default function EmailList({
                     ))
                 )}
             </div>
-
-            <ComposeModal
-                isOpen={isComposeOpen}
-                onClose={() => setIsComposeOpen(false)}
-            />
         </section>
     );
 }

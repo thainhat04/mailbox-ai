@@ -95,7 +95,19 @@
             "6": "Hủy",
             "7": "name@gmail.com",
             "8": "Chủ đề của bạn ở đây...",
-            "9": "Viết nội dung thư của bạn ở đây..."
+            "9": "Viết nội dung thư của bạn ở đây...",
+            "10": "Tệp đính kèm",
+            "errors": {
+                "toRequired": "Vui lòng nhập người nhận (To).",
+                "toInvalid": "Địa chỉ email To không hợp lệ.",
+                "ccInvalid": "Địa chỉ email CC không hợp lệ.",
+                "bccInvalid": "Địa chỉ email BCC không hợp lệ.",
+                "subjectRequired": "Vui lòng nhập tiêu đề.",
+                "messageRequired": "Vui lòng nhập nội dung email."
+            },
+            "fileTooLarge": "File {{name}} vượt quá kích thước tối đa {{size}}MB.",
+            "emailSent": "Email đã được gửi.",
+            "emailSendError": "Lỗi khi gửi email: {{error}}"
         },
         "detail": {
             "1": "Người gửi",

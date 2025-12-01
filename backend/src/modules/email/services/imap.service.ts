@@ -12,6 +12,9 @@ import { ReplyEmailDto } from "../dto/reply-emai.dto";
 import { simpleParser } from "mailparser";
 import { MailDetail } from "../dto/mail-detail.dto";
 import { SendEmailResponse } from "../dto/send-email-response";
+import fs from "fs";
+import fsPromises from "fs/promises";
+const MAX_SIZE_BYTES = 15 * 1024 * 1024;
 
 export interface ImapConnectionConfig {
   userId: string;
@@ -265,7 +268,7 @@ export class ImapService {
 
   async fetchEmails(
     config: ImapConnectionConfig,
-    mailbox: string = "INBOX",
+    mailbox: string = "INBOX", //"[Gmail]/Sent Mail",
     limit: number = 50,
   ): Promise<MailMessage[]> {
     const imap = await this.connect(config);
@@ -288,7 +291,11 @@ export class ImapService {
           });
 
           fetch.on("message", (msg, seqno) => {
-            const message: Partial<MailMessage> = { id: seqno.toString() };
+            const message: Partial<MailMessage> = {};
+
+            msg.once("attributes", (attrs) => {
+              message.id = attrs.uid;
+            });
 
             msg.on("body", (stream, info) => {
               let buffer = "";
@@ -360,7 +367,7 @@ export class ImapService {
       const transporter = nodemailer.createTransport(smtpConfig as any);
 
       // Map attachments
-      const attachments = this.mapAttachments(dto.attachments);
+      const attachments = await this.mapAttachments(dto.attachments);
 
       const mailOptions = {
         from: email,
@@ -403,7 +410,7 @@ export class ImapService {
     dto: ReplyEmailDto, // bạn có thể thay bằng ReplyEmailDto
   ): Promise<SendEmailResponse> {
     const { userId, provider, email } = config;
-
+    console.log("Original email in replyEmail:", original);
     // 1) GET TOKEN
     let token = await this.oauth2TokenService.getToken(userId, provider, email);
     if (!token) {
@@ -441,7 +448,7 @@ export class ImapService {
     const { subject, headers } = this.buildReplyHeaders(original);
     const htmlBody = this.buildReplyHtml(original, dto);
 
-    const attachments = this.mapAttachments(dto.attachments);
+    const attachments = await this.mapAttachments(dto.attachments);
 
     const mailOptions = {
       from: email,
@@ -457,22 +464,22 @@ export class ImapService {
     const info = await transporter.sendMail(mailOptions);
 
     // 5) APPEND TO SENT
-    const imap = await this.connect(config);
+    // const imap = await this.connect(config);
 
-    try {
-      const raw = await this.buildRawMessage(
-        mailOptions,
-        email,
-        info.messageId,
-      );
-      await this.appendRawToSent(imap, raw, provider);
-      return {
-        emailId: info.messageId || "",
-        sendAt: new Date(),
-      };
-    } finally {
-      await this.disconnect(config);
-    }
+    // try {
+    //   const raw = await this.buildRawMessage(
+    //     mailOptions,
+    //     email,
+    //     info.messageId,
+    //   );
+    //   await this.appendRawToSent(imap, raw, provider);
+    return {
+      emailId: info.messageId || "",
+      sendAt: new Date(),
+    };
+    // } finally {
+    //   await this.disconnect(config);
+    // }
   }
   async saveImapConfig(
     userId: string,
@@ -528,28 +535,76 @@ export class ImapService {
     });
   }
 
-  private mapAttachments(attachments?: AttachmentDto[]): Attachment[] {
+  private async mapAttachments(
+    attachments?: AttachmentDto[],
+  ): Promise<Attachment[]> {
     if (!attachments?.length) return [];
 
-    const mapped: Attachment[] = [];
+    // map từng attachment sang Promise<Attachment | null>
+    const promises = attachments.map(async (att) => {
+      try {
+        // --- Base64 ---
+        if (att.contentBase64) {
+          const size = Math.floor((att.contentBase64.length * 3) / 4);
+          if (size > MAX_SIZE_BYTES) {
+            console.warn(`Attachment too large, skipped: ${att.filename}`);
+            return null;
+          }
+          return {
+            filename: att.filename,
+            content: Buffer.from(att.contentBase64, "base64"),
+            contentType: att.mimeType || undefined,
+          } as Attachment;
+        }
 
-    for (const att of attachments) {
-      if (att.contentBase64) {
-        mapped.push({
-          filename: att.filename,
-          content: Buffer.from(att.contentBase64, "base64"),
-          contentType: att.mimeType || undefined,
-        });
-      } else if (att.url) {
-        mapped.push({
-          filename: att.filename,
-          path: att.url,
-        });
+        // --- Local file ---
+        if (att.url && att.url.startsWith("file://")) {
+          const path = att.url.replace(/^file:\/\//, "");
+          await fsPromises.access(path, fs.constants.R_OK);
+          const stats = await fsPromises.stat(path);
+          if (stats.size > MAX_SIZE_BYTES) {
+            console.warn(`Attachment too large, skipped: ${att.filename}`);
+            return null;
+          }
+          return {
+            filename: att.filename,
+            content: fs.createReadStream(path),
+          } as Attachment;
+        }
+
+        // --- HTTP/HTTPS URL ---
+        if (att.url && /^https?:\/\//.test(att.url)) {
+          const res = await fetch(att.url, { method: "HEAD" });
+          const contentLength = res.headers.get("content-length");
+          if (
+            !res.ok ||
+            (contentLength && parseInt(contentLength) > MAX_SIZE_BYTES)
+          ) {
+            console.warn(
+              `Attachment too large or not reachable, skipped: ${att.url}`,
+            );
+            return null;
+          }
+          return {
+            filename: att.filename,
+            path: att.url,
+          } as Attachment;
+        }
+
+        return null;
+      } catch (err) {
+        console.warn(
+          `Attachment processing failed, skipped: ${att.filename || att.url}`,
+        );
+        return null;
       }
-    }
+    });
 
-    return mapped;
+    // Chạy song song và lọc null
+    const results = await Promise.all(promises);
+    return results.filter((a): a is Attachment => !!a);
   }
+
   private async buildRawMessage(
     mailOptions: any,
     from: string,
@@ -639,9 +694,11 @@ export class ImapService {
   ): Promise<MailDetail> {
     const imap = await this.connect(config);
 
-    return new Promise((resolve, reject) => {
+    return new Promise<MailDetail>((resolve, reject) => {
       imap.openBox(mailbox, true, (err, box) => {
         if (err) return reject(err);
+
+        let resolved = false;
 
         const fetch = imap.fetch(uid, { bodies: "", struct: true });
 
@@ -650,7 +707,8 @@ export class ImapService {
             simpleParser(stream, (err, parsed) => {
               if (err) return reject(err);
 
-              const detail: MailDetail = {
+              resolved = true;
+              resolve({
                 messageId: parsed.messageId,
                 subject: parsed.subject || "",
                 from: parsed.from?.value || [],
@@ -661,14 +719,22 @@ export class ImapService {
                 inReplyTo: parsed.inReplyTo || undefined,
                 text: parsed.text || undefined,
                 html: parsed.html || undefined,
-              };
-
-              resolve(detail);
+              });
             });
           });
         });
 
         fetch.once("error", reject);
+
+        fetch.once("end", () => {
+          if (!resolved) {
+            reject(
+              new NotFoundException(
+                `Mail with UID ${uid} not found in mailbox ${mailbox}`,
+              ),
+            );
+          }
+        });
       });
     });
   }

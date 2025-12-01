@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { Email, Mailbox } from "./entities";
 import { MOCK_EMAILS, MOCK_MAILBOXES } from "./data";
 import { EmailListQueryDto } from "./dto";
-import { ModifyEmailFlagsDto } from "./dto/modify.dto";
+import { ModifyEmailDto } from "./dto/modify.dto";
 import { ImapService } from "./services/imap.service";
 import { OAuth2TokenService } from "./services/oauth2-token.service";
 import { MailProvider } from "@prisma/client";
@@ -333,7 +333,12 @@ export class EmailService {
     );
     return result;
   }
-  async getEmailDetail(userId: string, userEmail: string, id: number) {
+  async getEmailDetail(
+    userId: string,
+    userEmail: string,
+    id: number,
+    mailbox: string = "INBOX",
+  ) {
     return this.imapService.getMailDetail(
       {
         userId,
@@ -341,6 +346,7 @@ export class EmailService {
         provider: "GOOGLE",
       },
       id,
+      mailbox,
     );
   }
   async replyEmail(userId: string, userEmail: string, original: any, dto: any) {
@@ -359,7 +365,7 @@ export class EmailService {
     userId: string,
     userEmail: string,
     id: number,
-    dto: ModifyEmailFlagsDto,
+    dto: ModifyEmailDto,
   ) {
     await this.imapService.modifyEmailFlags(
       {
@@ -368,7 +374,8 @@ export class EmailService {
         provider: "GOOGLE",
       },
       id,
-      dto,
+      dto.flags,
+      dto.mailBox || "INBOX",
     );
     return {
       success: true,
