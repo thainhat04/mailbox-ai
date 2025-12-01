@@ -17,6 +17,11 @@ export class EmailAddressDto {
   @ApiProperty({ example: "john.doe@example.com" })
   @IsEmail()
   email: string;
+
+  @ApiProperty({ example: "https://ui-avatars.com/api/?name=John+Doe", required: false })
+  @IsOptional()
+  @IsString()
+  avatar?: string;
 }
 
 export class AttachmentDto {
@@ -114,6 +119,16 @@ export class EmailDto {
   @IsArray()
   @IsString({ each: true })
   labels?: string[];
+
+  @ApiProperty({ example: 3, required: false, description: "Number of emails in this thread" })
+  @IsOptional()
+  threadCount?: number;
+
+  @ApiProperty({ type: [String], required: false, description: "IDs of emails in this thread" })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  threadEmails?: string[];
 }
 
 export class EmailListQueryDto {
@@ -124,6 +139,11 @@ export class EmailListQueryDto {
   @ApiProperty({ required: false, default: 50 })
   @IsOptional()
   limit?: number;
+
+  @ApiProperty({ required: false, default: "INBOX" })
+  @IsOptional()
+  @IsString()
+  mailbox?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()

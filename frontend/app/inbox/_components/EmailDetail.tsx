@@ -14,6 +14,8 @@ import {
 import { formatEmailDate } from "@/helper/dateFormatter";
 import EmailBody from "./EmailBody";
 import { useTranslation } from "react-i18next";
+import { AppConfig } from "@/config";
+import SERVICES from "@/constants/services";
 
 interface EmailDetailWithBackProps extends EmailDetailProps {
     onBack?: () => void;
@@ -40,6 +42,61 @@ export default function EmailDetail({
 }: EmailDetailWithBackProps) {
     const { t } = useTranslation();
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
+
+    const handleDownloadAttachment = async (url: string, filename: string) => {
+        try {
+            const token = localStorage.getItem(SERVICES.accessToken);
+            const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to download attachment");
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = downloadUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(downloadUrl);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error("Error downloading attachment:", error);
+            alert("Failed to download attachment");
+        }
+    };
+
+    const handleViewAttachment = async (url: string, filename: string, mimeType: string) => {
+        try {
+            const token = localStorage.getItem(SERVICES.accessToken);
+            const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load attachment");
+            }
+
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            window.open(blobUrl, "_blank");
+
+            // Clean up after a delay to allow the browser to load it
+            setTimeout(() => {
+                window.URL.revokeObjectURL(blobUrl);
+            }, 100);
+        } catch (error) {
+            console.error("Error viewing attachment:", error);
+            alert("Failed to view attachment");
+        }
+    };
 
     return (
         <div className="flex-1 h-full flex flex-col text-white relative w-full md:w-auto">
@@ -145,9 +202,8 @@ export default function EmailDetail({
                                                 </div>
                                             </div>
                                             <div className="ml-auto sm:ml-3 flex shrink-0 items-center gap-1 sm:gap-2 w-full sm:w-auto">
-                                                <a
-                                                    href={att.url}
-                                                    download={att.filename}
+                                                <button
+                                                    onClick={() => handleDownloadAttachment(att.url, att.filename)}
                                                     className="flex-1 sm:flex-none inline-flex items-center justify-center sm:justify-start gap-1 rounded-md bg-white/8 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white hover:bg-white/[0.14] transition"
                                                     aria-label={`Download ${att.filename}`}
                                                 >
@@ -156,15 +212,13 @@ export default function EmailDetail({
                                                         className="hidden sm:block"
                                                     />
                                                     {t("inbox.detail.10")}
-                                                </a>
-                                                <a
-                                                    href={att.url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
+                                                </button>
+                                                <button
+                                                    onClick={() => handleViewAttachment(att.url, att.filename, att.mimeType)}
                                                     className="flex-1 sm:flex-none inline-flex items-center justify-center rounded-md border border-white/15 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white/85 hover:bg-white/8 transition"
                                                 >
                                                     {t("inbox.detail.11")}
-                                                </a>
+                                                </button>
                                             </div>
                                         </li>
                                     ))}

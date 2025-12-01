@@ -111,18 +111,28 @@ export default function EmailRow({
                 </div>
             </div>
 
-            {/* Subject */}
-            <p
-                title={email.subject}
-                className={clsx(
-                    "text-xs truncate ml-6",
-                    email.isRead
-                        ? "text-white/60"
-                        : "text-cyan-50 font-semibold"
+            {/* Subject with thread count */}
+            <div className="flex items-center gap-2 ml-6">
+                <p
+                    title={email.subject}
+                    className={clsx(
+                        "text-xs truncate flex-1",
+                        email.isRead
+                            ? "text-white/60"
+                            : "text-cyan-50 font-semibold"
+                    )}
+                >
+                    {email.subject}
+                </p>
+                {email.threadCount && email.threadCount > 1 && (
+                    <span
+                        className="shrink-0 text-[10px] text-cyan-400 font-semibold bg-cyan-400/10 px-1.5 py-0.5 rounded"
+                        title={`${email.threadCount} messages in conversation`}
+                    >
+                        {email.threadCount}
+                    </span>
                 )}
-            >
-                {email.subject}
-            </p>
+            </div>
 
             {/* Preview */}
             <p

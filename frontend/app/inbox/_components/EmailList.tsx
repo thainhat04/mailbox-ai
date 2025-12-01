@@ -7,7 +7,10 @@ import EmailRow from "./EmailRow";
 import ComposeModal from "./ComposeModal";
 import EmailToolbar from "./EmailToolbar";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
-import { useGetMailInOneBoxQuery } from "../_services";
+import { useMutationHandler } from "@/hooks/useMutationHandler";
+import {
+    useGetMailInOneBoxQuery,
+} from "../_services";
 import { useKeyboardNavigation } from "@/hooks/useKeyboardNavigation";
 import { useTranslation } from "react-i18next";
 
@@ -23,7 +26,7 @@ export default function EmailList({
     onSelectEmail,
 }: EmailListProps) {
     const { t } = useTranslation();
-    const { result, isLoading, isFetching } = useQueryHandler(
+    const { result, isLoading, isFetching, refetch } = useQueryHandler(
         useGetMailInOneBoxQuery,
         { mailboxId: selectedFolder },
         { skip: !selectedFolder }
@@ -120,7 +123,7 @@ export default function EmailList({
         );
     };
     const refreshEmails = () => {
-        setEmails([...(result?.data.emails || [])]);
+        refetch();
         setSelectedEmails(new Set());
     };
 
@@ -169,37 +172,22 @@ export default function EmailList({
                 data-email-list
                 className="relative flex-1 custom-scroll overflow-y-auto divide-y divide-white/10"
             >
-                {(isLoading || isFetching) && (
-                    <div className="absolute inset-x-0 top-0 flex justify-center py-3 z-10 pointer-events-none">
-                        <div className="flex items-center space-x-2 bg-white/5 rounded-full px-3 py-1 shadow-sm">
-                            <svg
-                                className="h-5 w-5 text-white animate-spin"
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                            >
-                                <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                />
-                                <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                                />
-                            </svg>
-                            <span className="text-xs text-white/80">
-                                {t("inbox.14")}
-                            </span>
+                {(isLoading || isFetching) ? (
+                    Array.from({ length: 8 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse border-b border-white/5">
+                            <div className="h-4 w-4 rounded bg-white/10 shrink-0" />
+                            <div className="h-4 w-4 rounded bg-white/10 shrink-0" />
+                            <div className="flex-1 min-w-0 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="h-4 w-32 rounded bg-white/10" />
+                                    <div className="h-3 w-12 rounded bg-white/10" />
+                                </div>
+                                <div className="h-3 w-3/4 rounded bg-white/10" />
+                                <div className="h-3 w-1/2 rounded bg-white/10" />
+                            </div>
                         </div>
-                    </div>
-                )}
-
-                {!isLoading && !isFetching && emails.length === 0 ? (
+                    ))
+                ) : emails.length === 0 ? (
                     <div className="p-4 text-center text-sm text-white/60">
                         {t("inbox.8")}
                     </div>

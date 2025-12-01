@@ -49,6 +49,10 @@ export interface Email {
     replyTo?: string;
     inReplyTo?: string; // for threading
     references?: string[]; // for threading
+
+    // Thread metadata
+    threadCount?: number;
+    threadEmails?: string[];
 }
 
 export interface EmailResponse {
