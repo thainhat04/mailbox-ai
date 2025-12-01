@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../../database/prisma.service';
-import { OAuth2TokenService } from './oauth2-token.service';
-import { MailProvider } from '@prisma/client';
-import Imap = require('imap');
-import * as nodemailer from 'nodemailer';
-import { Transporter } from 'nodemailer';
+import { Injectable, Logger } from "@nestjs/common";
+import { PrismaService } from "../../../database/prisma.service";
+import { OAuth2TokenService } from "./oauth2-token.service";
+import { MailProvider } from "@prisma/client";
+import Imap = require("imap");
+import * as nodemailer from "nodemailer";
+import { Transporter } from "nodemailer";
+import { simpleParser, ParsedMail } from "mailparser";
 
 export interface ImapConnectionConfig {
   userId: string;
@@ -24,6 +25,10 @@ export interface MailMessage {
     contentType: string;
     size: number;
   }>;
+  // Threading fields
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string[];
 }
 
 @Injectable()
@@ -34,9 +39,13 @@ export class ImapService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly oauth2TokenService: OAuth2TokenService,
-  ) { }
+  ) {}
 
-  private getConnectionKey(userId: string, provider: MailProvider, email: string): string {
+  private getConnectionKey(
+    userId: string,
+    provider: MailProvider,
+    email: string,
+  ): string {
     return `${userId}:${provider}:${email}`;
   }
 
@@ -56,7 +65,11 @@ export class ImapService {
     return base64Token;
   }
 
-  private async getImapConfig(provider: MailProvider, email: string, accessToken: string): Promise<Imap.Config> {
+  private async getImapConfig(
+    provider: MailProvider,
+    email: string,
+    accessToken: string,
+  ): Promise<Imap.Config> {
     // Format the OAuth2 token for XOAUTH2 authentication
     // Some imap library versions expect base64-encoded XOAUTH2 format
     const xoauth2Token = this.formatXoauth2Token(email, accessToken);
@@ -75,44 +88,48 @@ export class ImapService {
     if (provider === MailProvider.GOOGLE) {
       return {
         ...baseConfig,
-        host: 'imap.gmail.com',
+        host: "imap.gmail.com",
         port: 993,
       } as Imap.Config;
     } else if (provider === MailProvider.MICROSOFT) {
       return {
         ...baseConfig,
-        host: 'outlook.office365.com',
+        host: "outlook.office365.com",
         port: 993,
       } as Imap.Config;
     }
 
-    throw new Error('Unsupported provider');
+    throw new Error("Unsupported provider");
   }
 
-  private async getSmtpConfig(provider: MailProvider, email: string, accessToken: string) {
+  private async getSmtpConfig(
+    provider: MailProvider,
+    email: string,
+    accessToken: string,
+  ) {
     const auth = {
-      type: 'OAuth2',
+      type: "OAuth2",
       user: email,
       accessToken: accessToken,
     };
 
     if (provider === MailProvider.GOOGLE) {
       return {
-        host: 'smtp.gmail.com',
+        host: "smtp.gmail.com",
         port: 587,
         secure: false,
         auth,
       };
     } else if (provider === MailProvider.MICROSOFT) {
       return {
-        host: 'smtp.office365.com',
+        host: "smtp.office365.com",
         port: 587,
         secure: false,
         auth,
       };
     }
 
-    throw new Error('Unsupported provider');
+    throw new Error("Unsupported provider");
   }
 
   async connect(config: ImapConnectionConfig): Promise<Imap> {
@@ -127,7 +144,7 @@ export class ImapService {
     // Get OAuth2 token
     let token = await this.oauth2TokenService.getToken(userId, provider, email);
     if (!token) {
-      throw new Error('No OAuth2 token found');
+      throw new Error("No OAuth2 token found");
     }
 
     // Log token info for debugging (without exposing the actual token)
@@ -136,7 +153,11 @@ export class ImapService {
     // Check if token is expired and refresh if needed
     if (await this.oauth2TokenService.isTokenExpired(token)) {
       this.logger.log(`Token expired, refreshing for ${email}`);
-      const newAccessToken = await this.oauth2TokenService.refreshToken(userId, provider, email);
+      const newAccessToken = await this.oauth2TokenService.refreshToken(
+        userId,
+        provider,
+        email,
+      );
       token = await this.oauth2TokenService.saveToken({
         userId,
         provider,
@@ -165,7 +186,11 @@ export class ImapService {
     }
 
     // Get IMAP configuration
-    const imapConfig = await this.getImapConfig(provider, email, token.accessToken);
+    const imapConfig = await this.getImapConfig(
+      provider,
+      email,
+      token.accessToken,
+    );
 
     this.logger.log(`Attempting IMAP connection for ${email} (${provider})`);
     this.logger.debug(`IMAP config: host=${imapConfig.host}, port=${imapConfig.port}, user=${imapConfig.user}`);
@@ -179,14 +204,14 @@ export class ImapService {
         reject(new Error('IMAP connection timeout'));
       }, 30000); // 30 seconds timeout
 
-      imap.once('ready', () => {
+      imap.once("ready", () => {
         clearTimeout(timeout);
         this.logger.log(`IMAP connection established for ${email}`);
         this.connections.set(key, imap);
         resolve(imap);
       });
 
-      imap.once('error', (err) => {
+      imap.once("error", (err) => {
         clearTimeout(timeout);
         this.logger.error(`IMAP connection error for ${email}:`, err);
         this.logger.error(`Error details: ${err.message}`);
@@ -223,7 +248,11 @@ export class ImapService {
     }
   }
 
-  async fetchEmails(config: ImapConnectionConfig, mailbox: string = 'INBOX', limit: number = 50): Promise<MailMessage[]> {
+  async fetchEmails(
+    config: ImapConnectionConfig,
+    mailbox: string = "INBOX",
+    limit: number = 50,
+  ): Promise<MailMessage[]> {
     const imap = await this.connect(config);
 
     return new Promise((resolve, reject) => {
@@ -241,43 +270,81 @@ export class ImapService {
 
         const fetchRange = `${Math.max(1, box.messages.total - fetchCount + 1)}:${box.messages.total}`;
         const messages: MailMessage[] = [];
+        const messagePromises: Promise<void>[] = [];
 
         const fetch = imap.seq.fetch(fetchRange, {
-          bodies: ['HEADER', 'TEXT'],
+          bodies: "",
           struct: true,
         });
 
-        fetch.on('message', (msg, seqno) => {
-          const message: Partial<MailMessage> = { id: seqno.toString() };
+        fetch.on("message", (msg, seqno) => {
+          let messageUid = seqno.toString();
+          let emailBuffer = Buffer.alloc(0);
 
-          msg.on('body', (stream, info) => {
-            let buffer = '';
-            stream.on('data', (chunk) => {
-              buffer += chunk.toString('utf8');
+          // Get UID for unique identification
+          msg.once("attributes", (attrs) => {
+            if (attrs.uid) {
+              messageUid = attrs.uid.toString();
+            }
+          });
+
+          msg.on("body", (stream, info) => {
+            stream.on("data", (chunk) => {
+              emailBuffer = Buffer.concat([emailBuffer, chunk]);
             });
-            stream.once('end', () => {
-              if (info.which === 'HEADER') {
-                const header = Imap.parseHeader(buffer);
-                message.from = header.from?.[0] || '';
-                message.to = header.to || [];
-                message.subject = header.subject?.[0] || '';
-                message.date = new Date(header.date?.[0] || Date.now());
-              } else if (info.which === 'TEXT') {
-                message.body = buffer;
+          });
+
+          const messagePromise = new Promise<void>((resolveMsg, rejectMsg) => {
+            msg.once("end", async () => {
+              try {
+                const parsed: ParsedMail = await simpleParser(emailBuffer);
+
+                const message: MailMessage = {
+                  id: messageUid,
+                  from: parsed.from?.text || "",
+                  to: Array.isArray(parsed.to)
+                    ? parsed.to.map((addr) => addr.text)
+                    : parsed.to?.text
+                      ? [parsed.to.text]
+                      : [],
+                  subject: parsed.subject || "",
+                  // Prefer HTML over text for richer formatting, fallback to text
+                  body: parsed.html || parsed.text || "",
+                  date: parsed.date || new Date(),
+                  attachments:
+                    parsed.attachments?.map((att, idx) => ({
+                      filename: att.filename || `attachment-${idx}`,
+                      contentType: att.contentType || "application/octet-stream",
+                      size: att.size || 0,
+                    })) || [],
+                  // Threading fields
+                  messageId: parsed.messageId || undefined,
+                  inReplyTo: parsed.inReplyTo || undefined,
+                  references: parsed.references
+                    ? (Array.isArray(parsed.references) ? parsed.references : [parsed.references])
+                    : undefined,
+                };
+
+                messages.push(message);
+                resolveMsg();
+              } catch (parseError) {
+                this.logger.error(`Failed to parse email ${messageUid}: ${parseError.message}`);
+                rejectMsg(parseError);
               }
             });
           });
 
-          msg.once('end', () => {
-            if (message.from && message.subject) {
-              messages.push(message as MailMessage);
-            }
-          });
+          messagePromises.push(messagePromise);
         });
 
-        fetch.once('error', reject);
-        fetch.once('end', () => {
-          resolve(messages);
+        fetch.once("error", reject);
+        fetch.once("end", async () => {
+          try {
+            await Promise.all(messagePromises);
+            resolve(messages);
+          } catch (error) {
+            reject(error);
+          }
         });
       });
     });
@@ -295,12 +362,16 @@ export class ImapService {
     // Get OAuth2 token
     let token = await this.oauth2TokenService.getToken(userId, provider, email);
     if (!token) {
-      throw new Error('No OAuth2 token found');
+      throw new Error("No OAuth2 token found");
     }
 
     // Check if token is expired and refresh if needed
     if (await this.oauth2TokenService.isTokenExpired(token)) {
-      const newAccessToken = await this.oauth2TokenService.refreshToken(userId, provider, email);
+      const newAccessToken = await this.oauth2TokenService.refreshToken(
+        userId,
+        provider,
+        email,
+      );
       token = await this.oauth2TokenService.saveToken({
         userId,
         provider,
@@ -313,15 +384,21 @@ export class ImapService {
     }
 
     // Get SMTP configuration
-    const smtpConfig = await this.getSmtpConfig(provider, email, token.accessToken);
+    const smtpConfig = await this.getSmtpConfig(
+      provider,
+      email,
+      token.accessToken,
+    );
 
     // Create transporter
-    const transporter: Transporter = nodemailer.createTransport(smtpConfig as any);
+    const transporter: Transporter = nodemailer.createTransport(
+      smtpConfig as any,
+    );
 
     // Send email
     await transporter.sendMail({
       from: email,
-      to: Array.isArray(to) ? to.join(', ') : to,
+      to: Array.isArray(to) ? to.join(", ") : to,
       subject,
       text: body,
       html: html || body,
@@ -335,9 +412,20 @@ export class ImapService {
     provider: MailProvider,
     email: string,
   ): Promise<void> {
-    const imapSettings = provider === MailProvider.GOOGLE
-      ? { host: 'imap.gmail.com', port: 993, smtpHost: 'smtp.gmail.com', smtpPort: 587 }
-      : { host: 'outlook.office365.com', port: 993, smtpHost: 'smtp.office365.com', smtpPort: 587 };
+    const imapSettings =
+      provider === MailProvider.GOOGLE
+        ? {
+            host: "imap.gmail.com",
+            port: 993,
+            smtpHost: "smtp.gmail.com",
+            smtpPort: 587,
+          }
+        : {
+            host: "outlook.office365.com",
+            port: 993,
+            smtpHost: "smtp.office365.com",
+            smtpPort: 587,
+          };
 
     await this.prisma.imapConfig.upsert({
       where: {
@@ -369,7 +457,282 @@ export class ImapService {
   async getImapConfigs(userId: string) {
     return this.prisma.imapConfig.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
+  }
+
+  async getMessageCount(
+    config: ImapConnectionConfig,
+    mailbox: string = "INBOX",
+  ): Promise<number> {
+    const imap = await this.connect(config);
+
+    return new Promise((resolve, reject) => {
+      imap.openBox(mailbox, true, (err, box) => {
+        if (err) {
+          this.logger.error(`Failed to open mailbox "${mailbox}": ${err.message}`);
+          // If mailbox doesn't exist, return 0 instead of error
+          if (err.message.includes('does not exist') || err.message.includes('Mailbox doesn\'t exist')) {
+            resolve(0);
+            return;
+          }
+          reject(err);
+          return;
+        }
+        resolve(box.messages.total);
+      });
+    });
+  }
+
+  /**
+   * List all available mailboxes/folders from IMAP server
+   */
+  async listMailboxes(config: ImapConnectionConfig): Promise<any[]> {
+    const imap = await this.connect(config);
+
+    return new Promise((resolve, reject) => {
+      imap.getBoxes((err, boxes) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        // Flatten the box structure and remove circular references
+        const flattenBoxes = (boxes: any, prefix: string = ''): any[] => {
+          const result: any[] = [];
+          for (const [name, box] of Object.entries<any>(boxes)) {
+            const fullName = prefix ? `${prefix}/${name}` : name;
+
+            // Extract only serializable properties, avoid circular references
+            result.push({
+              name: fullName,
+              delimiter: box.delimiter || '/',
+              attributes: box.attribs || [],
+              hasChildren: !!box.children,
+            });
+
+            // Recursively process children
+            if (box.children) {
+              result.push(...flattenBoxes(box.children, fullName));
+            }
+          }
+          return result;
+        };
+
+        const allBoxes = flattenBoxes(boxes);
+        this.logger.log(`Available mailboxes: ${allBoxes.map(b => b.name).join(', ')}`);
+        resolve(allBoxes);
+      });
+    });
+  }
+
+  async fetchEmailById(
+    config: ImapConnectionConfig,
+    mailbox: string,
+    messageUid: string,
+  ): Promise<MailMessage> {
+    const imap = await this.connect(config);
+
+    return new Promise((resolve, reject) => {
+      imap.openBox(mailbox, true, (err, box) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        // Use UID fetch instead of sequence fetch
+        const fetch = imap.fetch(messageUid, {
+          bodies: "",
+          struct: true,
+        });
+
+        let emailBuffer = Buffer.alloc(0);
+        let foundMessage = false;
+
+        fetch.on("message", (msg, seqno) => {
+          foundMessage = true;
+
+          msg.on("body", (stream, info) => {
+            stream.on("data", (chunk) => {
+              emailBuffer = Buffer.concat([emailBuffer, chunk]);
+            });
+          });
+
+          msg.once("end", async () => {
+            try {
+              const parsed: ParsedMail = await simpleParser(emailBuffer);
+
+              const message: MailMessage = {
+                id: messageUid, // Use the UID we searched for
+                from: parsed.from?.text || "",
+                to: Array.isArray(parsed.to)
+                  ? parsed.to.map((addr) => addr.text)
+                  : parsed.to?.text
+                    ? [parsed.to.text]
+                    : [],
+                subject: parsed.subject || "",
+                // Prefer HTML over text for richer formatting, fallback to text
+                body: parsed.html || parsed.text || "",
+                date: parsed.date || new Date(),
+                attachments:
+                  parsed.attachments?.map((att, idx) => ({
+                    filename: att.filename || `attachment-${idx}`,
+                    contentType: att.contentType || "application/octet-stream",
+                    size: att.size || 0,
+                  })) || [],
+                // Threading fields
+                messageId: parsed.messageId || undefined,
+                inReplyTo: parsed.inReplyTo || undefined,
+                references: parsed.references
+                  ? (Array.isArray(parsed.references) ? parsed.references : [parsed.references])
+                  : undefined,
+              };
+
+              resolve(message);
+            } catch (parseError) {
+              reject(parseError);
+            }
+          });
+        });
+
+        fetch.once("error", (err) => {
+          this.logger.error(`Error fetching email ${messageUid} from ${mailbox}: ${err.message}`);
+          reject(err);
+        });
+
+        fetch.once("end", () => {
+          if (!foundMessage) {
+            reject(new Error(`Email with UID ${messageUid} not found in ${mailbox}`));
+          }
+        });
+      });
+    });
+  }
+
+  async fetchAttachment(
+    config: ImapConnectionConfig,
+    mailbox: string,
+    messageUid: string,
+    partNumber: string,
+  ): Promise<{ stream: NodeJS.ReadableStream; metadata: any }> {
+    const imap = await this.connect(config);
+
+    return new Promise((resolve, reject) => {
+      imap.openBox(mailbox, true, (err, box) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        // Use UID fetch instead of sequence fetch
+        const fetch = imap.fetch(messageUid, {
+          bodies: [partNumber],
+          struct: true,
+        });
+
+        let attachmentBuffer = Buffer.alloc(0);
+        let metadata: any = {};
+        let encoding: string | undefined;
+
+        fetch.on("message", (msg) => {
+          msg.on("body", (stream, info) => {
+            stream.on("data", (chunk) => {
+              attachmentBuffer = Buffer.concat([attachmentBuffer, chunk]);
+            });
+          });
+
+          msg.once("attributes", (attrs) => {
+            // Get attachment metadata from structure
+            if (attrs.struct) {
+              const parts = this.flattenParts(attrs.struct);
+              const part = parts.find((p) => p.partID === partNumber);
+              if (part) {
+                encoding = part.encoding;
+                metadata = {
+                  filename: part.disposition?.params?.filename ||
+                           part.params?.name ||
+                           "attachment",
+                  mimeType: `${part.type}/${part.subtype}`.toLowerCase(),
+                  size: part.size || 0,
+                  encoding: encoding,
+                };
+              }
+            }
+          });
+
+          msg.once("end", () => {
+            try {
+              // Decode the attachment based on encoding
+              let decodedBuffer = attachmentBuffer;
+
+              if (encoding) {
+                this.logger.log(`Decoding attachment with encoding: ${encoding}`);
+
+                if (encoding.toUpperCase() === 'BASE64') {
+                  // Decode base64
+                  const base64String = attachmentBuffer.toString('utf8').replace(/\r?\n/g, '');
+                  decodedBuffer = Buffer.from(base64String, 'base64');
+                } else if (encoding.toUpperCase() === 'QUOTED-PRINTABLE') {
+                  // Quoted-printable is rarely used for attachments, usually for text
+                  // For now, just log a warning and use raw buffer
+                  this.logger.warn('Quoted-printable encoding detected for attachment, using raw buffer');
+                  decodedBuffer = attachmentBuffer;
+                } else if (encoding === '7BIT' || encoding === '8BIT' || encoding === 'BINARY') {
+                  // No decoding needed
+                  decodedBuffer = attachmentBuffer;
+                } else {
+                  this.logger.warn(`Unknown encoding: ${encoding}, using raw buffer`);
+                }
+              }
+
+              // Update size with decoded size
+              metadata.size = decodedBuffer.length;
+
+              // Convert buffer to stream
+              const Readable = require("stream").Readable;
+              const readable = new Readable();
+              readable.push(decodedBuffer);
+              readable.push(null);
+
+              this.logger.log(`Attachment ready: ${metadata.filename} (${metadata.size} bytes, ${metadata.mimeType})`);
+              resolve({ stream: readable, metadata });
+            } catch (decodeError) {
+              this.logger.error(`Failed to decode attachment: ${decodeError.message}`);
+              reject(decodeError);
+            }
+          });
+        });
+
+        fetch.once("error", reject);
+      });
+    });
+  }
+
+  // Helper method to flatten IMAP structure parts
+  private flattenParts(
+    struct: any[],
+    parts: any[] = [],
+    prefix: string = "1",
+  ): any[] {
+    if (!Array.isArray(struct)) {
+      return parts;
+    }
+
+    for (let i = 0; i < struct.length; i++) {
+      const part = struct[i];
+      if (Array.isArray(part)) {
+        this.flattenParts(part, parts, `${prefix}.${i + 1}`);
+      } else if (part.partID) {
+        parts.push(part);
+      } else {
+        // This is a part without partID, add it manually
+        parts.push({
+          ...part,
+          partID: i === struct.length - 1 ? prefix : `${prefix}.${i + 1}`,
+        });
+      }
+    }
+
+    return parts;
   }
 }

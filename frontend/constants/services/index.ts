@@ -11,6 +11,20 @@ const SERVICES = {
     UNAUTHORIZED_ERROR_MESSAGE: "UNAUTHORIZED_ERROR_MESSAGE",
     NETWORK_ERROR_MESSAGE: "NETWORK_ERROR_MESSAGE",
     TIMEOUT_ERROR_MESSAGE: "TIMEOUT_ERROR_MESSAGE",
+    // Email endpoints
+    URL_GET_EMAILS: "/api/emails",
+    URL_GET_EMAIL_BY_ID: "/api/emails",
+    URL_MARK_EMAIL_READ: "/api/emails",
+    URL_MARK_EMAIL_UNREAD: "/api/emails",
+    URL_TOGGLE_STAR: "/api/emails",
+    URL_DELETE_EMAIL: "/api/emails",
+    URL_SEARCH_EMAILS: "/api/emails/search",
+    URL_GET_MAILBOXES: "/api/mailboxes",
+    URL_GET_MAILBOX_BY_ID: "/api/mailboxes",
+    URL_GET_MAILBOX_EMAILS: "/api/mailboxes",
+    URL_TEST_IMAP: "/api/imap/test",
+    URL_LIST_IMAP_MAILBOXES: "/api/imap/mailboxes",
+    URL_GET_ATTACHMENT: "/api/attachments",
 };
 
 export enum HTTP_METHOD {

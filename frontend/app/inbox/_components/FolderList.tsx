@@ -17,7 +17,11 @@ export default function FolderList({ selected, onSelect }: FolderListProps) {
     const folders: Folder[] = result?.data || [];
     const domFolders = useMemo(() => {
         if (isLoading || isFetching) {
-            return <li>{t("inbox.11")}</li>;
+            return Array.from({ length: 5 }).map((_, i) => (
+                <li key={i}>
+                    <div className="h-9 w-full rounded-lg bg-white/5 animate-pulse" />
+                </li>
+            ));
         }
         if (error) {
             return <li>{t("inbox.12")}</li>;
@@ -39,12 +43,17 @@ export default function FolderList({ selected, onSelect }: FolderListProps) {
                         )}
                         aria-current={isActive ? "true" : undefined}
                     >
-                        <span className="truncate">{f.name}</span>
-                        {f.unreadCount != 0 && (
-                            <span className="ml-2 inline-flex min-w-6 justify-center rounded-full bg-linear-to-r from-cyan-500 to-sky-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
-                                {f.unreadCount}
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {f.icon && <span className="text-base shrink-0">{f.icon}</span>}
+                            <span className="truncate">
+                                {f.name}
+                                {((['drafts', 'trash', 'sent'].includes(f.id) ? f.totalCount : f.unreadCount) || 0) > 0 && (
+                                    <span className="ml-1.5 text-[11px] text-white/50">
+                                        ({['drafts', 'trash', 'sent'].includes(f.id) ? f.totalCount : f.unreadCount})
+                                    </span>
+                                )}
                             </span>
-                        )}
+                        </div>
                     </button>
                 </li>
             );

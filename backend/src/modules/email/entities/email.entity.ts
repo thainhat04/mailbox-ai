@@ -11,6 +11,7 @@ export interface Email {
   from: {
     name: string;
     email: string;
+    avatar?: string;
   };
   to: Array<{
     name: string;
@@ -34,4 +35,11 @@ export interface Email {
   mailboxId: string;
   attachments?: Attachment[];
   labels?: string[];
+  // Threading fields
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string[];
+  // Thread metadata
+  threadCount?: number;
+  threadEmails?: string[];
 }
