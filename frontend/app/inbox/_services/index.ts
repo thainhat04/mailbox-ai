@@ -17,6 +17,7 @@ const inboxApi = api.injectEndpoints({
                 url: constant.URL_MAILBOXES,
                 method: HTTP_METHOD.GET,
             }),
+            providesTags: ["Mailboxes"],
         }),
         getMailInOneBox: builder.query<
             SuccessResponse<EmailResponse>,
@@ -84,7 +85,7 @@ const inboxApi = api.injectEndpoints({
                 if (mailbox) params.append("mailbox", mailbox);
                 const queryString = params.toString();
                 return {
-                    url: `/api/emails/${id}${
+                    url: `/emails/${id}${
                         queryString ? `?${queryString}` : ""
                     }`,
                     method: HTTP_METHOD.GET,
@@ -94,43 +95,64 @@ const inboxApi = api.injectEndpoints({
         }),
         markEmailRead: builder.mutation<SuccessResponse<Email>, string>({
             query: (id) => ({
-                url: `/api/emails/${id}/read`,
+                url: `/emails/${id}/read`,
                 method: HTTP_METHOD.PATCH,
             }),
             invalidatesTags: (_, __, id) => [
                 { type: "Emails", id },
                 { type: "Emails", id: "LIST" },
+                "Mailboxes", // Refresh folder unread counts
             ],
         }),
         markEmailUnread: builder.mutation<SuccessResponse<Email>, string>({
             query: (id) => ({
-                url: `/api/emails/${id}/unread`,
+                url: `/emails/${id}/unread`,
                 method: HTTP_METHOD.PATCH,
             }),
             invalidatesTags: (_, __, id) => [
                 { type: "Emails", id },
                 { type: "Emails", id: "LIST" },
+                "Mailboxes", // Refresh folder unread counts
             ],
         }),
         toggleEmailStar: builder.mutation<SuccessResponse<Email>, string>({
             query: (id) => ({
-                url: `/api/emails/${id}/star`,
+                url: `/emails/${id}/star`,
                 method: HTTP_METHOD.PATCH,
             }),
             invalidatesTags: (_, __, id) => [
                 { type: "Emails", id },
                 { type: "Emails", id: "LIST" },
+                "Mailboxes", // Refresh folder counts (starred folder)
             ],
         }),
         deleteEmail: builder.mutation<SuccessResponse<null>, string>({
             query: (id) => ({
-                url: `/api/emails/${id}`,
+                url: `/emails/${id}`,
                 method: HTTP_METHOD.DELETE,
             }),
             invalidatesTags: (_, __, id) => [
                 { type: "Emails", id },
                 { type: "Emails", id: "LIST" },
+                "Mailboxes", // Refresh folder counts
             ],
+        }),
+        getThreadEmails: builder.query<
+            SuccessResponse<Email[]>,
+            { id: string; mailbox?: string }
+        >({
+            query: ({ id, mailbox }) => {
+                const params = new URLSearchParams();
+                if (mailbox) params.append("mailbox", mailbox);
+                const queryString = params.toString();
+                return {
+                    url: `/emails/${id}/thread${
+                        queryString ? `?${queryString}` : ""
+                    }`,
+                    method: HTTP_METHOD.GET,
+                };
+            },
+            providesTags: (_, __, { id }) => [{ type: "Emails", id: `THREAD-${id}` }],
         }),
     }),
     overrideExisting: false,
@@ -147,4 +169,5 @@ export const {
     useMarkEmailUnreadMutation,
     useToggleEmailStarMutation,
     useDeleteEmailMutation,
+    useGetThreadEmailsQuery,
 } = inboxApi;

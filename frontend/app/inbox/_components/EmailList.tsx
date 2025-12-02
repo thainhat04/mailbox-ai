@@ -28,9 +28,13 @@ export default function EmailList({
     setIsComposeOpen,
 }: EmailListProps) {
     const { t } = useTranslation();
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const LIMIT = 12; // Show 12 emails per page like Gmail
+
     const { result, isLoading, isFetching, refetch } = useQueryHandler(
         useGetMailInOneBoxQuery,
-        { mailboxId: selectedFolder },
+        { mailboxId: selectedFolder, page, limit: LIMIT },
         { skip: !selectedFolder }
     );
 
@@ -41,15 +45,51 @@ export default function EmailList({
 
     const [focusedIndex, setFocusedIndex] = useState<number>(-1);
     const emailListRef = useRef<HTMLDivElement>(null);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+    // Reset when folder changes
     useEffect(() => {
-        if (result) {
-            console.log("Fetched emails:", result.data.emails);
-            setEmails(result.data.emails);
-            setSelectedEmails(new Set());
-            setFocusedIndex(-1);
+        setEmails([]);
+        setPage(1);
+        setHasMore(true);
+        setSelectedEmails(new Set());
+        setFocusedIndex(-1);
+    }, [selectedFolder]);
+
+    // Handle pagination response
+    useEffect(() => {
+        if (result && result.data) {
+            const newEmails = result.data.emails || [];
+            console.log(`Page ${page}: Fetched ${newEmails.length} emails`);
+
+            if (page === 1) {
+                // First page - replace all emails
+                setEmails(newEmails);
+                console.log('Set first page emails:', newEmails.length);
+            } else {
+                // Subsequent pages - append emails
+                setEmails(prev => {
+                    // Avoid duplicates
+                    const existingIds = new Set(prev.map(e => e.id));
+                    const uniqueNew = newEmails.filter(e => !existingIds.has(e.id));
+                    console.log(`Appending ${uniqueNew.length} unique emails to ${prev.length} existing`);
+                    return [...prev, ...uniqueNew];
+                });
+            }
+
+            // Check if there are more pages
+            // Use totalPages from backend if available, otherwise fallback to length check
+            let hasMorePages = false;
+            if (result.data.totalPages !== undefined) {
+                hasMorePages = page < result.data.totalPages;
+            } else {
+                hasMorePages = newEmails.length >= LIMIT;
+            }
+            console.log(`Has more pages: ${hasMorePages} (Page ${page}/${result.data.totalPages}, received ${newEmails.length})`);
+            setHasMore(hasMorePages);
+            setIsLoadingMore(false);
         }
-    }, [result]);
+    }, [result, page, LIMIT]);
 
     // Keyboard navigation
     useKeyboardNavigation({
@@ -126,8 +166,25 @@ export default function EmailList({
         );
     };
     const refreshEmails = () => {
+        setPage(1);
+        setEmails([]);
+        setHasMore(true);
         refetch();
         setSelectedEmails(new Set());
+    };
+
+    // Infinite scroll handler
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const target = e.currentTarget;
+        const scrollPercentage = (target.scrollTop + target.clientHeight) / target.scrollHeight;
+
+        // Load more when scrolled to 80%
+        // Only check isLoadingMore to avoid blocking when isFetching
+        if (scrollPercentage > 0.8 && hasMore && !isLoadingMore) {
+            console.log('Loading more emails, current page:', page);
+            setIsLoadingMore(true);
+            setPage(prev => prev + 1);
+        }
     };
 
     const toggleStar = (emailId: string) => {
@@ -164,7 +221,7 @@ export default function EmailList({
     ];
 
     return (
-        <section className="flex-[0_0_30rem] h-full flex flex-col border-r border-white/10 bg-white/5 backdrop-blur-md">
+        <section className="h-full flex flex-col border-r border-white/10 bg-white/5 backdrop-blur-md">
             <EmailToolbar
                 selectedFolder={selectedFolder}
                 actions={toolbarActions}
@@ -173,9 +230,14 @@ export default function EmailList({
             <div
                 ref={emailListRef}
                 data-email-list
-                className="relative flex-1 custom-scroll overflow-y-auto divide-y divide-white/10"
+                className="relative flex-1 overflow-y-auto divide-y divide-white/10"
+                style={{
+                    maxHeight: 'calc(100vh - 120px)', // Subtract header + toolbar height
+                    overflowY: 'auto'
+                }}
+                onScroll={handleScroll}
             >
-                {isLoading || isFetching ? (
+                {isLoading && page === 1 ? (
                     Array.from({ length: 8 }).map((_, i) => (
                         <div
                             key={i}
@@ -218,6 +280,34 @@ export default function EmailList({
                         </div>
                     ))
                 )}
+
+                {/* Loading more indicator - Skeleton */}
+                {isLoadingMore && hasMore && (
+                    Array.from({ length: 3 }).map((_, i) => (
+                        <div
+                            key={`loading-more-${i}`}
+                            className="flex items-center gap-3 px-4 py-3 animate-pulse border-b border-white/5"
+                        >
+                            <div className="h-4 w-4 rounded bg-white/10 shrink-0" />
+                            <div className="h-4 w-4 rounded bg-white/10 shrink-0" />
+                            <div className="flex-1 min-w-0 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="h-4 w-32 rounded bg-white/10" />
+                                    <div className="h-3 w-12 rounded bg-white/10" />
+                                </div>
+                                <div className="h-3 w-3/4 rounded bg-white/10" />
+                                <div className="h-3 w-1/2 rounded bg-white/10" />
+                            </div>
+                        </div>
+                    ))
+                )}
+
+                {/* End of list indicator - Hidden as requested */}
+                {/* {!hasMore && emails.length > 0 && (
+                    <div className="py-4 text-center text-xs text-white/40">
+                        {t("inbox.14") || "No more emails"}
+                    </div>
+                )} */}
             </div>
         </section>
     );

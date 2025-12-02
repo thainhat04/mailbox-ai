@@ -45,6 +45,10 @@ export class EmailService {
   private emails: Email[] = MOCK_EMAILS;
   private mailboxes: Mailbox[] = MOCK_MAILBOXES;
 
+  // Cache for mailbox counts (30 seconds TTL)
+  private mailboxCountsCache = new Map<string, { data: Mailbox[]; timestamp: number }>();
+  private readonly CACHE_TTL_MS = 30000; // 30 seconds
+
   constructor(
     private readonly imapService: ImapService,
     private readonly oauth2TokenService: OAuth2TokenService,
@@ -57,28 +61,8 @@ export class EmailService {
     operation: () => Promise<T>,
     maxRetries: number = 3,
   ): Promise<T> {
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        return await operation();
-      } catch (error) {
-        if (i === maxRetries - 1) throw error;
-
-        // Don't retry auth errors
-        if (error instanceof ImapAuthenticationError) {
-          throw error;
-        }
-
-        // Exponential backoff: 1s, 2s, 4s
-        const delay = Math.pow(2, i) * 1000;
-        await new Promise((resolve) => setTimeout(resolve, delay));
-
-        this.logger.warn(
-          `Retrying IMAP operation (attempt ${i + 2}/${maxRetries})`,
-        );
-      }
-    }
-
-    throw new Error("Retry logic failed");
+    // Retry mechanism disabled as requested
+    return operation();
   }
 
   /**
@@ -221,9 +205,9 @@ export class EmailService {
       `Fetching emails from ${mailboxId} (page ${page}, limit ${limit}) for user ${userId}`,
     );
 
-    // Fetch emails from IMAP with retry logic
+    // Fetch emails from IMAP with retry logic and pagination
     const imapMessages = await this.retryImapOperation(() =>
-      this.imapService.fetchEmails(config, imapFolder, limit),
+      this.imapService.fetchEmails(config, imapFolder, limit, page),
     );
 
     this.logger.log(
@@ -336,78 +320,91 @@ export class EmailService {
           });
 
           // Fetch and filter related emails from other mailboxes
-          for (const fetchFolder of foldersToFetch) {
-            const messages = await this.retryImapOperation(() =>
-              this.imapService.fetchEmails(config, fetchFolder.folder, limit),
-            );
+          // Use fetchEmailHeaders for performance
+          const fetchPromises = foldersToFetch.map(async (fetchFolder) => {
+            try {
+              // Use fetchEmailHeaders instead of fetchEmails
+              // Fetch all headers to find related messages (since we don't know which page they are on)
+              // But limit to recent messages to avoid scanning entire mailbox?
+              // For now, let's fetch headers for the whole mailbox or a large range if possible,
+              // but fetchEmailHeaders currently fetches *all* headers if we don't specify range.
+              // Let's assume fetchEmailHeaders fetches all headers which is fast enough.
+              const messages = await this.retryImapOperation(
+                () => this.imapService.fetchEmailHeaders(config, fetchFolder.folder),
+                1, // Don't retry too much for related folders
+              );
 
-            const relatedMessages: Email[] = messages
-              .filter((msg) => {
-                const normalizedSubject = this.normalizeSubject(msg.subject);
+              return messages
+                .filter((msg) => {
+                  const normalizedSubject = this.normalizeSubject(msg.subject);
 
-                // Include if referenced by current mailbox via Message-ID
-                if (msg.messageId && currentReferences.has(msg.messageId)) {
-                  return true;
-                }
-                // Or if current mailbox emails reply to this message
-                if (
-                  msg.messageId &&
-                  emails.some((e) => e.inReplyTo === msg.messageId)
-                ) {
-                  return true;
-                }
-                // Or if this message replies to current mailbox email
-                if (msg.inReplyTo && currentMessageIds.has(msg.inReplyTo)) {
-                  return true;
-                }
-                // Fallback: match by normalized subject
-                if (currentSubjects.has(normalizedSubject)) {
-                  return true;
-                }
-                return false;
-              })
-              .map((msg) => {
-                const fromName = msg.from.split("<")[0].trim();
-                const fromEmail = msg.from.match(/<(.+)>/)?.[1] || msg.from;
+                  // Include if referenced by current mailbox via Message-ID
+                  if (msg.messageId && currentReferences.has(msg.messageId)) {
+                    return true;
+                  }
+                  // Or if current mailbox emails reply to this message
+                  if (
+                    msg.messageId &&
+                    emails.some((e) => e.inReplyTo === msg.messageId)
+                  ) {
+                    return true;
+                  }
+                  // Or if this message replies to current mailbox email
+                  if (msg.inReplyTo && currentMessageIds.has(msg.inReplyTo)) {
+                    return true;
+                  }
+                  // Fallback: match by normalized subject
+                  if (currentSubjects.has(normalizedSubject)) {
+                    return true;
+                  }
+                  return false;
+                })
+                .map((msg) => {
+                  const fromName = msg.from.split("<")[0].trim();
+                  const fromEmail = msg.from.match(/<(.+)>/)?.[1] || msg.from;
+                  const flags = msg.flags || [];
 
-                return {
-                  id: msg.id,
-                  mailboxId: fetchFolder.mailboxId,
-                  from: {
-                    name: fromName,
-                    email: fromEmail,
-                    avatar: this.generateAvatar(fromName, fromEmail),
-                  },
-                  to: msg.to.map((t) => ({
-                    name: t.split("<")[0].trim(),
-                    email: t.match(/<(.+)>/)?.[1] || t,
-                  })),
-                  subject: msg.subject,
-                  preview: this.stripHtmlTags(msg.body).substring(0, 150),
-                  body: msg.body,
-                  timestamp: msg.date.toISOString(),
-                  isRead: false,
-                  isStarred: false,
-                  isImportant: false,
-                  attachments: (msg.attachments || []).map((att, idx) => ({
-                    id: `${msg.id}-att-${idx}`,
-                    filename: att.filename,
-                    mimeType: att.contentType,
-                    size: att.size,
-                    url: `/api/attachments/${msg.id}-att-${idx}`,
-                  })),
-                  labels: [],
-                  messageId: msg.messageId,
-                  inReplyTo: msg.inReplyTo,
-                  references: msg.references,
-                };
-              });
+                  return {
+                    id: msg.id,
+                    mailboxId: fetchFolder.mailboxId,
+                    from: {
+                      name: fromName,
+                      email: fromEmail,
+                      avatar: this.generateAvatar(fromName, fromEmail),
+                    },
+                    to: msg.to.map((t) => ({
+                      name: t.split("<")[0].trim(),
+                      email: t.match(/<(.+)>/)?.[1] || t,
+                    })),
+                    subject: msg.subject,
+                    preview: "", // Headers don't have body
+                    body: "", // Headers don't have body
+                    timestamp: msg.date.toISOString(),
+                    isRead: flags.includes("\\Seen"),
+                    isStarred: flags.includes("\\Flagged"),
+                    isImportant: false,
+                    attachments: [],
+                    labels: [],
+                    messageId: msg.messageId,
+                    inReplyTo: msg.inReplyTo,
+                    references: msg.references,
+                  };
+                });
+            } catch (error) {
+              this.logger.warn(
+                `Failed to fetch related emails from ${fetchFolder.name}: ${error.message}`,
+              );
+              return [];
+            }
+          });
 
-            this.logger.log(
-              `Found ${relatedMessages.length} related emails from ${fetchFolder.name}`,
-            );
-            allEmailsForThreading.push(...relatedMessages);
-          }
+          const relatedResults = await Promise.all(fetchPromises);
+          const relatedMessages = relatedResults.flat();
+
+          this.logger.log(
+            `Found ${relatedMessages.length} related emails for threading`,
+          );
+          allEmailsForThreading.push(...relatedMessages);
         }
       } catch (error) {
         this.logger.warn(
@@ -518,8 +515,8 @@ export class EmailService {
       emails: filteredThreads,
       page,
       limit,
-      total: filteredThreads.length, // Return actual number of threads, not raw messages
-      totalPages: Math.ceil(filteredThreads.length / limit),
+      total: totalMessages, // Return total messages count from IMAP for correct pagination
+      totalPages: Math.ceil(totalMessages / limit),
     };
   }
 
@@ -616,6 +613,20 @@ export class EmailService {
     return mapping[mailboxId.toLowerCase()] || "INBOX";
   }
 
+  private normalizeSubject(subject: string): string {
+    if (!subject) return "";
+    let normalized = subject;
+    let prevNormalized = "";
+    while (prevNormalized !== normalized) {
+      prevNormalized = normalized;
+      normalized = normalized.replace(
+        /^(re|fwd|fw|aw|sv|vs|r|wg|tr|odp|ynt|İlt):\s*/gi,
+        "",
+      );
+    }
+    return normalized.trim();
+  }
+
   /**
    * Get a specific email by ID from IMAP
    */
@@ -664,42 +675,37 @@ export class EmailService {
     // If mailbox is specified, use it directly
     if (mailboxId) {
       const imapFolder = this.mapMailboxToImapFolder(mailboxId, token.provider);
-      this.logger.log(
-        `Fetching email ${emailId} from ${mailboxId} -> ${imapFolder}`,
-      );
-
-      const imapMessage = await this.imapService.fetchEmailById(
-        config,
-        imapFolder,
-        emailId,
-      );
-
-      return this.convertImapMessageToEmail(imapMessage, mailboxId);
+      try {
+        const imapMessage = await this.imapService.fetchEmailById(
+          config,
+          imapFolder,
+          emailId,
+        );
+        return this.convertImapMessageToEmail(imapMessage, mailboxId);
+      } catch (error) {
+        this.logger.warn(
+          `Email ${emailId} not found in ${mailboxId}: ${error.message}`,
+        );
+      }
     }
 
     // Otherwise, search through common folders
     const foldersToSearch = ["inbox", "sent", "drafts", "trash", "spam"];
 
     for (const folder of foldersToSearch) {
+      // Skip the already checked mailbox if provided
+      if (mailboxId && folder === mailboxId) continue;
+
       try {
         const imapFolder = this.mapMailboxToImapFolder(folder, token.provider);
-        this.logger.log(
-          `Searching for email ${emailId} in ${folder} -> ${imapFolder}`,
-        );
-
         const imapMessage = await this.imapService.fetchEmailById(
           config,
           imapFolder,
           emailId,
         );
-
         return this.convertImapMessageToEmail(imapMessage, folder);
       } catch (error) {
-        // Continue searching in next folder
-        this.logger.debug(
-          `Email ${emailId} not found in ${folder}: ${error.message}`,
-        );
-        continue;
+        // Continue searching
       }
     }
 
@@ -707,40 +713,9 @@ export class EmailService {
   }
 
   /**
-   * Normalize email subject for threading
-   * Removes Re:, Fwd:, etc. and trims whitespace
-   */
-  private normalizeSubject(subject: string): string {
-    if (!subject) return "";
-
-    let normalized = subject;
-
-    // Remove all Re:, Fwd:, etc. prefixes (can be multiple, e.g., "Re: Re: Fwd:")
-    let prevNormalized = "";
-    while (prevNormalized !== normalized) {
-      prevNormalized = normalized;
-      normalized = normalized.replace(
-        /^(re|fwd|fw|aw|sv|vs|r|wg|tr|odp|ynt|İlt):\s*/gi,
-        "",
-      );
-    }
-
-    // Remove bracketed numbers like [2] or (2) that some clients add
-    normalized = normalized.replace(/\s*[\[\(]\d+[\]\)]\s*/g, " ");
-
-    // Normalize whitespace
-    normalized = normalized.replace(/\s+/g, " ").trim().toLowerCase();
-
-    return normalized;
-  }
-
-  /**
-   * Group emails into conversation threads
-   * Uses Message-ID, In-Reply-To, and References headers for accurate threading
-   * Falls back to subject-based grouping if headers are missing
+   * Group emails into threads based on Message-ID, References, and Subject
    */
   private groupEmailsIntoThreads(emails: Email[]): Email[] {
-    // Build a map of message-id to email for quick lookup
     const messageIdMap = new Map<string, Email>();
     emails.forEach((email) => {
       if (email.messageId) {
@@ -970,34 +945,22 @@ export class EmailService {
     if (!tokens || tokens.length === 0) {
       throw new NotFoundException("No IMAP tokens found for user");
     }
-
     const token = tokens[0];
+
     const config = {
       userId,
       provider: token.provider,
       email: token.email,
     };
 
-    // Search for the email in common folders to find which mailbox it belongs to
     const foldersToSearch = ["inbox", "sent", "drafts", "trash", "spam"];
 
     for (const folder of foldersToSearch) {
       try {
         const imapFolder = this.mapMailboxToImapFolder(folder, token.provider);
-        this.logger.log(
-          `Searching for attachment in ${folder} -> ${imapFolder}`,
-        );
-
-        // First, fetch the email to get the correct part number
-        const imapMessage = await this.imapService.fetchEmailById(
-          config,
-          imapFolder,
-          emailId,
-        );
-
+        
         // Calculate the actual part number from attachments
         // IMAP parts typically start from 2 for attachments (1 is usually body)
-        // But we need to fetch the email structure to get accurate part numbers
         const partNumber = `${partIndex + 2}`;
 
         this.logger.log(
@@ -1027,8 +990,8 @@ export class EmailService {
   /**
    * Mark email as read
    */
-  async markAsRead(id: string): Promise<Email> {
-    const email = await this.findEmailById(id, "");
+  async markAsRead(userId: string, id: string): Promise<Email> {
+    const email = await this.findEmailById(id, userId);
     email.isRead = true;
 
     // Update mailbox unread count
@@ -1040,8 +1003,8 @@ export class EmailService {
   /**
    * Mark email as unread
    */
-  async markAsUnread(id: string): Promise<Email> {
-    const email = await this.findEmailById(id, "");
+  async markAsUnread(userId: string, id: string): Promise<Email> {
+    const email = await this.findEmailById(id, userId);
     email.isRead = false;
 
     // Update mailbox unread count
@@ -1053,8 +1016,8 @@ export class EmailService {
   /**
    * Toggle star status
    */
-  async toggleStar(id: string): Promise<Email> {
-    const email = await this.findEmailById(id, "");
+  async toggleStar(userId: string, id: string): Promise<Email> {
+    const email = await this.findEmailById(id, userId);
     email.isStarred = !email.isStarred;
 
     // If starring, add to starred mailbox
@@ -1077,8 +1040,8 @@ export class EmailService {
   /**
    * Delete email (move to trash)
    */
-  async deleteEmail(id: string): Promise<void> {
-    const email = await this.findEmailById(id, "");
+  async deleteEmail(userId: string, id: string): Promise<void> {
+    const email = await this.findEmailById(id, userId);
 
     if (email.mailboxId === "trash") {
       // Permanently delete if already in trash
@@ -1132,39 +1095,181 @@ export class EmailService {
     });
   }
   async sendEmail(userId: string, userEmail: string, dto: any) {
+    const tokens = await this.oauth2TokenService.getUserTokens(userId);
+    const token = tokens.find((t) => t.email === userEmail);
+    if (!token) {
+      throw new NotFoundException(`No account found for email ${userEmail}`);
+    }
+
     // Here you would integrate with an SMTP service to send the email.
     const result = await this.imapService.sendEmail(
       {
         userId,
         email: userEmail,
-        provider: "GOOGLE",
+        provider: token.provider,
       },
       dto,
     );
     return result;
   }
+  async getThreadEmails(
+    userId: string,
+    userEmail: string,
+    threadId: string,
+    mailbox: string = "INBOX",
+  ) {
+    const tokens = await this.oauth2TokenService.getUserTokens(userId);
+    const token = tokens.find((t) => t.email === userEmail);
+    if (!token) {
+      throw new NotFoundException(`No account found for email ${userEmail}`);
+    }
+
+    // Since we don't have a direct "get thread" IMAP command, we need to:
+    // 1. Fetch the specific email if threadId looks like an ID
+    // 2. Or search for emails with the same Message-ID / References
+    // For now, let's assume threadId is the ID of one of the emails in the thread.
+    // We'll fetch that email, then search for related emails.
+
+    // This is a simplified implementation. A robust one would search across mailboxes.
+    const config = {
+      userId,
+      provider: token.provider,
+      email: token.email,
+    };
+
+    const imapFolder = this.mapMailboxToImapFolder(mailbox, token.provider);
+    
+    try {
+      // 1. Fetch the requested email to get its metadata
+      const rootEmailMsg = await this.imapService.fetchEmailById(config, imapFolder, threadId);
+      if (!rootEmailMsg) return [];
+      
+      const rootEmail = this.convertImapMessageToEmail(rootEmailMsg, mailbox);
+      
+      // 2. Identify folders to search (Inbox, Sent, Archive)
+      const foldersToSearch = [
+        { name: "inbox", folder: this.mapMailboxToImapFolder("inbox", token.provider), mailboxId: "inbox" },
+        { name: "sent", folder: this.mapMailboxToImapFolder("sent", token.provider), mailboxId: "sent" },
+        { name: "archive", folder: this.mapMailboxToImapFolder("archive", token.provider), mailboxId: "archive" },
+      ];
+
+      // Remove duplicates (e.g. if mailbox is inbox, don't add it again)
+      const uniqueFolders = foldersToSearch.filter((f, index, self) => 
+        index === self.findIndex((t) => t.folder === f.folder)
+      );
+
+      // 3. Fetch headers from all folders to find related messages
+      const messageId = rootEmail.messageId;
+      const references = new Set(rootEmail.references || []);
+      if (rootEmail.inReplyTo) references.add(rootEmail.inReplyTo);
+      const normalizedSubject = this.normalizeSubject(rootEmail.subject);
+
+      const relatedEmailPromises = uniqueFolders.map(async (folderInfo) => {
+        try {
+           // Fetch headers
+           const headers = await this.retryImapOperation(() => 
+             this.imapService.fetchEmailHeaders(config, folderInfo.folder)
+           , 1);
+
+           // Filter for related emails
+           return headers.filter(h => {
+             // Match by Message-ID (if referenced)
+             if (h.messageId && references.has(h.messageId)) return true;
+             // Match by References (if it references root)
+             if (messageId && h.references && Array.isArray(h.references) && h.references.includes(messageId)) return true;
+             if (messageId && h.inReplyTo === messageId) return true;
+             // Match by Subject
+             if (this.normalizeSubject(h.subject || "") === normalizedSubject) return true;
+             // Match if it is the root email itself (but in this folder)
+             if (h.messageId === messageId) return true;
+             
+             return false;
+           }).map(h => ({ ...h, mailboxId: folderInfo.mailboxId, folderName: folderInfo.folder }));
+        } catch (e) {
+          return [];
+        }
+      });
+
+      const relatedHeaders = (await Promise.all(relatedEmailPromises)).flat();
+
+      // 4. De-duplicate headers by Message-ID
+      const uniqueHeaders = new Map<string, any>();
+      relatedHeaders.forEach(h => {
+        if (h.messageId) {
+            if (!uniqueHeaders.has(h.messageId)) {
+                uniqueHeaders.set(h.messageId, h);
+            }
+        } else {
+            uniqueHeaders.set(h.id, h);
+        }
+      });
+
+      // 5. Fetch full bodies for the identified emails
+      const fullEmails: Email[] = [];
+      
+      // We already have the root email
+      fullEmails.push(rootEmail);
+      if (rootEmail.messageId) {
+        uniqueHeaders.delete(rootEmail.messageId); // Don't fetch root again if possible
+      }
+
+      const fetchBodyPromises = Array.from(uniqueHeaders.values()).map(async (header) => {
+         try {
+            const fullMsg = await this.imapService.fetchEmailById(config, header.folderName, header.id);
+            return this.convertImapMessageToEmail(fullMsg, header.mailboxId);
+         } catch (e) {
+            return null;
+         }
+      });
+
+      const fetchedBodies = await Promise.all(fetchBodyPromises);
+      fetchedBodies.forEach(e => {
+        if (e) fullEmails.push(e);
+      });
+
+      // 6. Sort by date
+      return fullEmails.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    } catch (error) {
+      this.logger.warn(`Failed to fetch thread ${threadId}: ${error.message}`);
+      return [];
+    }
+  }
+
   async getEmailDetail(
     userId: string,
     userEmail: string,
     id: number,
     mailbox: string = "INBOX",
   ) {
+    const tokens = await this.oauth2TokenService.getUserTokens(userId);
+    const token = tokens.find((t) => t.email === userEmail);
+    if (!token) {
+      throw new NotFoundException(`No account found for email ${userEmail}`);
+    }
+
     return this.imapService.getMailDetail(
       {
         userId,
         email: userEmail,
-        provider: "GOOGLE",
+        provider: token.provider,
       },
       id,
       mailbox,
     );
   }
   async replyEmail(userId: string, userEmail: string, original: any, dto: any) {
+    const tokens = await this.oauth2TokenService.getUserTokens(userId);
+    const token = tokens.find((t) => t.email === userEmail);
+    if (!token) {
+      throw new NotFoundException(`No account found for email ${userEmail}`);
+    }
+
     const result = await this.imapService.replyEmail(
       {
         userId,
         email: userEmail,
-        provider: "GOOGLE",
+        provider: token.provider,
       },
       original,
       dto,
@@ -1177,11 +1282,17 @@ export class EmailService {
     id: number,
     dto: ModifyEmailDto,
   ) {
+    const tokens = await this.oauth2TokenService.getUserTokens(userId);
+    const token = tokens.find((t) => t.email === userEmail);
+    if (!token) {
+      throw new NotFoundException(`No account found for email ${userEmail}`);
+    }
+
     await this.imapService.modifyEmailFlags(
       {
         userId,
         email: userEmail,
-        provider: "GOOGLE",
+        provider: token.provider,
       },
       id,
       dto.flags,
@@ -1192,13 +1303,19 @@ export class EmailService {
     };
   }
   async getAllEmails(userId: string, userEmail: string) {
+    const tokens = await this.oauth2TokenService.getUserTokens(userId);
+    const token = tokens.find((t) => t.email === userEmail);
+    if (!token) {
+      throw new NotFoundException(`No account found for email ${userEmail}`);
+    }
+
     return this.imapService.fetchEmails(
       {
         userId,
         email: userEmail,
-        provider: "GOOGLE",
+        provider: token.provider,
       },
-      "[Gmail]/Sent Mail",
+      this.mapMailboxToImapFolder("sent", token.provider),
     );
   }
 
@@ -1341,6 +1458,8 @@ export class EmailService {
     return Array.from(mailboxMap.values()).sort((a, b) => a.order - b.order);
   }
 
+
+
   /**
    * Get hardcoded mailboxes with email counts from IMAP
    */
@@ -1449,13 +1568,15 @@ export class EmailService {
               token.provider,
             );
             try {
+              // Use fetchEmailHeaders for performance
               const messages = await this.retryImapOperation(() =>
-                this.imapService.fetchEmails(config, imapFolder, 1000),
+                this.imapService.fetchEmailHeaders(config, imapFolder),
               );
 
               const mappedEmails: Email[] = messages.map((msg) => {
                 const fromName = msg.from.split("<")[0].trim();
                 const fromEmail = msg.from.match(/<(.+)>/)?.[1] || msg.from;
+                const flags = msg.flags || [];
 
                 return {
                   id: msg.id,
@@ -1470,11 +1591,11 @@ export class EmailService {
                     email: t.match(/<(.+)>/)?.[1] || t,
                   })),
                   subject: msg.subject,
-                  preview: this.stripHtmlTags(msg.body).substring(0, 150),
-                  body: msg.body,
+                  preview: "",
+                  body: "",
                   timestamp: msg.date.toISOString(),
-                  isRead: false,
-                  isStarred: false,
+                  isRead: flags.includes("\\Seen"),
+                  isStarred: flags.includes("\\Flagged"),
                   isImportant: false,
                   attachments: (msg.attachments || []).map((att, idx) => ({
                     id: `${msg.id}-att-${idx}`,
@@ -1679,6 +1800,113 @@ export class EmailService {
   }
 
   /**
+   * OPTIMIZED with caching: Get hardcoded mailboxes with fast IMAP counts
+   * Uses cache with 30s TTL to avoid hitting IMAP on every request
+   */
+  async getCachedFastMailboxCounts(userId?: string): Promise<Mailbox[]> {
+    const cacheKey = userId || 'anonymous';
+
+    // Check cache first
+    const cached = this.mailboxCountsCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
+      this.logger.debug(`Returning cached mailbox counts for ${cacheKey}`);
+      return cached.data;
+    }
+
+    // Cache miss or expired - fetch fresh data
+    this.logger.debug(`Cache miss for ${cacheKey}, fetching fresh counts`);
+    const mailboxes = await this.getHardcodedMailboxesWithCounts(userId);
+
+    // Update cache
+    this.mailboxCountsCache.set(cacheKey, {
+      data: mailboxes,
+      timestamp: Date.now(),
+    });
+
+    return mailboxes;
+  }
+
+  /**
+   * OPTIMIZED: Get hardcoded mailboxes with fast IMAP counts (no email fetching)
+   * This method uses IMAP openBox to get counts without downloading emails
+   * Much faster than getHardcodedMailboxesWithCounts() which fetches all emails
+   */
+  async getFastMailboxCounts(userId?: string): Promise<Mailbox[]> {
+    this.logger.log(`getFastMailboxCounts called for userId: ${userId}`);
+
+    // Define hardcoded mailboxes
+    const hardcodedMailboxes: Mailbox[] = [
+      { id: "inbox", name: "Inbox", type: MailboxType.INBOX, icon: "📥", unreadCount: 0, totalCount: 0, order: 1 },
+      { id: "sent", name: "Sent", type: MailboxType.SENT, icon: "📤", unreadCount: 0, totalCount: 0, order: 2 },
+      { id: "drafts", name: "Drafts", type: MailboxType.DRAFTS, icon: "📝", unreadCount: 0, totalCount: 0, order: 3 },
+      { id: "starred", name: "Starred", type: MailboxType.STARRED, icon: "⭐", unreadCount: 0, totalCount: 0, order: 4 },
+      { id: "important", name: "Important", type: MailboxType.CUSTOM, icon: "❗", unreadCount: 0, totalCount: 0, order: 5 },
+      { id: "trash", name: "Trash", type: MailboxType.TRASH, icon: "🗑️", unreadCount: 0, totalCount: 0, order: 6 },
+      { id: "spam", name: "Spam", type: MailboxType.CUSTOM, icon: "⚠️", unreadCount: 0, totalCount: 0, order: 7 },
+      { id: "archive", name: "Archive", type: MailboxType.ARCHIVE, icon: "📦", unreadCount: 0, totalCount: 0, order: 8 },
+    ];
+
+    // If user is authenticated, get fast counts from IMAP
+    if (!userId) {
+      this.logger.log('No userId provided, returning mailboxes with zero counts');
+      return hardcodedMailboxes;
+    }
+
+    if (userId) {
+      try {
+        const tokens = await this.oauth2TokenService.getUserTokens(userId);
+        if (tokens && tokens.length > 0) {
+          const token = tokens[0];
+          const config = {
+            userId,
+            provider: token.provider,
+            email: token.email,
+          };
+
+          // Map our mailbox IDs to IMAP folder names
+          const mailboxIdToImapFolder = new Map<string, string>();
+          for (const mailbox of hardcodedMailboxes) {
+            const imapFolder = this.mapMailboxToImapFolder(mailbox.id, token.provider);
+            mailboxIdToImapFolder.set(mailbox.id, imapFolder);
+            this.logger.log(`Mapping: ${mailbox.id} -> ${imapFolder}`);
+          }
+
+          // Get all IMAP folder names
+          const imapFolders = Array.from(mailboxIdToImapFolder.values());
+          this.logger.log(`Fetching statuses for ${imapFolders.length} folders: ${imapFolders.join(', ')}`);
+
+          // Fetch statuses in parallel (MUCH faster than sequential)
+          const statusMap = await this.retryImapOperation(() =>
+            this.imapService.getMultipleMailboxStatuses(config, imapFolders)
+          );
+
+          this.logger.log(`Received statusMap with ${statusMap.size} entries`);
+
+          // Update mailbox counts
+          for (const mailbox of hardcodedMailboxes) {
+            const imapFolder = mailboxIdToImapFolder.get(mailbox.id);
+            if (imapFolder && statusMap.has(imapFolder)) {
+              const status = statusMap.get(imapFolder)!;
+              mailbox.totalCount = status.total;
+              mailbox.unreadCount = status.unseen;
+
+              this.logger.log(`✓ ${mailbox.name}: ${status.total} total, ${status.unseen} unread`);
+            } else {
+              this.logger.warn(`✗ ${mailbox.name} (${imapFolder}): not found in statusMap`);
+            }
+          }
+        }
+      } catch (error) {
+        this.logger.error(`Failed to fetch fast mailbox counts from IMAP: ${error.message}`);
+        this.logger.error(`Error stack: ${error.stack}`);
+        // Don't swallow the error silently - rethrow so controller can fallback
+        throw error;
+      }
+    }
+
+    return hardcodedMailboxes;
+  }
+  /**
    * List all available mailboxes/folders from IMAP server
    */
   async listAvailableMailboxes(userId: string): Promise<{
@@ -1747,25 +1975,12 @@ export class EmailService {
         };
       }
 
-      // Use the first available token
       const token = tokens[0];
       const config = {
         userId,
         provider: token.provider,
         email: token.email,
       };
-
-      // Try to connect to IMAP
-      this.logger.log(
-        `Testing IMAP connection for ${token.email} (${token.provider})`,
-      );
-      const imap = await this.imapService.connect(config);
-
-      // Get IMAP config details
-      const imapConfig = await this.imapService.getImapConfigs(userId);
-      const configDetails = imapConfig.find(
-        (c) => c.provider === token.provider && c.email === token.email,
-      );
 
       // Try to fetch a few emails to verify the connection works
       let testEmailCount = 0;
@@ -1789,11 +2004,10 @@ export class EmailService {
         email: token.email,
         provider: token.provider,
         host:
-          configDetails?.imapHost ||
-          (token.provider === MailProvider.GOOGLE
+          token.provider === "GOOGLE"
             ? "imap.gmail.com"
-            : "outlook.office365.com"),
-        port: configDetails?.imapPort || 993,
+            : "outlook.office365.com",
+        port: 993,
         details: `Successfully connected to ${token.provider} IMAP server and fetched ${testEmailCount} test emails`,
         testEmailCount,
         testedAt: new Date().toISOString(),

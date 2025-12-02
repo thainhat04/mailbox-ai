@@ -48,7 +48,7 @@ export class EmailController {
   // ==================== MAILBOX ENDPOINTS ====================
 
   @Get("mailboxes")
-  @ApiOperation({ summary: "Get all mailboxes with email counts" })
+  @ApiOperation({ summary: "Get all mailboxes with email counts (optimized with caching)" })
   @ApiResponse({
     status: 200,
     description: "Mailboxes retrieved successfully",
@@ -57,11 +57,33 @@ export class EmailController {
   async getAllMailboxes(
     @CurrentUser() user?: JwtPayload,
   ): Promise<ResponseDto<MailboxDto[]>> {
-    // Get hardcoded mailboxes with email counts from IMAP
-    const mailboxes = await this.emailService.getHardcodedMailboxesWithCounts(
-      user?.sub,
-    );
-    return ResponseDto.success(mailboxes, "Mailboxes retrieved successfully");
+    // Use optimized cached fast counts (30s cache, no email fetching)
+    // If fast method fails or returns zeros, fallback to old method
+    try {
+      const mailboxes = await this.emailService.getCachedFastMailboxCounts(
+        user?.sub,
+      );
+
+      // Check if we got any counts - if all are zero and user is authenticated, something went wrong
+      const hasAnyCounts = mailboxes.some(m => m.totalCount > 0 || m.unreadCount > 0);
+
+      if (!hasAnyCounts && user?.sub) {
+        // Fallback to old method that fetches emails
+        console.warn('Fast count method returned all zeros, falling back to old method');
+        const fallbackMailboxes = await this.emailService.getHardcodedMailboxesWithCounts(user.sub);
+        return ResponseDto.success(fallbackMailboxes, "Mailboxes retrieved successfully (fallback)");
+      }
+
+      return ResponseDto.success(mailboxes, "Mailboxes retrieved successfully");
+    } catch (error) {
+      // If fast method completely fails, try old method
+      console.error('Fast count method failed:', error);
+      if (user?.sub) {
+        const fallbackMailboxes = await this.emailService.getHardcodedMailboxesWithCounts(user.sub);
+        return ResponseDto.success(fallbackMailboxes, "Mailboxes retrieved successfully (fallback)");
+      }
+      throw error;
+    }
   }
 
   @Get("mailboxes/:id")
@@ -183,8 +205,11 @@ export class EmailController {
     type: EmailDto,
   })
   @ApiResponse({ status: 404, description: "Email not found" })
-  async markAsRead(@Param("id") id: string): Promise<ResponseDto<EmailDto>> {
-    const email = await this.emailService.markAsRead(id);
+  async markAsRead(
+    @Param("id") id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailDto>> {
+    const email = await this.emailService.markAsRead(user.sub, id);
     return ResponseDto.success(email, "Email marked as read");
   }
 
@@ -197,8 +222,11 @@ export class EmailController {
     type: EmailDto,
   })
   @ApiResponse({ status: 404, description: "Email not found" })
-  async markAsUnread(@Param("id") id: string): Promise<ResponseDto<EmailDto>> {
-    const email = await this.emailService.markAsUnread(id);
+  async markAsUnread(
+    @Param("id") id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailDto>> {
+    const email = await this.emailService.markAsUnread(user.sub, id);
     return ResponseDto.success(email, "Email marked as unread");
   }
 
@@ -211,8 +239,11 @@ export class EmailController {
     type: EmailDto,
   })
   @ApiResponse({ status: 404, description: "Email not found" })
-  async toggleStar(@Param("id") id: string): Promise<ResponseDto<EmailDto>> {
-    const email = await this.emailService.toggleStar(id);
+  async toggleStar(
+    @Param("id") id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailDto>> {
+    const email = await this.emailService.toggleStar(user.sub, id);
     return ResponseDto.success(email, "Email star status toggled");
   }
 
@@ -223,9 +254,35 @@ export class EmailController {
   @ApiParam({ name: "id", description: "Email ID" })
   @ApiResponse({ status: 200, description: "Email deleted successfully" })
   @ApiResponse({ status: 404, description: "Email not found" })
-  async deleteEmail(@Param("id") id: string): Promise<ResponseDto<null>> {
-    this.emailService.deleteEmail(id);
+  async deleteEmail(
+    @Param("id") id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<null>> {
+    this.emailService.deleteEmail(user.sub, id);
     return ResponseDto.success(null, "Email deleted successfully");
+  }
+
+  @Get("emails/:id/thread")
+  @ApiOperation({ summary: "Get all emails in a thread" })
+  @ApiParam({ name: "id", description: "Thread ID (or Email ID)" })
+  @ApiQuery({ name: "mailbox", required: false })
+  @ApiResponse({
+    status: 200,
+    description: "Thread emails retrieved successfully",
+    type: [EmailDto],
+  })
+  async getThreadEmails(
+    @Param("id") id: string,
+    @Query("mailbox") mailbox: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailDto[]>> {
+    const emails = await this.emailService.getThreadEmails(
+      user.sub,
+      user.email,
+      id,
+      mailbox,
+    );
+    return ResponseDto.success(emails, "Thread emails retrieved successfully");
   }
 
   @Get("emails/search")

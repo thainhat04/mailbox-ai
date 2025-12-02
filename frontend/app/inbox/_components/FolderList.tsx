@@ -47,11 +47,25 @@ export default function FolderList({ selected, onSelect }: FolderListProps) {
                             {f.icon && <span className="text-base shrink-0">{f.icon}</span>}
                             <span className="truncate">
                                 {f.name}
-                                {((['drafts', 'trash', 'sent'].includes(f.id) ? f.totalCount : f.unreadCount) || 0) > 0 && (
-                                    <span className="ml-1.5 text-[11px] text-white/50">
-                                        ({['drafts', 'trash', 'sent'].includes(f.id) ? f.totalCount : f.unreadCount})
-                                    </span>
-                                )}
+                                {(() => {
+                                    // For drafts, trash, sent: show totalCount
+                                    // For inbox: show totalCount if no unread, otherwise show unreadCount
+                                    // For others: show unreadCount
+                                    let count = 0;
+                                    if (['drafts', 'trash', 'sent'].includes(f.id)) {
+                                        count = f.totalCount || 0;
+                                    } else if (f.id === 'inbox') {
+                                        count = f.unreadCount > 0 ? f.unreadCount : f.totalCount;
+                                    } else {
+                                        count = f.unreadCount || 0;
+                                    }
+
+                                    return count > 0 ? (
+                                        <span className="ml-1.5 text-[11px] text-white/50">
+                                            ({count})
+                                        </span>
+                                    ) : null;
+                                })()}
                             </span>
                         </div>
                     </button>

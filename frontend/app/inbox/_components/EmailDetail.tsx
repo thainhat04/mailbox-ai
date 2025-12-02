@@ -1,6 +1,6 @@
 // components/Inbox/EmailDetail.tsx
 "use client";
-import type { EmailDetailProps } from "../_types";
+import type { EmailDetailProps, Email } from "../_types";
 import {
     Reply,
     Forward,
@@ -10,6 +10,8 @@ import {
     Download,
     File,
     ArrowLeft,
+    ChevronDown,
+    ChevronUp,
 } from "lucide-react";
 import { formatEmailDate } from "@/helper/dateFormatter";
 import EmailBody from "./EmailBody";
@@ -17,9 +19,10 @@ import { useTranslation } from "react-i18next";
 import { AppConfig } from "@/config";
 import SERVICES from "@/constants/services";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
-import { useReplyEmailMutation } from "../_services";
+import { useReplyEmailMutation, useGetThreadEmailsQuery } from "../_services";
 import ReplyModal from "./ReplyModal";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import clsx from "clsx";
 
 interface EmailDetailWithBackProps extends EmailDetailProps {
     onBack?: () => void;
@@ -40,17 +43,20 @@ function displayAddress(a?: { name?: string; email?: string }) {
     return a.email || "";
 }
 
-export default function EmailDetail({
+const SingleEmailView = ({
     email,
-    onBack,
-}: EmailDetailWithBackProps) {
+    isExpanded,
+    onToggle,
+    isLast,
+}: {
+    email: Email;
+    isExpanded: boolean;
+    onToggle: () => void;
+    isLast: boolean;
+}) => {
     const { t } = useTranslation();
-    const [isReplyOpen, setIsReplyOpen] = useState(false);
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
-    const replyEmailMutation = useMutationHandler(
-        useReplyEmailMutation,
-        "ReplyEmail"
-    );
+    const [isReplyOpen, setIsReplyOpen] = useState(false);
 
     const handleDownloadAttachment = async (url: string, filename: string) => {
         try {
@@ -101,7 +107,6 @@ export default function EmailDetail({
             const blobUrl = window.URL.createObjectURL(blob);
             window.open(blobUrl, "_blank");
 
-            // Clean up after a delay to allow the browser to load it
             setTimeout(() => {
                 window.URL.revokeObjectURL(blobUrl);
             }, 100);
@@ -112,191 +117,197 @@ export default function EmailDetail({
     };
 
     return (
-        <div className="flex-1 h-full flex flex-col text-white relative w-full md:w-auto">
-            {!email ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-white/50 gap-4">
-                    <div className="rounded-full bg-white/10 p-4">
-                        <Forward className="text-white/50" />
+        <div className={clsx("border-b border-white/10 last:border-0", isExpanded ? "bg-white/5" : "bg-transparent")}>
+            <div
+                className="px-4 py-3 cursor-pointer flex items-center justify-between hover:bg-white/5 transition"
+                onClick={onToggle}
+            >
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-sm text-white truncate">
+                            {email.from?.name || email.from?.email}
+                        </span>
+                        <span className="text-xs text-white/60 truncate">
+                            {isExpanded ? displayAddress(email.from) : email.preview}
+                        </span>
                     </div>
-                    <p className="text-sm">{t("inbox.9")}</p>
                 </div>
-            ) : (
-                <div className="flex flex-col h-full">
-                    {/* Mobile back button + Header */}
-                    <header className="px-4 sm:px-6 py-4 sm:py-5 border-b border-white/15 flex items-start gap-3 sm:gap-0 flex-col sm:flex-col">
-                        {/* Back button on mobile */}
-                        {onBack && (
-                            <button
-                                onClick={onBack}
-                                className="md:hidden flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300 transition mb-2"
-                                aria-label="Back to email list"
-                            >
-                                <ArrowLeft size={16} />
-                                <span>Back</span>
-                            </button>
-                        )}
+                <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-white/50">
+                        {formatEmailDate(email.timestamp)}
+                    </span>
+                    {(email.attachments?.length || 0) > 0 && (
+                        <Paperclip size={14} className="text-white/50" />
+                    )}
+                </div>
+            </div>
 
-                        <h2 className="text-lg sm:text-2xl font-bold tracking-tight mb-3 text-white break-word">
-                            {email.subject}
-                        </h2>
-
-                        <div className="flex flex-col gap-1 text-xs w-full">
-                            <p className="text-white/70">
-                                {t("inbox.detail.1")}:{" "}
-                                <span className="font-medium text-white break-all">
-                                    {displayAddress(email.from)}
-                                </span>
-                            </p>
-                            <p className="text-white/70">
-                                {t("inbox.detail.2")}:{" "}
-                                <span className="font-medium text-white break-all">
-                                    {email.to?.map(displayAddress).join(", ")}
-                                </span>
-                            </p>
-                            {!!email.cc?.length && (
-                                <p className="text-white/70">
-                                    {t("inbox.detail.3")}:{" "}
-                                    <span className="font-medium text-white break-all">
-                                        {email.cc
-                                            .map(displayAddress)
-                                            .join(", ")}
-                                    </span>
-                                </p>
-                            )}
-                            <p className="text-white/60 mt-1">
-                                {t("inbox.detail.4")}:{" "}
-                                {formatEmailDate(email.timestamp)}
-                            </p>
-                        </div>
-                    </header>
-
-                    {/* Body */}
-                    <div className="custom-scroll flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 text-xs sm:text-sm leading-relaxed space-y-4">
-                        {isHtml ? (
+            {isExpanded && (
+                <div className="px-4 pb-4">
+                    <div className="text-xs text-white/70 mb-4">
+                        to {email.to?.map((t) => t.name || t.email).join(", ")}
+                    </div>
+                    
+                    <div className="text-sm text-white/90 leading-relaxed mb-4 overflow-hidden">
+                         {isHtml ? (
                             <EmailBody htmlContent={email.body} />
                         ) : (
-                            <pre className="whitespace-pre-wrap text-white/90 break-word">
+                            <pre className="whitespace-pre-wrap font-sans">
                                 {email.body}
                             </pre>
                         )}
+                    </div>
 
-                        {/* Attachments */}
-                        {!!email.attachments?.length && (
-                            <section className="mt-4">
-                                <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-white/80">
-                                    <Paperclip
-                                        size={16}
-                                        className="text-white/70"
-                                    />
-                                    {t("inbox.detail.9")} (
-                                    {email.attachments.length})
-                                </div>
-                                <ul className="space-y-2">
-                                    {email.attachments.map((att) => (
-                                        <li
-                                            key={att.id}
-                                            className="flex flex-col sm:flex-row items-start sm:items-center justify-between rounded-lg border border-white/12 bg-white/4 px-3 py-2 gap-2 sm:gap-0"
+                    {/* Attachments */}
+                    {!!email.attachments?.length && (
+                        <div className="mb-4">
+                            <div className="flex flex-wrap gap-2">
+                                {email.attachments?.map((att) => (
+                                    <div
+                                        key={att.id}
+                                        className="flex items-center gap-2 bg-white/10 rounded px-2 py-1 text-xs"
+                                    >
+                                        <File size={12} className="text-white/70" />
+                                        <span className="truncate max-w-[150px]">{att.filename}</span>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDownloadAttachment(att.url, att.filename);
+                                            }}
+                                            className="hover:text-cyan-400"
                                         >
-                                            <div className="flex min-w-0 items-center gap-3 flex-1">
-                                                <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/6 ring-1 ring-white/10 shrink-0">
-                                                    <File
-                                                        size={16}
-                                                        className="text-white/70"
-                                                    />
-                                                </span>
-                                                <div className="min-w-0">
-                                                    <p className="truncate text-xs sm:text-sm text-white">
-                                                        {att.filename}
-                                                    </p>
-                                                    <p className="text-[10px] sm:text-[11px] text-white/50">
-                                                        {att.mimeType} •{" "}
-                                                        {formatBytes(att.size)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="ml-auto sm:ml-3 flex shrink-0 items-center gap-1 sm:gap-2 w-full sm:w-auto">
-                                                <button
-                                                    onClick={() =>
-                                                        handleDownloadAttachment(
-                                                            att.url,
-                                                            att.filename
-                                                        )
-                                                    }
-                                                    className="flex-1 sm:flex-none inline-flex items-center justify-center sm:justify-start gap-1 rounded-md bg-white/8 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white hover:bg-white/[0.14] transition"
-                                                    aria-label={`Download ${att.filename}`}
-                                                >
-                                                    <Download
-                                                        size={12}
-                                                        className="hidden sm:block"
-                                                    />
-                                                    {t("inbox.detail.10")}
-                                                </button>
-                                                <button
-                                                    onClick={() =>
-                                                        handleViewAttachment(
-                                                            att.url,
-                                                            att.filename,
-                                                            att.mimeType
-                                                        )
-                                                    }
-                                                    className="flex-1 sm:flex-none inline-flex items-center justify-center rounded-md border border-white/15 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white/85 hover:bg-white/8 transition"
-                                                >
-                                                    {t("inbox.detail.11")}
-                                                </button>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </section>
-                        )}
-                    </div>
-
-                    {/* Footer actions - Responsive */}
-                    <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-white/15 flex flex-wrap gap-2 sm:gap-3">
-                        <button
-                            onClick={() => setIsReplyOpen(true)}
-                            className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition"
-                        >
-                            <Reply size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">
-                                {t("inbox.detail.5")}
-                            </span>
-                        </button>
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition">
-                            <Forward size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">
-                                {t("inbox.detail.6")}
-                            </span>
-                        </button>
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-red-600/20 transition">
-                            <Trash2 size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">
-                                {t("inbox.detail.7")}
-                            </span>
-                        </button>
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-yellow-500/20 transition">
-                            <Star size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">
-                                {t("inbox.detail.8")}
-                            </span>
-                        </button>
-                    </div>
-
-                    {/* Unread badge */}
-                    {!email.isRead && (
-                        <span className="absolute top-4 right-4 sm:right-6 rounded-full bg-cyan-400/15 px-2 py-1 text-[10px] font-medium text-cyan-300 ring-1 ring-cyan-300/30">
-                            {t("inbox.detail.12")}
-                        </span>
+                                            <Download size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     )}
+
+                    {/* Actions */}
+                    <div className="flex gap-2 mt-2">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsReplyOpen(true);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-xs font-medium transition"
+                        >
+                            <Reply size={14} /> {t("inbox.detail.5")}
+                        </button>
+                        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-xs font-medium transition">
+                            <Forward size={14} /> {t("inbox.detail.6")}
+                        </button>
+                    </div>
                 </div>
             )}
-
-            {/* Reply Modal */}
-            <ReplyModal
+             <ReplyModal
                 isOpen={isReplyOpen}
                 onClose={() => setIsReplyOpen(false)}
                 email={email}
             />
+        </div>
+    );
+};
+
+export default function EmailDetail({
+    email,
+    onBack,
+}: EmailDetailWithBackProps) {
+    const { t } = useTranslation();
+    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+    
+    // If email has threadEmails, fetch them. Otherwise just use the single email.
+    // Note: We need a way to know if we should fetch the thread. 
+    // For now, if threadCount > 1, we try to fetch.
+    const shouldFetchThread = email?.threadCount && email.threadCount > 1;
+    
+    const { data: threadData, isLoading: isThreadLoading } = useGetThreadEmailsQuery(
+        { id: email?.id || "", mailbox: email?.mailboxId },
+        { skip: !shouldFetchThread }
+    );
+
+    const emailsToRender = shouldFetchThread && threadData?.data 
+        ? threadData.data 
+        : (email ? [email] : []);
+
+    // Sort chronologically
+    const sortedEmails = [...emailsToRender].sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    useEffect(() => {
+        if (sortedEmails.length > 0) {
+            // Expand the last email by default
+            const lastEmail = sortedEmails[sortedEmails.length - 1];
+            setExpandedIds(new Set([lastEmail.id]));
+        }
+    }, [sortedEmails.length, email?.id]);
+
+    const toggleExpand = (id: string) => {
+        const newSet = new Set(expandedIds);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+        } else {
+            newSet.add(id);
+        }
+        setExpandedIds(newSet);
+    };
+
+    if (!email) {
+        return (
+            <div className="flex-1 h-full flex flex-col items-center justify-center text-white/50 gap-4">
+                <div className="rounded-full bg-white/10 p-4">
+                    <Forward className="text-white/50" />
+                </div>
+                <p className="text-sm">{t("inbox.9")}</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex-1 h-full flex flex-col text-white relative w-full md:w-auto bg-[#1E1E1E]">
+            {/* Header */}
+            <header className="px-4 py-4 border-b border-white/10 flex items-center gap-3">
+                {onBack && (
+                    <button
+                        onClick={onBack}
+                        className="md:hidden text-white/70 hover:text-white"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                )}
+                <h2 className="text-xl font-semibold text-white truncate flex-1">
+                    {email.subject}
+                </h2>
+                <div className="flex items-center gap-2">
+                    <button className="p-2 hover:bg-white/10 rounded-full transition text-white/70">
+                        <Trash2 size={18} />
+                    </button>
+                    <button className="p-2 hover:bg-white/10 rounded-full transition text-white/70">
+                        <Star size={18} />
+                    </button>
+                </div>
+            </header>
+
+            {/* Thread List */}
+            <div className="flex-1 overflow-y-auto custom-scroll">
+                {isThreadLoading ? (
+                    <div className="p-8 text-center text-white/50">Loading thread...</div>
+                ) : (
+                    <div className="flex flex-col pb-4">
+                        {sortedEmails.map((e, index) => (
+                            <SingleEmailView
+                                key={e.id}
+                                email={e}
+                                isExpanded={expandedIds.has(e.id)}
+                                onToggle={() => toggleExpand(e.id)}
+                                isLast={index === sortedEmails.length - 1}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

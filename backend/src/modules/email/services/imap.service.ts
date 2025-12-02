@@ -42,6 +42,7 @@ export interface MailMessage {
   messageId?: string;
   inReplyTo?: string;
   references?: string[];
+  flags?: string[];
 }
 
 @Injectable()
@@ -277,6 +278,7 @@ export class ImapService {
     config: ImapConnectionConfig,
     mailbox: string = "INBOX",
     limit: number = 50,
+    page: number = 1,
   ): Promise<MailMessage[]> {
     const imap = await this.connect(config);
 
@@ -287,13 +289,28 @@ export class ImapService {
           return;
         }
 
-        const fetchCount = Math.min(limit, box.messages.total);
-        if (fetchCount === 0) {
+        const totalMessages = box.messages.total;
+        if (totalMessages === 0) {
           resolve([]);
           return;
         }
 
-        const fetchRange = `${Math.max(1, box.messages.total - fetchCount + 1)}:${box.messages.total}`;
+        // Calculate pagination
+        // IMAP numbers messages from 1 to total
+        // We want newest messages first (reverse chronological)
+        // Page 1 = newest messages, Page 2 = older messages, etc
+        const skip = (page - 1) * limit;
+        const endIndex = totalMessages - skip; // Start from newest
+        const startIndex = Math.max(1, endIndex - limit + 1);
+
+        if (endIndex < 1 || startIndex > totalMessages) {
+          resolve([]);
+          return;
+        }
+
+        const fetchRange = `${startIndex}:${endIndex}`;
+        this.logger.log(`Fetching emails from ${mailbox}: range ${fetchRange} (page ${page}, limit ${limit}, total ${totalMessages})`);
+
         const messages: MailMessage[] = [];
         const messagePromises: Promise<void>[] = [];
 
@@ -305,10 +322,14 @@ export class ImapService {
         fetch.on("message", (msg, seqno) => {
           let emailBuffer = Buffer.alloc(0);
           let messageUid: string | null = null;
+          let flags: string[] = [];
 
           msg.once("attributes", (attrs) => {
             if (attrs.uid) {
               messageUid = attrs.uid.toString();
+            }
+            if (attrs.flags) {
+              flags = attrs.flags.map(f => f.toString());
             }
           });
 
@@ -352,6 +373,7 @@ export class ImapService {
                     : parsed.references
                       ? [parsed.references]
                       : [],
+                  flags: flags,
                 };
 
                 messages.push(message);
@@ -377,6 +399,91 @@ export class ImapService {
       });
     });
   }
+  async fetchEmailHeaders(
+    config: ImapConnectionConfig,
+    mailbox: string = "INBOX",
+  ): Promise<MailMessage[]> {
+    const imap = await this.connect(config);
+
+    return new Promise((resolve, reject) => {
+      imap.openBox(mailbox, true, (err, box) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        const totalMessages = box.messages.total;
+        if (totalMessages === 0) {
+          resolve([]);
+          return;
+        }
+
+        // Fetch all headers (limit to last 1000 to avoid performance issues on large mailboxes)
+        const fetchStart = Math.max(1, totalMessages - 1000);
+        const fetch = imap.seq.fetch(`${fetchStart}:*`, {
+          bodies:
+            "HEADER.FIELDS (MESSAGE-ID REFERENCES IN-REPLY-TO SUBJECT FROM DATE FLAGS)",
+          struct: false,
+        });
+
+        const messages: MailMessage[] = [];
+        const messagePromises: Promise<void>[] = [];
+
+        fetch.on("message", (msg, seqno) => {
+          let headerBuffer = Buffer.alloc(0);
+          let messageUid: string | null = null;
+          let flags: string[] = [];
+
+          msg.once("attributes", (attrs) => {
+            if (attrs.uid) messageUid = attrs.uid.toString();
+            if (attrs.flags) flags = attrs.flags.map((f) => f.toString());
+          });
+
+          msg.on("body", (stream) => {
+            stream.on("data", (chunk) => {
+              headerBuffer = Buffer.concat([headerBuffer, chunk]);
+            });
+          });
+
+          const messagePromise = new Promise<void>((resolveMsg) => {
+            msg.once("end", async () => {
+              try {
+                const parsed = await simpleParser(headerBuffer);
+                messages.push({
+                  id: messageUid || seqno.toString(),
+                  from: parsed.from?.text || "",
+                  to: [],
+                  subject: parsed.subject || "",
+                  body: "",
+                  date: parsed.date || new Date(),
+                  attachments: [],
+                  messageId: parsed.messageId,
+                  inReplyTo: parsed.inReplyTo,
+                  references: Array.isArray(parsed.references)
+                    ? parsed.references
+                    : parsed.references
+                      ? [parsed.references]
+                      : [],
+                  flags: flags,
+                });
+              } catch (e) {
+                // Ignore parse errors
+              }
+              resolveMsg();
+            });
+          });
+          messagePromises.push(messagePromise);
+        });
+
+        fetch.once("error", reject);
+        fetch.once("end", async () => {
+          await Promise.all(messagePromises);
+          resolve(messages);
+        });
+      });
+    });
+  }
+
   async sendEmail(
     config: ImapConnectionConfig,
     dto: SendEmailDto,
@@ -994,6 +1101,63 @@ ${html}
         resolve(allBoxes);
       });
     });
+  }
+
+  /**
+   * Get mailbox status (message count, unseen count) without fetching emails
+   * This is MUCH faster than fetching all emails just to count them
+   */
+  async getMailboxStatus(
+    config: ImapConnectionConfig,
+    mailbox: string,
+  ): Promise<{ total: number; unseen: number }> {
+    const imap = await this.connect(config);
+
+    return new Promise((resolve, reject) => {
+      imap.openBox(mailbox, true, (err, box) => {
+        if (err) {
+          this.logger.warn(`Failed to open mailbox ${mailbox}: ${err.message}`);
+          resolve({ total: 0, unseen: 0 });
+          return;
+        }
+
+        // The box object contains the counts we need
+        // box.messages is an object with { total: number, new: number, unseen: number }
+        const total = box.messages?.total || 0;
+        const unseen = box.messages?.new || box.messages?.unseen || 0;
+
+        this.logger.log(`✓ Mailbox ${mailbox}: ${total} total, ${unseen} unseen`);
+        resolve({ total, unseen });
+      });
+    });
+  }
+
+  /**
+   * Get status for multiple mailboxes in parallel
+   * Much faster than sequential fetches
+   */
+  async getMultipleMailboxStatuses(
+    config: ImapConnectionConfig,
+    mailboxes: string[],
+  ): Promise<Map<string, { total: number; unseen: number }>> {
+    const statusPromises = mailboxes.map(async (mailbox) => {
+      try {
+        const status = await this.getMailboxStatus(config, mailbox);
+        return { mailbox, status };
+      } catch (error) {
+        this.logger.warn(`Failed to get status for ${mailbox}: ${error.message}`);
+        return { mailbox, status: { total: 0, unseen: 0 } };
+      }
+    });
+
+    const results = await Promise.all(statusPromises);
+
+    const statusMap = new Map<string, { total: number; unseen: number }>();
+    results.forEach(({ mailbox, status }) => {
+      statusMap.set(mailbox, status);
+    });
+
+    return statusMap;
   }
 
   async fetchEmailById(
