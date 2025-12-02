@@ -1,9 +1,9 @@
-import type { Folder, EmailResponse, EmailRequest } from "../_types";
 import {
     type SendEmailDto,
     type ComposeEmailResponse,
     ReplyEmailWithId,
 } from "../_types/compose";
+import type { Folder, EmailResponse, EmailRequest, Email } from "../_types";
 import type { SuccessResponse } from "@/types/success-response";
 import { api } from "@/services/index";
 import { HTTP_METHOD } from "@/constants/services";
@@ -75,6 +75,63 @@ const inboxApi = api.injectEndpoints({
                 },
             }),
         }),
+        getEmailById: builder.query<
+            SuccessResponse<Email>,
+            { id: string; mailbox?: string }
+        >({
+            query: ({ id, mailbox }) => {
+                const params = new URLSearchParams();
+                if (mailbox) params.append("mailbox", mailbox);
+                const queryString = params.toString();
+                return {
+                    url: `/api/emails/${id}${
+                        queryString ? `?${queryString}` : ""
+                    }`,
+                    method: HTTP_METHOD.GET,
+                };
+            },
+            providesTags: (_, __, { id }) => [{ type: "Emails", id }],
+        }),
+        markEmailRead: builder.mutation<SuccessResponse<Email>, string>({
+            query: (id) => ({
+                url: `/api/emails/${id}/read`,
+                method: HTTP_METHOD.PATCH,
+            }),
+            invalidatesTags: (_, __, id) => [
+                { type: "Emails", id },
+                { type: "Emails", id: "LIST" },
+            ],
+        }),
+        markEmailUnread: builder.mutation<SuccessResponse<Email>, string>({
+            query: (id) => ({
+                url: `/api/emails/${id}/unread`,
+                method: HTTP_METHOD.PATCH,
+            }),
+            invalidatesTags: (_, __, id) => [
+                { type: "Emails", id },
+                { type: "Emails", id: "LIST" },
+            ],
+        }),
+        toggleEmailStar: builder.mutation<SuccessResponse<Email>, string>({
+            query: (id) => ({
+                url: `/api/emails/${id}/star`,
+                method: HTTP_METHOD.PATCH,
+            }),
+            invalidatesTags: (_, __, id) => [
+                { type: "Emails", id },
+                { type: "Emails", id: "LIST" },
+            ],
+        }),
+        deleteEmail: builder.mutation<SuccessResponse<null>, string>({
+            query: (id) => ({
+                url: `/api/emails/${id}`,
+                method: HTTP_METHOD.DELETE,
+            }),
+            invalidatesTags: (_, __, id) => [
+                { type: "Emails", id },
+                { type: "Emails", id: "LIST" },
+            ],
+        }),
     }),
     overrideExisting: false,
 });
@@ -85,4 +142,9 @@ export const {
     useSendEmailMutation,
     useReplyEmailMutation,
     useModifyEmailMutation,
+    useGetEmailByIdQuery,
+    useMarkEmailReadMutation,
+    useMarkEmailUnreadMutation,
+    useToggleEmailStarMutation,
+    useDeleteEmailMutation,
 } = inboxApi;

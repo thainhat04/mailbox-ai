@@ -9,12 +9,14 @@ import { Attachment } from "nodemailer/lib/mailer";
 import { NotFoundException } from "@nestjs/common";
 import { AttachmentDto } from "../dto/attachment.dto";
 import { ReplyEmailDto } from "../dto/reply-emai.dto";
-import { simpleParser } from "mailparser";
+
 import { MailDetail } from "../dto/mail-detail.dto";
 import { SendEmailResponse } from "../dto/send-email-response";
 import fs from "fs";
 import fsPromises from "fs/promises";
 const MAX_SIZE_BYTES = 15 * 1024 * 1024;
+import { Transporter } from "nodemailer";
+import { simpleParser, ParsedMail } from "mailparser";
 
 export interface ImapConnectionConfig {
   userId: string;
@@ -34,6 +36,10 @@ export interface MailMessage {
     contentType: string;
     size: number;
   }>;
+  // Threading fields
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string[];
 }
 
 @Injectable()
@@ -202,7 +208,6 @@ export class ImapService {
       email,
       token.accessToken,
     );
-    console.log("IMAP Config:", imapConfig);
 
     this.logger.log(`Attempting IMAP connection for ${email} (${provider})`);
     this.logger.debug(
@@ -280,47 +285,91 @@ export class ImapService {
         imap.openBox(mailbox, true, (err, box) => {
           if (err) return reject(err);
 
-          const fetchCount = Math.min(limit, box.messages.total);
-          if (fetchCount === 0) return resolve([]);
-
           const fetchRange = `${Math.max(1, box.messages.total - fetchCount + 1)}:${box.messages.total}`;
+          const messages: MailMessage[] = [];
+          const messagePromises: Promise<void>[] = [];
 
           const fetch = imap.seq.fetch(fetchRange, {
-            bodies: ["HEADER", "TEXT"],
+            bodies: "",
             struct: true,
           });
 
           fetch.on("message", (msg, seqno) => {
-            const message: Partial<MailMessage> = {};
+            let messageUid = seqno.toString();
+            let emailBuffer = Buffer.alloc(0);
 
+            // Get UID for unique identification
             msg.once("attributes", (attrs) => {
-              message.id = attrs.uid;
+              if (attrs.uid) {
+                messageUid = attrs.uid.toString();
+              }
             });
 
             msg.on("body", (stream, info) => {
-              let buffer = "";
-              stream.on("data", (chunk) => (buffer += chunk.toString("utf8")));
-              stream.once("end", () => {
-                if (info.which === "HEADER") {
-                  const header = Imap.parseHeader(buffer);
-                  message.from = header.from?.[0] || "";
-                  message.to = header.to || [];
-                  message.subject = header.subject?.[0] || "";
-                  message.date = new Date(header.date?.[0] || Date.now());
-                } else if (info.which === "TEXT") {
-                  message.body = buffer;
-                }
+              stream.on("data", (chunk) => {
+                emailBuffer = Buffer.concat([emailBuffer, chunk]);
               });
             });
 
-            msg.once("end", () => {
-              if (message.from && message.subject)
-                messages.push(message as MailMessage);
-            });
+            const messagePromise = new Promise<void>(
+              (resolveMsg, rejectMsg) => {
+                msg.once("end", async () => {
+                  try {
+                    const parsed: ParsedMail = await simpleParser(emailBuffer);
+
+                    const message: MailMessage = {
+                      id: messageUid,
+                      from: parsed.from?.text || "",
+                      to: Array.isArray(parsed.to)
+                        ? parsed.to.map((addr) => addr.text)
+                        : parsed.to?.text
+                          ? [parsed.to.text]
+                          : [],
+                      subject: parsed.subject || "",
+                      // Prefer HTML over text for richer formatting, fallback to text
+                      body: parsed.html || parsed.text || "",
+                      date: parsed.date || new Date(),
+                      attachments:
+                        parsed.attachments?.map((att, idx) => ({
+                          filename: att.filename || `attachment-${idx}`,
+                          contentType:
+                            att.contentType || "application/octet-stream",
+                          size: att.size || 0,
+                        })) || [],
+                      // Threading fields
+                      messageId: parsed.messageId || undefined,
+                      inReplyTo: parsed.inReplyTo || undefined,
+                      references: parsed.references
+                        ? Array.isArray(parsed.references)
+                          ? parsed.references
+                          : [parsed.references]
+                        : undefined,
+                    };
+
+                    messages.push(message);
+                    resolveMsg();
+                  } catch (parseError) {
+                    this.logger.error(
+                      `Failed to parse email ${messageUid}: ${parseError.message}`,
+                    );
+                    rejectMsg(parseError);
+                  }
+                });
+              },
+            );
+
+            messagePromises.push(messagePromise);
           });
 
           fetch.once("error", reject);
-          fetch.once("end", () => resolve(messages));
+          fetch.once("end", async () => {
+            try {
+              await Promise.all(messagePromises);
+              resolve(messages);
+            } catch (error) {
+              reject(error);
+            }
+          });
         });
       });
     } finally {
@@ -337,7 +386,7 @@ export class ImapService {
     // OAuth2 token
     let token = await this.oauth2TokenService.getToken(userId, provider, email);
     if (!token) {
-      throw new NotFoundException("No OAuth2 token found");
+      throw new Error("No OAuth2 token found");
     }
 
     if (await this.oauth2TokenService.isTokenExpired(token)) {
@@ -812,5 +861,309 @@ export class ImapService {
     } finally {
       await this.disconnect(config).catch(() => {});
     }
+  }
+  async getMessageCount(
+    config: ImapConnectionConfig,
+    mailbox: string = "INBOX",
+  ): Promise<number> {
+    const imap = await this.connect(config);
+
+    return new Promise((resolve, reject) => {
+      imap.openBox(mailbox, true, (err, box) => {
+        if (err) {
+          this.logger.error(
+            `Failed to open mailbox "${mailbox}": ${err.message}`,
+          );
+          // If mailbox doesn't exist, return 0 instead of error
+          if (
+            err.message.includes("does not exist") ||
+            err.message.includes("Mailbox doesn't exist")
+          ) {
+            resolve(0);
+            return;
+          }
+          reject(err);
+          return;
+        }
+        resolve(box.messages.total);
+      });
+    });
+  }
+
+  /**
+   * List all available mailboxes/folders from IMAP server
+   */
+  async listMailboxes(config: ImapConnectionConfig): Promise<any[]> {
+    const imap = await this.connect(config);
+
+    return new Promise((resolve, reject) => {
+      imap.getBoxes((err, boxes) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        // Flatten the box structure and remove circular references
+        const flattenBoxes = (boxes: any, prefix: string = ""): any[] => {
+          const result: any[] = [];
+          for (const [name, box] of Object.entries<any>(boxes)) {
+            const fullName = prefix ? `${prefix}/${name}` : name;
+
+            // Extract only serializable properties, avoid circular references
+            result.push({
+              name: fullName,
+              delimiter: box.delimiter || "/",
+              attributes: box.attribs || [],
+              hasChildren: !!box.children,
+            });
+
+            // Recursively process children
+            if (box.children) {
+              result.push(...flattenBoxes(box.children, fullName));
+            }
+          }
+          return result;
+        };
+
+        const allBoxes = flattenBoxes(boxes);
+        this.logger.log(
+          `Available mailboxes: ${allBoxes.map((b) => b.name).join(", ")}`,
+        );
+        resolve(allBoxes);
+      });
+    });
+  }
+
+  async fetchEmailById(
+    config: ImapConnectionConfig,
+    mailbox: string,
+    messageUid: string,
+  ): Promise<MailMessage> {
+    const imap = await this.connect(config);
+
+    return new Promise((resolve, reject) => {
+      imap.openBox(mailbox, true, (err, box) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        // Use UID fetch instead of sequence fetch
+        const fetch = imap.fetch(messageUid, {
+          bodies: "",
+          struct: true,
+        });
+
+        let emailBuffer = Buffer.alloc(0);
+        let foundMessage = false;
+
+        fetch.on("message", (msg, seqno) => {
+          foundMessage = true;
+
+          msg.on("body", (stream, info) => {
+            stream.on("data", (chunk) => {
+              emailBuffer = Buffer.concat([emailBuffer, chunk]);
+            });
+          });
+
+          msg.once("end", async () => {
+            try {
+              const parsed: ParsedMail = await simpleParser(emailBuffer);
+
+              const message: MailMessage = {
+                id: messageUid, // Use the UID we searched for
+                from: parsed.from?.text || "",
+                to: Array.isArray(parsed.to)
+                  ? parsed.to.map((addr) => addr.text)
+                  : parsed.to?.text
+                    ? [parsed.to.text]
+                    : [],
+                subject: parsed.subject || "",
+                // Prefer HTML over text for richer formatting, fallback to text
+                body: parsed.html || parsed.text || "",
+                date: parsed.date || new Date(),
+                attachments:
+                  parsed.attachments?.map((att, idx) => ({
+                    filename: att.filename || `attachment-${idx}`,
+                    contentType: att.contentType || "application/octet-stream",
+                    size: att.size || 0,
+                  })) || [],
+                // Threading fields
+                messageId: parsed.messageId || undefined,
+                inReplyTo: parsed.inReplyTo || undefined,
+                references: parsed.references
+                  ? Array.isArray(parsed.references)
+                    ? parsed.references
+                    : [parsed.references]
+                  : undefined,
+              };
+
+              resolve(message);
+            } catch (parseError) {
+              reject(parseError);
+            }
+          });
+        });
+
+        fetch.once("error", (err) => {
+          this.logger.error(
+            `Error fetching email ${messageUid} from ${mailbox}: ${err.message}`,
+          );
+          reject(err);
+        });
+
+        fetch.once("end", () => {
+          if (!foundMessage) {
+            reject(
+              new Error(`Email with UID ${messageUid} not found in ${mailbox}`),
+            );
+          }
+        });
+      });
+    });
+  }
+
+  async fetchAttachment(
+    config: ImapConnectionConfig,
+    mailbox: string,
+    messageUid: string,
+    partNumber: string,
+  ): Promise<{ stream: NodeJS.ReadableStream; metadata: any }> {
+    const imap = await this.connect(config);
+
+    return new Promise((resolve, reject) => {
+      imap.openBox(mailbox, true, (err, box) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        // Use UID fetch instead of sequence fetch
+        const fetch = imap.fetch(messageUid, {
+          bodies: [partNumber],
+          struct: true,
+        });
+
+        let attachmentBuffer = Buffer.alloc(0);
+        let metadata: any = {};
+        let encoding: string | undefined;
+
+        fetch.on("message", (msg) => {
+          msg.on("body", (stream, info) => {
+            stream.on("data", (chunk) => {
+              attachmentBuffer = Buffer.concat([attachmentBuffer, chunk]);
+            });
+          });
+
+          msg.once("attributes", (attrs) => {
+            // Get attachment metadata from structure
+            if (attrs.struct) {
+              const parts = this.flattenParts(attrs.struct);
+              const part = parts.find((p) => p.partID === partNumber);
+              if (part) {
+                encoding = part.encoding;
+                metadata = {
+                  filename:
+                    part.disposition?.params?.filename ||
+                    part.params?.name ||
+                    "attachment",
+                  mimeType: `${part.type}/${part.subtype}`.toLowerCase(),
+                  size: part.size || 0,
+                  encoding: encoding,
+                };
+              }
+            }
+          });
+
+          msg.once("end", () => {
+            try {
+              // Decode the attachment based on encoding
+              let decodedBuffer = attachmentBuffer;
+
+              if (encoding) {
+                this.logger.log(
+                  `Decoding attachment with encoding: ${encoding}`,
+                );
+
+                if (encoding.toUpperCase() === "BASE64") {
+                  // Decode base64
+                  const base64String = attachmentBuffer
+                    .toString("utf8")
+                    .replace(/\r?\n/g, "");
+                  decodedBuffer = Buffer.from(base64String, "base64");
+                } else if (encoding.toUpperCase() === "QUOTED-PRINTABLE") {
+                  // Quoted-printable is rarely used for attachments, usually for text
+                  // For now, just log a warning and use raw buffer
+                  this.logger.warn(
+                    "Quoted-printable encoding detected for attachment, using raw buffer",
+                  );
+                  decodedBuffer = attachmentBuffer;
+                } else if (
+                  encoding === "7BIT" ||
+                  encoding === "8BIT" ||
+                  encoding === "BINARY"
+                ) {
+                  // No decoding needed
+                  decodedBuffer = attachmentBuffer;
+                } else {
+                  this.logger.warn(
+                    `Unknown encoding: ${encoding}, using raw buffer`,
+                  );
+                }
+              }
+
+              // Update size with decoded size
+              metadata.size = decodedBuffer.length;
+
+              // Convert buffer to stream
+              const Readable = require("stream").Readable;
+              const readable = new Readable();
+              readable.push(decodedBuffer);
+              readable.push(null);
+
+              this.logger.log(
+                `Attachment ready: ${metadata.filename} (${metadata.size} bytes, ${metadata.mimeType})`,
+              );
+              resolve({ stream: readable, metadata });
+            } catch (decodeError) {
+              this.logger.error(
+                `Failed to decode attachment: ${decodeError.message}`,
+              );
+              reject(decodeError);
+            }
+          });
+        });
+
+        fetch.once("error", reject);
+      });
+    });
+  }
+
+  // Helper method to flatten IMAP structure parts
+  private flattenParts(
+    struct: any[],
+    parts: any[] = [],
+    prefix: string = "1",
+  ): any[] {
+    if (!Array.isArray(struct)) {
+      return parts;
+    }
+
+    for (let i = 0; i < struct.length; i++) {
+      const part = struct[i];
+      if (Array.isArray(part)) {
+        this.flattenParts(part, parts, `${prefix}.${i + 1}`);
+      } else if (part.partID) {
+        parts.push(part);
+      } else {
+        // This is a part without partID, add it manually
+        parts.push({
+          ...part,
+          partID: i === struct.length - 1 ? prefix : `${prefix}.${i + 1}`,
+        });
+      }
+    }
+
+    return parts;
   }
 }
