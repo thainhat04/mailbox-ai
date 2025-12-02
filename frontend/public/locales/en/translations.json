@@ -122,6 +122,12 @@
             "10": "Download",
             "11": "Open",
             "12": "Unread"
+        },
+        "reply": {
+            "1": "Reply to Email",
+            "2": "To",
+            "3": "Subject",
+            "4": "Send Reply"
         }
     }
 }

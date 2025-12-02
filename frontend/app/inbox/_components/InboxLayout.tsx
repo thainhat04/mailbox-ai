@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import FolderList from "./FolderList";
 import EmailList from "./EmailList";

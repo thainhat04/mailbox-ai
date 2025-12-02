@@ -16,6 +16,10 @@ import EmailBody from "./EmailBody";
 import { useTranslation } from "react-i18next";
 import { AppConfig } from "@/config";
 import SERVICES from "@/constants/services";
+import { useMutationHandler } from "@/hooks/useMutationHandler";
+import { useReplyEmailMutation } from "../_services";
+import ReplyModal from "./ReplyModal";
+import { useState } from "react";
 
 interface EmailDetailWithBackProps extends EmailDetailProps {
     onBack?: () => void;
@@ -41,7 +45,12 @@ export default function EmailDetail({
     onBack,
 }: EmailDetailWithBackProps) {
     const { t } = useTranslation();
+    const [isReplyOpen, setIsReplyOpen] = useState(false);
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
+    const replyEmailMutation = useMutationHandler(
+        useReplyEmailMutation,
+        "ReplyEmail"
+    );
 
     const handleDownloadAttachment = async (url: string, filename: string) => {
         try {
@@ -71,7 +80,11 @@ export default function EmailDetail({
         }
     };
 
-    const handleViewAttachment = async (url: string, filename: string, mimeType: string) => {
+    const handleViewAttachment = async (
+        url: string,
+        filename: string,
+        mimeType: string
+    ) => {
         try {
             const token = localStorage.getItem(SERVICES.accessToken);
             const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
@@ -203,7 +216,12 @@ export default function EmailDetail({
                                             </div>
                                             <div className="ml-auto sm:ml-3 flex shrink-0 items-center gap-1 sm:gap-2 w-full sm:w-auto">
                                                 <button
-                                                    onClick={() => handleDownloadAttachment(att.url, att.filename)}
+                                                    onClick={() =>
+                                                        handleDownloadAttachment(
+                                                            att.url,
+                                                            att.filename
+                                                        )
+                                                    }
                                                     className="flex-1 sm:flex-none inline-flex items-center justify-center sm:justify-start gap-1 rounded-md bg-white/8 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white hover:bg-white/[0.14] transition"
                                                     aria-label={`Download ${att.filename}`}
                                                 >
@@ -214,7 +232,13 @@ export default function EmailDetail({
                                                     {t("inbox.detail.10")}
                                                 </button>
                                                 <button
-                                                    onClick={() => handleViewAttachment(att.url, att.filename, att.mimeType)}
+                                                    onClick={() =>
+                                                        handleViewAttachment(
+                                                            att.url,
+                                                            att.filename,
+                                                            att.mimeType
+                                                        )
+                                                    }
                                                     className="flex-1 sm:flex-none inline-flex items-center justify-center rounded-md border border-white/15 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white/85 hover:bg-white/8 transition"
                                                 >
                                                     {t("inbox.detail.11")}
@@ -229,7 +253,10 @@ export default function EmailDetail({
 
                     {/* Footer actions - Responsive */}
                     <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-white/15 flex flex-wrap gap-2 sm:gap-3">
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition">
+                        <button
+                            onClick={() => setIsReplyOpen(true)}
+                            className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition"
+                        >
                             <Reply size={14} className="sm:size-4" />{" "}
                             <span className="hidden sm:inline">
                                 {t("inbox.detail.5")}
@@ -263,6 +290,13 @@ export default function EmailDetail({
                     )}
                 </div>
             )}
+
+            {/* Reply Modal */}
+            <ReplyModal
+                isOpen={isReplyOpen}
+                onClose={() => setIsReplyOpen(false)}
+                email={email}
+            />
         </div>
     );
 }

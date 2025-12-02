@@ -149,6 +149,7 @@ export class EmailService {
       if (tokens && tokens.length > 0) {
         try {
           // Try to fetch from IMAP
+          console.log("Fetching emails from IMAP for mailbox:", mailboxId);
           return await this.fetchEmailsFromImap(
             userId,
             mailboxId,
@@ -1191,11 +1192,14 @@ export class EmailService {
     };
   }
   async getAllEmails(userId: string, userEmail: string) {
-    return this.imapService.fetchEmails({
-      userId,
-      email: userEmail,
-      provider: "GOOGLE",
-    });
+    return this.imapService.fetchEmails(
+      {
+        userId,
+        email: userEmail,
+        provider: "GOOGLE",
+      },
+      "[Gmail]/Sent Mail",
+    );
   }
 
   /**

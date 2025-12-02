@@ -265,7 +265,6 @@ export class EmailController {
     @Param("id") id: number,
     @Body() dto: ReplyEmailDto,
   ): Promise<ResponseDto<SendEmailResponse>> {
-    console.log("id", id);
     const original = await this.emailService.getEmailDetail(
       user.sub,
       user.email,
@@ -275,6 +274,7 @@ export class EmailController {
     if (!original) {
       throw new NotFoundException("Original email not found");
     }
+    console.log("Original email:", original);
     const result = await this.emailService.replyEmail(
       user.sub,
       user.email,
@@ -299,7 +299,7 @@ export class EmailController {
     if (!original) {
       throw new NotFoundException("Original email not found");
     }
-    console.log("Original email:", original);
+
     return this.emailService.modifyEmail(user.sub, user.email, id, dto);
   }
   @Get("email-all")

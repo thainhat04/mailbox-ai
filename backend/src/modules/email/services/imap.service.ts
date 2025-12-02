@@ -9,6 +9,8 @@ import { Attachment } from "nodemailer/lib/mailer";
 import { NotFoundException } from "@nestjs/common";
 import { AttachmentDto } from "../dto/attachment.dto";
 import { ReplyEmailDto } from "../dto/reply-emai.dto";
+import { Readable } from "stream";
+import { AddressObject } from "mailparser";
 
 import { MailDetail } from "../dto/mail-detail.dto";
 import { SendEmailResponse } from "../dto/send-email-response";
@@ -273,110 +275,108 @@ export class ImapService {
 
   async fetchEmails(
     config: ImapConnectionConfig,
-    mailbox: string = "INBOX", //"[Gmail]/Sent Mail",
+    mailbox: string = "INBOX",
     limit: number = 50,
   ): Promise<MailMessage[]> {
     const imap = await this.connect(config);
 
-    const messages: MailMessage[] = [];
+    return new Promise((resolve, reject) => {
+      imap.openBox(mailbox, true, (err, box) => {
+        if (err) {
+          reject(err);
+          return;
+        }
 
-    try {
-      return await new Promise<MailMessage[]>((resolve, reject) => {
-        imap.openBox(mailbox, true, (err, box) => {
-          if (err) return reject(err);
+        const fetchCount = Math.min(limit, box.messages.total);
+        if (fetchCount === 0) {
+          resolve([]);
+          return;
+        }
 
-          const fetchRange = `${Math.max(1, box.messages.total - fetchCount + 1)}:${box.messages.total}`;
-          const messages: MailMessage[] = [];
-          const messagePromises: Promise<void>[] = [];
+        const fetchRange = `${Math.max(1, box.messages.total - fetchCount + 1)}:${box.messages.total}`;
+        const messages: MailMessage[] = [];
+        const messagePromises: Promise<void>[] = [];
 
-          const fetch = imap.seq.fetch(fetchRange, {
-            bodies: "",
-            struct: true,
-          });
+        const fetch = imap.seq.fetch(fetchRange, {
+          bodies: "",
+          struct: true,
+        });
 
-          fetch.on("message", (msg, seqno) => {
-            let messageUid = seqno.toString();
-            let emailBuffer = Buffer.alloc(0);
+        fetch.on("message", (msg, seqno) => {
+          let emailBuffer = Buffer.alloc(0);
+          let messageUid: string | null = null;
 
-            // Get UID for unique identification
-            msg.once("attributes", (attrs) => {
-              if (attrs.uid) {
-                messageUid = attrs.uid.toString();
-              }
-            });
-
-            msg.on("body", (stream, info) => {
-              stream.on("data", (chunk) => {
-                emailBuffer = Buffer.concat([emailBuffer, chunk]);
-              });
-            });
-
-            const messagePromise = new Promise<void>(
-              (resolveMsg, rejectMsg) => {
-                msg.once("end", async () => {
-                  try {
-                    const parsed: ParsedMail = await simpleParser(emailBuffer);
-
-                    const message: MailMessage = {
-                      id: messageUid,
-                      from: parsed.from?.text || "",
-                      to: Array.isArray(parsed.to)
-                        ? parsed.to.map((addr) => addr.text)
-                        : parsed.to?.text
-                          ? [parsed.to.text]
-                          : [],
-                      subject: parsed.subject || "",
-                      // Prefer HTML over text for richer formatting, fallback to text
-                      body: parsed.html || parsed.text || "",
-                      date: parsed.date || new Date(),
-                      attachments:
-                        parsed.attachments?.map((att, idx) => ({
-                          filename: att.filename || `attachment-${idx}`,
-                          contentType:
-                            att.contentType || "application/octet-stream",
-                          size: att.size || 0,
-                        })) || [],
-                      // Threading fields
-                      messageId: parsed.messageId || undefined,
-                      inReplyTo: parsed.inReplyTo || undefined,
-                      references: parsed.references
-                        ? Array.isArray(parsed.references)
-                          ? parsed.references
-                          : [parsed.references]
-                        : undefined,
-                    };
-
-                    messages.push(message);
-                    resolveMsg();
-                  } catch (parseError) {
-                    this.logger.error(
-                      `Failed to parse email ${messageUid}: ${parseError.message}`,
-                    );
-                    rejectMsg(parseError);
-                  }
-                });
-              },
-            );
-
-            messagePromises.push(messagePromise);
-          });
-
-          fetch.once("error", reject);
-          fetch.once("end", async () => {
-            try {
-              await Promise.all(messagePromises);
-              resolve(messages);
-            } catch (error) {
-              reject(error);
+          msg.once("attributes", (attrs) => {
+            if (attrs.uid) {
+              messageUid = attrs.uid.toString();
             }
           });
+
+          msg.on("body", (stream) => {
+            stream.on("data", (chunk) => {
+              emailBuffer = Buffer.concat([emailBuffer, chunk]);
+            });
+          });
+
+          const messagePromise = new Promise<void>((resolveMsg, rejectMsg) => {
+            msg.once("end", async () => {
+              try {
+                if (!messageUid) {
+                  return rejectMsg(new Error("Missing UID for message"));
+                }
+
+                const parsed: ParsedMail = await simpleParser(emailBuffer);
+
+                const message: MailMessage = {
+                  id: messageUid,
+                  from: parsed.from?.text || "",
+                  to: Array.isArray(parsed.to)
+                    ? parsed.to.map((a) => a.text)
+                    : parsed.to?.text
+                      ? [parsed.to.text]
+                      : [],
+                  subject: parsed.subject || "",
+                  body: parsed.html || parsed.text || "",
+                  date: parsed.date || new Date(),
+                  attachments:
+                    parsed.attachments?.map((att, idx) => ({
+                      filename: att.filename || `attachment-${idx}`,
+                      contentType:
+                        att.contentType || "application/octet-stream",
+                      size: att.size || 0,
+                    })) || [],
+                  messageId: parsed.messageId,
+                  inReplyTo: parsed.inReplyTo,
+                  references: Array.isArray(parsed.references)
+                    ? parsed.references
+                    : parsed.references
+                      ? [parsed.references]
+                      : [],
+                };
+
+                messages.push(message);
+                resolveMsg();
+              } catch (error) {
+                rejectMsg(error);
+              }
+            });
+          });
+
+          messagePromises.push(messagePromise);
+        });
+
+        fetch.once("error", reject);
+        fetch.once("end", async () => {
+          try {
+            await Promise.all(messagePromises);
+            resolve(messages);
+          } catch (error) {
+            reject(error);
+          }
         });
       });
-    } finally {
-      await this.disconnect(config); // đảm bảo IMAP được đóng
-    }
+    });
   }
-
   async sendEmail(
     config: ImapConnectionConfig,
     dto: SendEmailDto,
@@ -459,7 +459,6 @@ export class ImapService {
     dto: ReplyEmailDto, // bạn có thể thay bằng ReplyEmailDto
   ): Promise<SendEmailResponse> {
     const { userId, provider, email } = config;
-    console.log("Original email in replyEmail:", original);
     // 1) GET TOKEN
     let token = await this.oauth2TokenService.getToken(userId, provider, email);
     if (!token) {
@@ -699,13 +698,16 @@ export class ImapService {
     const originalSubject = original?.subject || "";
     const messageId = original?.messageId;
 
-    const subject = originalSubject.startsWith("Re:")
+    const subject = originalSubject.toLowerCase().startsWith("re:")
       ? originalSubject
       : `Re: ${originalSubject}`;
 
-    const references = original?.references
-      ? `${original.references} ${messageId}`.trim()
-      : messageId;
+    let references = "";
+    if (original?.references && original.references.trim()) {
+      references = `${original.references.trim()} ${messageId}`;
+    } else if (messageId) {
+      references = messageId;
+    }
 
     return {
       subject,
@@ -718,17 +720,34 @@ export class ImapService {
 
   private buildReplyHtml(original: any, dto: any): string {
     let html =
-      dto.replyHtml || (dto.replyText ? `<div>${dto.replyText}</div>` : "");
+      dto.replyHtml || (dto.replyText ? `<p>${dto.replyText}</p>` : "");
 
     if (!dto.includeQuoted) return html;
 
-    const quoted = original.html
+    const escapeHtml = require("escape-html");
+
+    const originalHtml = original.html
       ? original.html
       : original.text
-        ? `<pre>${require("escape-html")(original.text)}</pre>`
+        ? `<pre>${escapeHtml(original.text)}</pre>`
         : "";
 
-    return html + `<hr/><blockquote>${quoted}</blockquote>`;
+    const originalDate = original.date
+      ? new Date(original.date).toUTCString()
+      : "";
+
+    const originalFrom = original?.from?.[0]?.address || "";
+
+    return `
+${html}
+<br>
+<div>
+  On ${originalDate}, ${originalFrom} wrote:
+</div>
+<blockquote style="border-left:1px solid #ccc; margin-left:1em; padding-left:1em;">
+  ${originalHtml}
+</blockquote>
+`;
   }
 
   private resolveReplyRecipients(original: any): string | undefined {
@@ -736,57 +755,100 @@ export class ImapService {
       ? original.from.map((f) => f.address).join(", ")
       : undefined;
   }
+
   async getMailDetail(
     config: ImapConnectionConfig,
     uid: number,
     mailbox: string = "INBOX",
   ): Promise<MailDetail> {
+    console.log("Fetching mail detail for UID:", uid, "in mailbox:", mailbox);
     const imap = await this.connect(config);
 
-    return new Promise<MailDetail>((resolve, reject) => {
-      imap.openBox(mailbox, true, (err, box) => {
+    return new Promise((resolve, reject) => {
+      imap.openBox(mailbox, true, (err) => {
         if (err) return reject(err);
 
-        let resolved = false;
+        const fetch = imap.fetch(uid, { bodies: "" });
 
-        const fetch = imap.fetch(uid, { bodies: "", struct: true });
+        let buffer = Buffer.alloc(0);
+        let found = false;
+        let finished = false; // <--- KEY FIX
 
         fetch.on("message", (msg) => {
-          msg.on("body", (stream) => {
-            simpleParser(stream, (err, parsed) => {
-              if (err) return reject(err);
+          found = true; // message found
 
-              resolved = true;
-              resolve({
-                messageId: parsed.messageId,
+          msg.on("body", (stream) => {
+            stream.on("data", (chunk) => {
+              buffer = Buffer.concat([buffer, chunk]);
+            });
+          });
+
+          msg.once("end", async () => {
+            try {
+              const parsed = await simpleParser(buffer);
+
+              const mailDetail: MailDetail = {
+                messageId: parsed.messageId || "",
                 subject: parsed.subject || "",
-                from: parsed.from?.value || [],
-                to: parsed.to?.value || [],
-                cc: parsed.cc?.value || [],
+                from: this.normalize(parsed.from),
+                to: this.normalize(parsed.to),
+                cc: this.normalize(parsed.cc),
                 date: parsed.date || new Date(),
-                references: parsed.references?.join(" "),
-                inReplyTo: parsed.inReplyTo || undefined,
+                references: Array.isArray(parsed.references)
+                  ? parsed.references.join(" ")
+                  : parsed.references || "",
+                inReplyTo: parsed.inReplyTo || "",
                 text: parsed.text || undefined,
                 html: parsed.html || undefined,
-              });
-            });
+              };
+
+              if (!finished) {
+                // <--- SOFT GUARD
+                finished = true; // block future reject
+                resolve(mailDetail);
+              }
+            } catch (e) {
+              if (!finished) {
+                finished = true;
+                reject(e);
+              }
+            }
           });
         });
 
-        fetch.once("error", reject);
+        fetch.once("error", (e) => {
+          if (!finished) {
+            finished = true;
+            reject(e);
+          }
+        });
 
         fetch.once("end", () => {
-          if (!resolved) {
-            reject(
-              new NotFoundException(
-                `Mail with UID ${uid} not found in mailbox ${mailbox}`,
-              ),
-            );
+          // fetch done but message never received
+          if (!finished && !found) {
+            finished = true;
+            reject(new NotFoundException(`Mail with UID ${uid} not found`));
           }
         });
       });
     });
   }
+
+  private normalize(
+    obj?: AddressObject | AddressObject[],
+  ): { name?: string; address: string }[] {
+    if (!obj) return [];
+
+    if (Array.isArray(obj)) {
+      return obj.flatMap((o) => this.normalize(o));
+    }
+
+    return obj.value.map((v) => ({
+      name: v.name || undefined,
+      address: v.address || "",
+    }));
+  }
+
   async modifyEmailFlags(
     config: ImapConnectionConfig,
     uid: number,

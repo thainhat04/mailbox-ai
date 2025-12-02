@@ -8,9 +8,7 @@ import ComposeModal from "./ComposeModal";
 import EmailToolbar from "./EmailToolbar";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
-import {
-    useGetMailInOneBoxQuery,
-} from "../_services";
+import { useGetMailInOneBoxQuery } from "../_services";
 import { useKeyboardNavigation } from "@/hooks/useKeyboardNavigation";
 import { useTranslation } from "react-i18next";
 
@@ -46,6 +44,7 @@ export default function EmailList({
 
     useEffect(() => {
         if (result) {
+            console.log("Fetched emails:", result.data.emails);
             setEmails(result.data.emails);
             setSelectedEmails(new Set());
             setFocusedIndex(-1);
@@ -176,9 +175,12 @@ export default function EmailList({
                 data-email-list
                 className="relative flex-1 custom-scroll overflow-y-auto divide-y divide-white/10"
             >
-                {(isLoading || isFetching) ? (
+                {isLoading || isFetching ? (
                     Array.from({ length: 8 }).map((_, i) => (
-                        <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse border-b border-white/5">
+                        <div
+                            key={i}
+                            className="flex items-center gap-3 px-4 py-3 animate-pulse border-b border-white/5"
+                        >
                             <div className="h-4 w-4 rounded bg-white/10 shrink-0" />
                             <div className="h-4 w-4 rounded bg-white/10 shrink-0" />
                             <div className="flex-1 min-w-0 space-y-2">

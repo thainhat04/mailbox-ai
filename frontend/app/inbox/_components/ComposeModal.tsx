@@ -14,7 +14,7 @@ interface Props {
     onClose: () => void;
 }
 
-export default function ComposeEmailModal({ isOpen, onClose }: Props) {
+export default function ComposeModal({ isOpen, onClose }: Props) {
     if (!isOpen) return null;
     const sendEmailMutation = useMutationHandler(
         useSendEmailMutation,
