@@ -68,7 +68,7 @@ const inboxApi = api.injectEndpoints({
         >({
             query: (body) => ({
                 url: constant.URL_MODIFY_EMAIL(body.emailId),
-                method: HTTP_METHOD.PATCH,
+                method: HTTP_METHOD.POST,
                 body: {
                     mailBox: body.mailBox,
                     flags: body.flags,
@@ -115,7 +115,7 @@ const inboxApi = api.injectEndpoints({
         toggleEmailStar: builder.mutation<SuccessResponse<Email>, string>({
             query: (id) => ({
                 url: `/api/emails/${id}/star`,
-                method: HTTP_METHOD.PATCH,
+                method: HTTP_METHOD.POST,
             }),
             invalidatesTags: (_, __, id) => [
                 { type: "Emails", id },

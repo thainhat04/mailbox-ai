@@ -121,7 +121,8 @@
             "9": "Attachments",
             "10": "Download",
             "11": "Open",
-            "12": "Unread"
+            "12": "Unread",
+            "13": "Processing..."
         },
         "reply": {
             "1": "Reply to Email",

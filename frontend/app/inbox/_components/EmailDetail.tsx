@@ -16,10 +16,11 @@ import EmailBody from "./EmailBody";
 import { useTranslation } from "react-i18next";
 import { AppConfig } from "@/config";
 import SERVICES from "@/constants/services";
-import { useMutationHandler } from "@/hooks/useMutationHandler";
-import { useReplyEmailMutation } from "../_services";
 import ReplyModal from "./ReplyModal";
 import { useState } from "react";
+import { useModifyEmailMutation } from "../_services";
+import { useMutationHandler } from "@/hooks/useMutationHandler";
+import { ModifyEmailFlags } from "../_types/modify";
 
 interface EmailDetailWithBackProps extends EmailDetailProps {
     onBack?: () => void;
@@ -47,9 +48,14 @@ export default function EmailDetail({
     const { t } = useTranslation();
     const [isReplyOpen, setIsReplyOpen] = useState(false);
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
-    const replyEmailMutation = useMutationHandler(
-        useReplyEmailMutation,
-        "ReplyEmail"
+    const modifyFlags = useState<ModifyEmailFlags>({
+        read: true,
+        starred: email?.isStarred,
+        delete: false,
+    });
+    const modifyEmail = useMutationHandler(
+        useModifyEmailMutation,
+        "ModifyEmail"
     );
 
     const handleDownloadAttachment = async (url: string, filename: string) => {
@@ -108,6 +114,30 @@ export default function EmailDetail({
         } catch (error) {
             console.error("Error viewing attachment:", error);
             alert("Failed to view attachment");
+        }
+    };
+    const handleDelete = async () => {
+        if (!email?.id) return;
+        if (modifyEmail.isLoading) return;
+        const result = await modifyEmail.ModifyEmail({
+            emailId: email.id,
+            mailBox: email.mailboxId || "",
+            flags: { delete: true },
+        });
+        if (result) {
+            onBack && onBack();
+            //xóa thành công đóng detail và quay về list
+        }
+    };
+    const handleStar = async () => {
+        if (!email?.id) return;
+        if (modifyEmail.isLoading) return;
+        const result = await modifyEmail.ModifyEmail({
+            emailId: email.id,
+            mailBox: email.mailboxId || "",
+            flags: { starred: !email.isStarred },
+        });
+        if (result) {
         }
     };
 
@@ -268,14 +298,32 @@ export default function EmailDetail({
                                 {t("inbox.detail.6")}
                             </span>
                         </button>
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-red-600/20 transition">
+                        <button
+                            onClick={handleDelete}
+                            className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-red-600/20 transition"
+                        >
                             <Trash2 size={14} className="sm:size-4" />{" "}
                             <span className="hidden sm:inline">
                                 {t("inbox.detail.7")}
                             </span>
                         </button>
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-yellow-500/20 transition">
-                            <Star size={14} className="sm:size-4" />{" "}
+                        <button
+                            onClick={handleStar}
+                            className={`flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg px-3 sm:px-4 py-2 text-xs font-medium transition ${
+                                email?.isStarred
+                                    ? "bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30"
+                                    : "bg-white/10 text-white hover:bg-white/[0.14]"
+                            }`}
+                            aria-pressed={!!email?.isStarred}
+                        >
+                            <Star
+                                size={14}
+                                className={
+                                    email?.isStarred
+                                        ? "text-yellow-300"
+                                        : "text-white"
+                                }
+                            />
                             <span className="hidden sm:inline">
                                 {t("inbox.detail.8")}
                             </span>
@@ -297,6 +345,20 @@ export default function EmailDetail({
                 onClose={() => setIsReplyOpen(false)}
                 email={email}
             />
+            {modifyEmail.isLoading && (
+                <div
+                    className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm cursor-wait"
+                    role="status"
+                    aria-live="polite"
+                >
+                    <div className="flex flex-col items-center gap-2">
+                        <span className="inline-block h-10 w-10 rounded-full border-4 border-white/20 border-t-white animate-spin" />
+                        <span className="text-sm text-white/90">
+                            {t("inbox.detail.13")}
+                        </span>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
