@@ -6,7 +6,10 @@ import {
   Patch,
   Delete,
   UseGuards,
+  Post,
+  Body,
   Res,
+  NotFoundException,
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
 import {
@@ -16,6 +19,7 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
+  ApiBody,
 } from "@nestjs/swagger";
 import { EmailService } from "./email.service";
 import {
@@ -29,9 +33,13 @@ import { ResponseDto } from "../../common/dtos/response.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { JwtPayload } from "../../common/decorators/current-user.decorator";
+import { SendEmailDto } from "./dto/send-email.dto";
+import { ReplyEmailDto } from "./dto/reply-emai.dto";
+import { ModifyEmailDto } from "./dto/modify.dto";
+import { SendEmailResponse } from "./dto/send-email-response";
 
 @ApiTags("Email")
-@Controller("api")
+@Controller()
 @ApiBearerAuth("JWT-auth")
 @UseGuards(JwtAuthGuard)
 export class EmailController {
@@ -50,7 +58,9 @@ export class EmailController {
     @CurrentUser() user?: JwtPayload,
   ): Promise<ResponseDto<MailboxDto[]>> {
     // Get hardcoded mailboxes with email counts from IMAP
-    const mailboxes = await this.emailService.getHardcodedMailboxesWithCounts(user?.sub);
+    const mailboxes = await this.emailService.getHardcodedMailboxesWithCounts(
+      user?.sub,
+    );
     return ResponseDto.success(mailboxes, "Mailboxes retrieved successfully");
   }
 
@@ -146,7 +156,8 @@ export class EmailController {
     name: "mailbox",
     required: false,
     type: String,
-    description: "Mailbox ID (inbox, sent, trash, etc.). If not provided, searches all folders.",
+    description:
+      "Mailbox ID (inbox, sent, trash, etc.). If not provided, searches all folders.",
   })
   @ApiResponse({
     status: 200,
@@ -233,6 +244,67 @@ export class EmailController {
       emails,
       `Found ${emails.length} matching emails`,
     );
+  }
+  @Post("emails/send")
+  @ApiOperation({ summary: "Send an email" })
+  @ApiResponse({
+    status: 200,
+    description: "Email sent successfully",
+    type: SendEmailResponse,
+  })
+  async send(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: SendEmailDto,
+  ): Promise<ResponseDto<SendEmailResponse>> {
+    const result = await this.emailService.sendEmail(user.sub, user.email, dto);
+    return ResponseDto.success(result, "Email sent successfully");
+  }
+  @Post("emails/:id/reply")
+  async reply(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: number,
+    @Body() dto: ReplyEmailDto,
+  ): Promise<ResponseDto<SendEmailResponse>> {
+    const original = await this.emailService.getEmailDetail(
+      user.sub,
+      user.email,
+      id,
+      dto.mailBox,
+    );
+    if (!original) {
+      throw new NotFoundException("Original email not found");
+    }
+    console.log("Original email:", original);
+    const result = await this.emailService.replyEmail(
+      user.sub,
+      user.email,
+      original,
+      dto,
+    );
+    return ResponseDto.success(result, "Email replied successfully");
+  }
+
+  @Post("emails/:id/modify")
+  async modifyEmail(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: number,
+    @Body() dto: ModifyEmailDto,
+  ) {
+    const original = await this.emailService.getEmailDetail(
+      user.sub,
+      user.email,
+      id,
+      dto.mailBox,
+    );
+    if (!original) {
+      throw new NotFoundException("Original email not found");
+    }
+
+    return this.emailService.modifyEmail(user.sub, user.email, id, dto);
+  }
+  @Get("email-all")
+  async getAllEmails(@CurrentUser() user: JwtPayload) {
+    return this.emailService.getAllEmails(user.sub, user.email);
   }
 
   // ==================== IMAP TEST ENDPOINT ====================

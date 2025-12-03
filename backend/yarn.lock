@@ -7306,6 +7306,11 @@ write-file-atomic@^5.0.1:
     imurmurhash "^0.1.4"
     signal-exit "^4.0.1"
 
+xoauth2@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/xoauth2/-/xoauth2-1.2.0.tgz#f2eefac11472c971ea3bc46e554eb4b1232146e5"
+  integrity sha512-hKuNbkj3q/ifCcfWnW6KURP+6ExSuLdLG007gasNhMEMKlLaejNkIA6eu5Ol1xPP0/kzTuA87XHDaAcUw5k73Q==
+
 xtend@^4.0.2:
   version "4.0.2"
   resolved "https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz"

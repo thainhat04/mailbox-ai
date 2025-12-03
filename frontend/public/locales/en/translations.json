@@ -95,7 +95,19 @@
             "6": "Cancel",
             "7": "name@gmail.com",
             "8": "Your subject here...",
-            "9": "Write your message here..."
+            "9": "Write your message here...",
+            "10": "Attachments",
+            "errors": {
+                "toRequired": "Please enter a recipient (To).",
+                "toInvalid": "Invalid To email address.",
+                "ccInvalid": "Invalid CC email address.",
+                "bccInvalid": "Invalid BCC email address.",
+                "subjectRequired": "Please enter a subject.",
+                "messageRequired": "Please enter email content."
+            },
+            "fileTooLarge": "File {{name}} exceeds the maximum size of {{size}}MB.",
+            "emailSent": "Email sent successfully.",
+            "emailSendError": "Failed to send email: {{error}}"
         },
         "detail": {
             "1": "From",
@@ -109,7 +121,14 @@
             "9": "Attachments",
             "10": "Download",
             "11": "Open",
-            "12": "Unread"
+            "12": "Unread",
+            "13": "Processing..."
+        },
+        "reply": {
+            "1": "Reply to Email",
+            "2": "To",
+            "3": "Subject",
+            "4": "Send Reply"
         }
     }
 }
