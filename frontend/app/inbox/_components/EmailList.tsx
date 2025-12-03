@@ -1,14 +1,14 @@
 // components/Inbox/EmailList.tsx
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import type { Email } from "../_types";
 import EmailRow from "./EmailRow";
 import ComposeModal from "./ComposeModal";
 import EmailToolbar from "./EmailToolbar";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
-import { useGetMailInOneBoxQuery } from "../_services";
+import { useGetMailInOneBoxQuery, useModifyEmailMutation } from "../_services";
 import { useKeyboardNavigation } from "@/hooks/useKeyboardNavigation";
 import { useTranslation } from "react-i18next";
 
@@ -18,6 +18,7 @@ interface EmailListProps {
     onSelectEmail: (email: Email) => void;
     isComposeOpen: boolean;
     setIsComposeOpen: (open: boolean) => void;
+    onEmailModified?: (email: Email) => void;
 }
 
 export default function EmailList({
@@ -26,12 +27,20 @@ export default function EmailList({
     onSelectEmail,
     isComposeOpen,
     setIsComposeOpen,
+    onEmailModified,
 }: EmailListProps) {
     const { t } = useTranslation();
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
     const { result, isLoading, isFetching, refetch } = useQueryHandler(
         useGetMailInOneBoxQuery,
-        { mailboxId: selectedFolder },
+        { mailboxId: selectedFolder, page, limit: 50 },
         { skip: !selectedFolder }
+    );
+    
+    const modifyEmail = useMutationHandler(
+        useModifyEmailMutation,
+        "ModifyEmail"
     );
 
     const [emails, setEmails] = useState<Email[]>([]);
@@ -41,15 +50,64 @@ export default function EmailList({
 
     const [focusedIndex, setFocusedIndex] = useState<number>(-1);
     const emailListRef = useRef<HTMLDivElement>(null);
+    const observerRef = useRef<IntersectionObserver | null>(null);
+    const loadMoreRef = useRef<HTMLDivElement>(null);
+
+    // Reset when folder changes
+    useEffect(() => {
+        setEmails([]);
+        setPage(1);
+        setHasMore(true);
+        setSelectedEmails(new Set());
+        setFocusedIndex(-1);
+    }, [selectedFolder]);
 
     useEffect(() => {
         if (result) {
             console.log("Fetched emails:", result.data.emails);
-            setEmails(result.data.emails);
-            setSelectedEmails(new Set());
-            setFocusedIndex(-1);
+            const newEmails = result.data.emails;
+            
+            if (page === 1) {
+                // First page - replace all emails
+                setEmails(newEmails);
+            } else {
+                // Subsequent pages - append emails
+                setEmails((prev) => {
+                    const existingIds = new Set(prev.map(e => e.id));
+                    const uniqueNewEmails = newEmails.filter(e => !existingIds.has(e.id));
+                    return [...prev, ...uniqueNewEmails];
+                });
+            }
+            
+            // Check if there are more pages
+            const totalPages = result.data.totalPages;
+            setHasMore(page < totalPages);
         }
-    }, [result]);
+    }, [result, page]);
+
+    // Infinite scroll observer
+    useEffect(() => {
+        if (isLoading || isFetching || !hasMore) return;
+
+        observerRef.current = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore && !isFetching) {
+                    setPage((prev) => prev + 1);
+                }
+            },
+            { threshold: 0.1 }
+        );
+
+        if (loadMoreRef.current) {
+            observerRef.current.observe(loadMoreRef.current);
+        }
+
+        return () => {
+            if (observerRef.current) {
+                observerRef.current.disconnect();
+            }
+        };
+    }, [hasMore, isFetching, isLoading]);
 
     // Keyboard navigation
     useKeyboardNavigation({
@@ -104,46 +162,117 @@ export default function EmailList({
 
     // Select email
     const handleSelectEmail = (email: Email) => {
-        setEmails((prev) =>
-            prev.map((e) => (e.id === email.id ? { ...e, isRead: true } : e))
-        );
-        onSelectEmail({ ...email, isRead: true });
+        onSelectEmail(email);
     };
 
     const selectAll = () => setSelectedEmails(new Set(emails.map((e) => e.id)));
-    const deleteSelected = () => {
+    const deleteSelected = async () => {
+        const deletedIds = Array.from(selectedEmails);
         setEmails((prev) => prev.filter((e) => !selectedEmails.has(e.id)));
         setSelectedEmails(new Set());
+
+        // Call API for each selected email
+        const promises = deletedIds.map((emailId) =>
+            modifyEmail.ModifyEmail({
+                emailId,
+                mailBox: selectedFolder,
+                flags: { delete: true }
+            })
+        );
+
+        await Promise.all(promises);
     };
     const deleteEmails = (ids: string[]) => {
         setEmails((prev) => prev.filter((e) => !ids.includes(e.id)));
     };
-    const markSelected = (read: boolean) => {
+    const markSelected = async (read: boolean) => {
         setEmails((prev) =>
             prev.map((e) =>
                 selectedEmails.has(e.id) ? { ...e, isRead: read } : e
             )
         );
+
+        // Call API for each selected email
+        const promises = Array.from(selectedEmails).map((emailId) =>
+            modifyEmail.ModifyEmail({
+                emailId,
+                mailBox: selectedFolder,
+                flags: { read }
+            })
+        );
+
+        await Promise.all(promises);
     };
     const refreshEmails = () => {
+        setEmails([]);
+        setPage(1);
+        setHasMore(true);
         refetch();
         setSelectedEmails(new Set());
     };
 
-    const toggleStar = (emailId: string) => {
+    const toggleStar = async (emailId: string) => {
+        const email = emails.find((e) => e.id === emailId);
+        if (!email) return;
+
+        const updatedEmail = { ...email, isStarred: !email.isStarred };
+
+        // Optimistic update
         setEmails((prev) =>
             prev.map((e) =>
-                e.id === emailId ? { ...e, isStarred: !e.isStarred } : e
+                e.id === emailId ? updatedEmail : e
             )
         );
+
+        // Call API
+        const result = await modifyEmail.ModifyEmail({
+            emailId,
+            mailBox: selectedFolder,
+            flags: { starred: !email.isStarred }
+        });
+
+        // If failed, revert optimistic update
+        if (!result) {
+            setEmails((prev) =>
+                prev.map((e) =>
+                    e.id === emailId ? email : e
+                )
+            );
+        } else {
+            onEmailModified?.(updatedEmail);
+        }
     };
 
-    const toggleRead = (emailId: string) => {
+    const toggleRead = async (emailId: string) => {
+        const email = emails.find((e) => e.id === emailId);
+        if (!email) return;
+
+        const updatedEmail = { ...email, isRead: !email.isRead };
+
+        // Optimistic update
         setEmails((prev) =>
             prev.map((e) =>
-                e.id === emailId ? { ...e, isRead: !e.isRead } : e
+                e.id === emailId ? updatedEmail : e
             )
         );
+
+        // Call API
+        const result = await modifyEmail.ModifyEmail({
+            emailId,
+            mailBox: selectedFolder,
+            flags: { read: !email.isRead }
+        });
+
+        // If failed, revert optimistic update
+        if (!result) {
+            setEmails((prev) =>
+                prev.map((e) =>
+                    e.id === emailId ? email : e
+                )
+            );
+        } else {
+            onEmailModified?.(updatedEmail);
+        }
     };
 
     const toolbarActions = [
@@ -198,25 +327,46 @@ export default function EmailList({
                         {t("inbox.8")}
                     </div>
                 ) : (
-                    emails.map((email, index) => (
-                        <div
-                            key={email.id}
-                            data-email-row
-                            onClick={() => {
-                                handleSelectEmail(email);
-                            }}
-                        >
-                            <EmailRow
-                                email={email}
-                                active={selectedEmail?.id === email.id}
-                                selected={selectedEmails.has(email.id)}
-                                onSelect={handleSelectEmail}
-                                onToggleSelect={toggleSelectEmail}
-                                onToggleStar={toggleStar}
-                                onToggleRead={toggleRead}
-                            />
-                        </div>
-                    ))
+                    <>
+                        {emails.map((email, index) => (
+                            <div
+                                key={email.id}
+                                data-email-row
+                                onClick={() => {
+                                    handleSelectEmail(email);
+                                }}
+                            >
+                                <EmailRow
+                                    email={email}
+                                    active={selectedEmail?.id === email.id}
+                                    selected={selectedEmails.has(email.id)}
+                                    onSelect={handleSelectEmail}
+                                    onToggleSelect={toggleSelectEmail}
+                                    onToggleStar={toggleStar}
+                                    onToggleRead={toggleRead}
+                                />
+                            </div>
+                        ))}
+                        
+                        {/* Infinite scroll trigger */}
+                        {hasMore && (
+                            <div ref={loadMoreRef} className="p-4 text-center">
+                                {isFetching ? (
+                                    <div className="flex items-center justify-center gap-2 text-sm text-white/60">
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white/70 rounded-full animate-spin" />
+                                        <span>{t("inbox.9") || "Loading more..."}</span>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => setPage((prev) => prev + 1)}
+                                        className="text-sm text-cyan-400 hover:text-cyan-300 transition"
+                                    >
+                                        {t("inbox.10") || "Load more"}
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </section>

@@ -17,6 +17,7 @@ const inboxApi = api.injectEndpoints({
                 url: constant.URL_MAILBOXES,
                 method: HTTP_METHOD.GET,
             }),
+            providesTags: [{ type: "Emails", id: "MAILBOXES_LIST" }],
         }),
         getMailInOneBox: builder.query<
             SuccessResponse<EmailResponse>,
@@ -25,7 +26,7 @@ const inboxApi = api.injectEndpoints({
             query: ({
                 mailboxId,
                 page = 1,
-                limit = 10,
+                limit = 50,
                 unreadOnly,
                 starredOnly,
             }) => ({
@@ -74,6 +75,52 @@ const inboxApi = api.injectEndpoints({
                     flags: body.flags,
                 },
             }),
+            invalidatesTags: () => {
+                // Only invalidate mailboxes list to update unread counts
+                // Don't invalidate email list to avoid full page refresh
+                return [{ type: "Emails", id: "MAILBOXES_LIST" }];
+            },
+            async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+                if (!arg.mailBox) return;
+
+                // Optimistic update: patch all cached pages
+                const patches: Array<{ undo: () => void }> = [];
+
+                // Update all pages in cache (we don't know which page the email is on)
+                for (let page = 1; page <= 10; page++) {
+                    const patchResult = dispatch(
+                        inboxApi.util.updateQueryData(
+                            'getMailInOneBox',
+                            { mailboxId: arg.mailBox, page, limit: 50 },
+                            (draft) => {
+                                if (arg.flags.delete) {
+                                    // Remove email from list if deleting
+                                    draft.data.emails = draft.data.emails.filter((e) => e.id !== arg.emailId);
+                                } else {
+                                    // Update email flags
+                                    const email = draft.data.emails.find((e) => e.id === arg.emailId);
+                                    if (email) {
+                                        if (arg.flags.read !== undefined) {
+                                            email.isRead = arg.flags.read;
+                                        }
+                                        if (arg.flags.starred !== undefined) {
+                                            email.isStarred = arg.flags.starred;
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    );
+                    patches.push(patchResult);
+                }
+
+                try {
+                    await queryFulfilled;
+                } catch {
+                    // Revert all optimistic updates on error
+                    patches.forEach(patch => patch.undo());
+                }
+            },
         }),
         getEmailById: builder.query<
             SuccessResponse<Email>,

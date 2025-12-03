@@ -45,6 +45,14 @@ export const baseQueryWithInterceptors: BaseQueryFn<
                 const refreshToken = localStorage.getItem(
                     constantServices.refreshToken
                 );
+                if (!refreshToken) {
+                    localStorage.removeItem(SERVICES.accessToken);
+                    if (typeof window !== "undefined") {
+                        window.location.href = "/auth/login?expired=true";
+                    }
+                    return result;
+                }
+
                 if (refreshToken) {
                     const refreshResult = await rawBaseQuery(
                         {
@@ -81,6 +89,14 @@ export const baseQueryWithInterceptors: BaseQueryFn<
 
                         // Retry request gốc
                         result = await rawBaseQuery(args, api, extraOptions);
+                    } else {
+                        localStorage.removeItem(SERVICES.accessToken);
+                        localStorage.removeItem(SERVICES.refreshToken);
+
+                        // Redirect to login page
+                        if (typeof window !== "undefined") {
+                            window.location.href = "/auth/login?expired=true";
+                        }
                     }
                 }
             } finally {

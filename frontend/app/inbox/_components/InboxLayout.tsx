@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import FolderList from "./FolderList";
 import EmailList from "./EmailList";
 import EmailDetail from "./EmailDetail";
@@ -7,6 +7,8 @@ import { Email } from "../_types";
 import HeaderInbox from "@/components/common/HeaderInbox";
 import { ArrowLeft } from "lucide-react";
 import ComposeModal from "./ComposeModal";
+import { useMutationHandler } from "@/hooks/useMutationHandler";
+import { useModifyEmailMutation } from "../_services";
 
 type ViewType = "folders" | "list" | "detail";
 
@@ -15,14 +17,47 @@ export default function InboxLayout() {
     const [selectedFolder, setSelectedFolder] = useState<string>("");
     const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
 
+    const modifyEmail = useMutationHandler(
+        useModifyEmailMutation,
+        "ModifyEmail"
+    );
+
     const handleFolderSelect = (folderId: string) => {
         setSelectedFolder(folderId);
         setView("list");
     };
 
-    const handleEmailSelect = (email: Email) => {
-        setSelectedEmail(email);
+    // Callback to update selected email after modifications
+    const handleEmailModified = useCallback((updatedEmail: Email) => {
+        // Update selected email if it's the same one
+        if (selectedEmail && selectedEmail.id === updatedEmail.id) {
+            setSelectedEmail(updatedEmail);
+        }
+        // RTK Query cache is updated automatically via onQueryStarted
+    }, [selectedEmail]);
+
+    const handleEmailSelect = async (email: Email) => {
+
+        // Save original read status before optimistic update
+        const wasUnread = !email.isRead;
+
+        // Update selected email with optimistic read status
+        const updatedEmail = { ...email, isRead: true };
+        setSelectedEmail(updatedEmail);
         setView("detail");
+
+        // Call API to mark as read if not already read
+        if (wasUnread) {
+            try {
+
+                // Notify EmailList to update
+                handleEmailModified(updatedEmail);
+            } catch (error) {
+                console.error("Failed to mark as read:", error);
+                // Revert optimistic update on error
+                setSelectedEmail(email);
+            }
+        }
     };
 
     const handleBackFromList = () => {
@@ -62,6 +97,7 @@ export default function InboxLayout() {
                         selectedFolder={selectedFolder}
                         selectedEmail={selectedEmail}
                         onSelectEmail={handleEmailSelect}
+                        onEmailModified={handleEmailModified}
                         isComposeOpen={isComposeOpen}
                         setIsComposeOpen={setIsComposeOpen}
                     />
@@ -69,7 +105,10 @@ export default function InboxLayout() {
 
                 {/* Email Detail */}
                 <div className="flex-1 h-full backdrop-blur-md overflow-x-auto custom-scroll">
-                    <EmailDetail email={selectedEmail} />
+                    <EmailDetail
+                        email={selectedEmail}
+                        onEmailModified={handleEmailModified}
+                    />
                 </div>
             </div>
 
@@ -106,6 +145,7 @@ export default function InboxLayout() {
                                 selectedFolder={selectedFolder}
                                 selectedEmail={selectedEmail}
                                 onSelectEmail={handleEmailSelect}
+                                onEmailModified={handleEmailModified}
                                 isComposeOpen={isComposeOpen}
                                 setIsComposeOpen={setIsComposeOpen}
                             />
@@ -118,6 +158,7 @@ export default function InboxLayout() {
                         <EmailDetail
                             email={selectedEmail}
                             onBack={handleBackFromDetail}
+                            onEmailModified={handleEmailModified}
                         />
                     </div>
                 )}

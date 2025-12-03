@@ -1,6 +1,6 @@
 // components/Inbox/EmailDetail.tsx
 "use client";
-import type { EmailDetailProps } from "../_types";
+import type { EmailDetailProps, Email } from "../_types";
 import {
     Reply,
     Forward,
@@ -17,13 +17,15 @@ import { useTranslation } from "react-i18next";
 import { AppConfig } from "@/config";
 import SERVICES from "@/constants/services";
 import ReplyModal from "./ReplyModal";
-import { useState } from "react";
+import ForwardModal from "./ForwardModal";
+import { useState, useEffect } from "react";
 import { useModifyEmailMutation } from "../_services";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
 import { ModifyEmailFlags } from "../_types/modify";
 
 interface EmailDetailWithBackProps extends EmailDetailProps {
     onBack?: () => void;
+    onEmailModified?: (email: Email) => void;
 }
 
 function formatBytes(bytes?: number) {
@@ -44,19 +46,22 @@ function displayAddress(a?: { name?: string; email?: string }) {
 export default function EmailDetail({
     email,
     onBack,
+    onEmailModified,
 }: EmailDetailWithBackProps) {
     const { t } = useTranslation();
     const [isReplyOpen, setIsReplyOpen] = useState(false);
+    const [isForwardOpen, setIsForwardOpen] = useState(false);
+    const [isStarred, setIsStarred] = useState(email?.isStarred || false);
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
-    const modifyFlags = useState<ModifyEmailFlags>({
-        read: true,
-        starred: email?.isStarred,
-        delete: false,
-    });
     const modifyEmail = useMutationHandler(
         useModifyEmailMutation,
         "ModifyEmail"
     );
+    
+    // Update isStarred when email changes
+    useEffect(() => {
+        setIsStarred(email?.isStarred || false);
+    }, [email?.id, email?.isStarred]);
 
     const handleDownloadAttachment = async (url: string, filename: string) => {
         try {
@@ -125,19 +130,35 @@ export default function EmailDetail({
             flags: { delete: true },
         });
         if (result) {
-            onBack && onBack();
-            //xóa thành công đóng detail và quay về list
+            // Notify parent to update counts
+            if (email && onEmailModified) {
+                onEmailModified(email);
+            }
+            if (onBack) {
+                onBack();
+            }
         }
     };
     const handleStar = async () => {
         if (!email?.id) return;
         if (modifyEmail.isLoading) return;
+
+        // Optimistic update
+        const newStarred = !isStarred;
+        setIsStarred(newStarred);
+
         const result = await modifyEmail.ModifyEmail({
             emailId: email.id,
             mailBox: email.mailboxId || "",
-            flags: { starred: !email.isStarred },
+            flags: { starred: newStarred },
         });
-        if (result) {
+        
+        if (!result) {
+            setIsStarred(!newStarred);
+        } else if (email && onEmailModified) {
+            // Notify parent to update email list
+            const updatedEmail = { ...email, isStarred: newStarred };
+            onEmailModified(updatedEmail);
         }
     };
 
@@ -292,7 +313,10 @@ export default function EmailDetail({
                                 {t("inbox.detail.5")}
                             </span>
                         </button>
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition">
+                        <button
+                            onClick={() => setIsForwardOpen(true)}
+                            className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition"
+                        >
                             <Forward size={14} className="sm:size-4" />{" "}
                             <span className="hidden sm:inline">
                                 {t("inbox.detail.6")}
@@ -310,16 +334,17 @@ export default function EmailDetail({
                         <button
                             onClick={handleStar}
                             className={`flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg px-3 sm:px-4 py-2 text-xs font-medium transition ${
-                                email?.isStarred
+                                isStarred
                                     ? "bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30"
                                     : "bg-white/10 text-white hover:bg-white/[0.14]"
                             }`}
-                            aria-pressed={!!email?.isStarred}
+                            aria-pressed={isStarred}
+                            disabled={modifyEmail.isLoading}
                         >
                             <Star
                                 size={14}
                                 className={
-                                    email?.isStarred
+                                    isStarred
                                         ? "text-yellow-300"
                                         : "text-white"
                                 }
@@ -343,6 +368,13 @@ export default function EmailDetail({
             <ReplyModal
                 isOpen={isReplyOpen}
                 onClose={() => setIsReplyOpen(false)}
+                email={email}
+            />
+
+            {/* Forward Modal */}
+            <ForwardModal
+                isOpen={isForwardOpen}
+                onClose={() => setIsForwardOpen(false)}
                 email={email}
             />
             {modifyEmail.isLoading && (

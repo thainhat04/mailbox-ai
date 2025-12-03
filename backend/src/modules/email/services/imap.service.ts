@@ -42,6 +42,10 @@ export interface MailMessage {
   messageId?: string;
   inReplyTo?: string;
   references?: string[];
+  // Flags
+  flags?: string[];
+  isRead?: boolean;
+  isStarred?: boolean;
 }
 
 @Injectable()
@@ -297,18 +301,34 @@ export class ImapService {
         const messages: MailMessage[] = [];
         const messagePromises: Promise<void>[] = [];
 
+        this.logger.debug(
+          `Fetching messages ${fetchRange} from ${mailbox} (total: ${box.messages.total})`,
+        );
+
         const fetch = imap.seq.fetch(fetchRange, {
           bodies: "",
           struct: true,
+          markSeen: false, // Don't mark emails as read when fetching
+          // Note: flags are automatically included in attributes
         });
 
         fetch.on("message", (msg, seqno) => {
           let emailBuffer = Buffer.alloc(0);
           let messageUid: string | null = null;
+          let messageFlags: string[] = [];
 
           msg.once("attributes", (attrs) => {
             if (attrs.uid) {
               messageUid = attrs.uid.toString();
+            }
+            if (attrs.flags) {
+              messageFlags = attrs.flags;
+              // Log first few messages to verify flags
+              if (seqno <= 3) {
+                this.logger.debug(
+                  `Message ${messageUid} flags: ${JSON.stringify(messageFlags)}`,
+                );
+              }
             }
           });
 
@@ -352,7 +372,17 @@ export class ImapService {
                     : parsed.references
                       ? [parsed.references]
                       : [],
+                  flags: messageFlags,
+                  isRead: messageFlags.includes("\\Seen"),
+                  isStarred: messageFlags.includes("\\Flagged"),
                 };
+
+                // Log first message to verify
+                if (messages.length === 0) {
+                  this.logger.debug(
+                    `First message: UID=${messageUid}, flags=${JSON.stringify(messageFlags)}, isRead=${message.isRead}, subject="${parsed.subject?.substring(0, 50)}"`,
+                  );
+                }
 
                 messages.push(message);
                 resolveMsg();
@@ -868,35 +898,55 @@ ${html}
 
       // MARK READ / UNREAD
       if (options.read !== undefined) {
+        this.logger.log(
+          `Modifying read flag for UID ${uid} in ${mailbox}: ${options.read}`,
+        );
         await new Promise<void>((resolve, reject) => {
-          if (options.read) {
-            imap.addFlags(uid, "\\Seen", (err) => {
+          // Use UID search to modify flags
+          imap.search([["UID", uid]], (searchErr, results) => {
+            if (searchErr) return reject(searchErr);
+            if (!results || results.length === 0) {
+              return reject(new Error(`Email with UID ${uid} not found`));
+            }
+
+            const flagFunc = options.read
+              ? imap.addFlags.bind(imap)
+              : imap.delFlags.bind(imap);
+            flagFunc(results, "\\Seen", (err) => {
               if (err) return reject(err);
+              this.logger.log(
+                `Successfully ${options.read ? "marked as read" : "marked as unread"} UID ${uid}`,
+              );
               resolve();
             });
-          } else {
-            imap.delFlags(uid, "\\Seen", (err) => {
-              if (err) return reject(err);
-              resolve();
-            });
-          }
+          });
         });
       }
 
       // STAR / UNSTAR
       if (options.starred !== undefined) {
+        this.logger.log(
+          `Modifying starred flag for UID ${uid} in ${mailbox}: ${options.starred}`,
+        );
         await new Promise<void>((resolve, reject) => {
-          if (options.starred) {
-            imap.addFlags(uid, "\\Flagged", (err) => {
+          // Use UID search to modify flags
+          imap.search([["UID", uid]], (searchErr, results) => {
+            if (searchErr) return reject(searchErr);
+            if (!results || results.length === 0) {
+              return reject(new Error(`Email with UID ${uid} not found`));
+            }
+
+            const flagFunc = options.starred
+              ? imap.addFlags.bind(imap)
+              : imap.delFlags.bind(imap);
+            flagFunc(results, "\\Flagged", (err) => {
               if (err) return reject(err);
+              this.logger.log(
+                `Successfully ${options.starred ? "starred" : "unstarred"} UID ${uid}`,
+              );
               resolve();
             });
-          } else {
-            imap.delFlags(uid, "\\Flagged", (err) => {
-              if (err) return reject(err);
-              resolve();
-            });
-          }
+          });
         });
       }
 
@@ -908,10 +958,20 @@ ${html}
             ? "[Gmail]/Trash"
             : "Deleted Items");
 
+        this.logger.log(`Moving UID ${uid} to ${trashMailbox}`);
         await new Promise<void>((resolve, reject) => {
-          imap.move(uid, trashMailbox, (err) => {
-            if (err) return reject(err);
-            resolve();
+          // Use UID search to find the message
+          imap.search([["UID", uid]], (searchErr, results) => {
+            if (searchErr) return reject(searchErr);
+            if (!results || results.length === 0) {
+              return reject(new Error(`Email with UID ${uid} not found`));
+            }
+
+            imap.move(results, trashMailbox, (err) => {
+              if (err) return reject(err);
+              this.logger.log(`Successfully moved UID ${uid} to trash`);
+              resolve();
+            });
           });
         });
       }
@@ -1014,13 +1074,21 @@ ${html}
         const fetch = imap.fetch(messageUid, {
           bodies: "",
           struct: true,
+          markSeen: false, // Don't mark email as read when fetching
         });
 
         let emailBuffer = Buffer.alloc(0);
         let foundMessage = false;
+        let messageFlags: string[] = [];
 
         fetch.on("message", (msg, seqno) => {
           foundMessage = true;
+
+          msg.once("attributes", (attrs) => {
+            if (attrs.flags) {
+              messageFlags = attrs.flags;
+            }
+          });
 
           msg.on("body", (stream, info) => {
             stream.on("data", (chunk) => {
@@ -1058,6 +1126,10 @@ ${html}
                     ? parsed.references
                     : [parsed.references]
                   : undefined,
+                // Flags
+                flags: messageFlags,
+                isRead: messageFlags.includes("\\Seen"),
+                isStarred: messageFlags.includes("\\Flagged"),
               };
 
               resolve(message);

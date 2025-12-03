@@ -47,18 +47,26 @@ export default function FolderList({ selected, onSelect }: FolderListProps) {
                             {f.icon && <span className="text-base shrink-0">{f.icon}</span>}
                             <span className="truncate">
                                 {f.name}
-                                {((['drafts', 'trash', 'sent'].includes(f.id) ? f.totalCount : f.unreadCount) || 0) > 0 && (
-                                    <span className="ml-1.5 text-[11px] text-white/50">
-                                        ({['drafts', 'trash', 'sent'].includes(f.id) ? f.totalCount : f.unreadCount})
-                                    </span>
-                                )}
+                                {(() => {
+                                    let count = 0;
+                                    
+                                    if (f.id === 'inbox' || f.id === 'spam') {
+                                        count = f.unreadCount || 0;
+                                    }
+                                    
+                                    return count > 0 ? (
+                                        <span className="ml-1.5 text-[11px] text-white/50">
+                                            ({count})
+                                        </span>
+                                    ) : null;
+                                })()}
                             </span>
                         </div>
                     </button>
                 </li>
             );
         });
-    }, [folders, isLoading, isFetching, error, selected]);
+    }, [folders, isLoading, isFetching, error, selected, onSelect, t]);
     return (
         <aside className="flex-1 custom-scroll overflow-y-auto border-r border-white/10 bg-white/5 backdrop-blur-md relative">
             <h2 className="px-5 py-4 text-xs font-semibold tracking-wide text-white/70 uppercase">

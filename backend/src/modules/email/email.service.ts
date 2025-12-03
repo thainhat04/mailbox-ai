@@ -5,7 +5,6 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { Email, Mailbox } from "./entities";
-import { MOCK_EMAILS, MOCK_MAILBOXES } from "./data";
 
 import { ModifyEmailDto } from "./dto/modify.dto";
 
@@ -42,8 +41,9 @@ import { MailProvider } from "@prisma/client";
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private emails: Email[] = MOCK_EMAILS;
-  private mailboxes: Mailbox[] = MOCK_MAILBOXES;
+  // Cache for user's actual Gmail folder names
+  private gmailFolderCache: Map<string, Record<string, string>> = new Map();
+  private gmailMailboxesCache: Map<string, any[]> = new Map();
 
   constructor(
     private readonly imapService: ImapService,
@@ -82,13 +82,6 @@ export class EmailService {
   }
 
   /**
-   * Get all mailboxes for the current user
-   */
-  findAllMailboxes(): Mailbox[] {
-    return this.mailboxes.sort((a, b) => a.order - b.order);
-  }
-
-  /**
    * Get a specific mailbox by ID
    */
   findMailboxById(id: string): Mailbox {
@@ -117,12 +110,7 @@ export class EmailService {
       };
     }
 
-    // Fall back to mock mailboxes
-    const mailbox = this.mailboxes.find((m) => m.id === id);
-    if (!mailbox) {
-      throw new NotFoundException(`Mailbox with ID "${id}" not found`);
-    }
-    return mailbox;
+    throw new NotFoundException(`Mailbox with ID "${id}" not found`);
   }
 
   /**
@@ -143,29 +131,23 @@ export class EmailService {
     // Verify mailbox exists
     this.findMailboxById(mailboxId);
 
-    // Check if user has OAuth2 tokens for IMAP access
-    if (userId) {
-      const tokens = await this.oauth2TokenService.getUserTokens(userId);
-      if (tokens && tokens.length > 0) {
-        try {
-          // Try to fetch from IMAP
-          console.log("Fetching emails from IMAP for mailbox:", mailboxId);
-          return await this.fetchEmailsFromImap(
-            userId,
-            mailboxId,
-            query,
-            tokens,
-          );
-        } catch (error) {
-          this.logger.warn(
-            `Failed to fetch emails from IMAP: ${error.message}, falling back to mock data`,
-          );
-        }
-      }
+    // Require OAuth2 tokens for IMAP access
+    if (!userId) {
+      throw new UnauthorizedException(
+        "User authentication required to access emails",
+      );
     }
 
-    // Fallback to mock data
-    return this.fetchEmailsFromMock(mailboxId, query);
+    const tokens = await this.oauth2TokenService.getUserTokens(userId);
+    if (!tokens || tokens.length === 0) {
+      throw new UnauthorizedException(
+        "No email account connected. Please connect your email account first.",
+      );
+    }
+
+    // Fetch from IMAP
+    console.log("Fetching emails from IMAP for mailbox:", mailboxId);
+    return await this.fetchEmailsFromImap(userId, mailboxId, query, tokens);
   }
 
   /**
@@ -184,14 +166,22 @@ export class EmailService {
     // Use the first available token
     const token = tokens[0];
 
-    // Map mailbox ID to IMAP folder based on provider
-    const imapFolder = this.mapMailboxToImapFolder(mailboxId, token.provider);
-
     const config = {
       userId,
       provider: token.provider,
       email: token.email,
     };
+
+    // Build folder mapping cache for Gmail (if not already cached)
+    if (token.provider === MailProvider.GOOGLE) {
+      await this.ensureGmailFolderCache(userId, config);
+    }
+
+    const imapFolder = this.mapMailboxToImapFolder(
+      mailboxId,
+      token.provider,
+      userId,
+    );
 
     this.logger.log(
       `Fetching emails from ${mailboxId} -> IMAP folder: "${imapFolder}" (provider: ${token.provider})`,
@@ -251,15 +241,15 @@ export class EmailService {
         preview: this.stripHtmlTags(msg.body).substring(0, 150),
         body: msg.body,
         timestamp: msg.date.toISOString(),
-        isRead: false,
-        isStarred: false,
+        isRead: msg.isRead ?? false,
+        isStarred: msg.isStarred ?? false,
         isImportant: false,
         attachments: (msg.attachments || []).map((att, idx) => ({
           id: `${msg.id}-att-${idx}`,
           filename: att.filename,
           mimeType: att.contentType,
           size: att.size,
-          url: `/api/attachments/${msg.id}-att-${idx}`,
+          url: `/attachments/${msg.id}-att-${idx}`,
         })),
         labels: [],
         // Threading fields
@@ -291,14 +281,18 @@ export class EmailService {
         if (mailboxId !== "inbox") {
           foldersToFetch.push({
             name: "inbox",
-            folder: this.mapMailboxToImapFolder("inbox", token.provider),
+            folder: this.mapMailboxToImapFolder(
+              "inbox",
+              token.provider,
+              userId,
+            ),
             mailboxId: "inbox",
           });
         }
         if (mailboxId !== "sent") {
           foldersToFetch.push({
             name: "sent",
-            folder: this.mapMailboxToImapFolder("sent", token.provider),
+            folder: this.mapMailboxToImapFolder("sent", token.provider, userId),
             mailboxId: "sent",
           });
         }
@@ -386,15 +380,15 @@ export class EmailService {
                   preview: this.stripHtmlTags(msg.body).substring(0, 150),
                   body: msg.body,
                   timestamp: msg.date.toISOString(),
-                  isRead: false,
-                  isStarred: false,
+                  isRead: msg.isRead ?? false,
+                  isStarred: msg.isStarred ?? false,
                   isImportant: false,
                   attachments: (msg.attachments || []).map((att, idx) => ({
                     id: `${msg.id}-att-${idx}`,
                     filename: att.filename,
                     mimeType: att.contentType,
                     size: att.size,
-                    url: `/api/attachments/${msg.id}-att-${idx}`,
+                    url: `/attachments/${msg.id}-att-${idx}`,
                   })),
                   labels: [],
                   messageId: msg.messageId,
@@ -523,58 +517,81 @@ export class EmailService {
     };
   }
 
-  /**
-   * Fetch emails from mock data
-   */
-  private fetchEmailsFromMock(mailboxId: string, query: EmailListQueryDto) {
-    // Filter emails by mailbox
-    let filteredEmails = this.emails.filter((e) => e.mailboxId === mailboxId);
-
-    // Apply additional filters
-    if (query.unreadOnly) {
-      filteredEmails = filteredEmails.filter((e) => !e.isRead);
-    }
-
-    if (query.starredOnly) {
-      filteredEmails = filteredEmails.filter((e) => e.isStarred);
-    }
-
-    // Sort by timestamp (newest first)
-    filteredEmails.sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
-
-    // Pagination
-    const page = query.page || 1;
-    const limit = query.limit || 50;
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-
-    const paginatedEmails = filteredEmails.slice(startIndex, endIndex);
-    const total = filteredEmails.length;
-    const totalPages = Math.ceil(total / limit);
-
-    return {
-      emails: paginatedEmails,
-      page,
-      limit,
-      total,
-      totalPages,
+ 
+  private buildGmailFolderCache(userId: string, mailboxes: any[]): void {
+    const mapping: Record<string, string> = {
+      inbox: "INBOX",
     };
+
+    for (const mailbox of mailboxes) {
+      const attrs = mailbox.attributes || [];
+      const name = mailbox.name;
+
+      // Map based on IMAP attributes (standard flags)
+      if (attrs.includes("\\Sent")) {
+        mapping.sent = name;
+      } else if (attrs.includes("\\Drafts")) {
+        mapping.drafts = name;
+      } else if (attrs.includes("\\Trash")) {
+        mapping.trash = name;
+      } else if (attrs.includes("\\Junk")) {
+        mapping.spam = name;
+      } else if (attrs.includes("\\Flagged")) {
+        mapping.starred = name;
+      } else if (attrs.includes("\\Important")) {
+        mapping.important = name;
+      } else if (attrs.includes("\\All")) {
+        mapping.archive = name;
+      }
+    }
+
+    this.gmailFolderCache.set(userId, mapping);
+    this.gmailMailboxesCache.set(userId, mailboxes);
+    this.logger.log(
+      `Built Gmail folder cache for user ${userId}: ${JSON.stringify(mapping)}`,
+    );
   }
 
-  /**
-   * Map mailbox ID to IMAP folder name based on provider
-   * Different providers use different folder naming conventions
-   */
+  
+  private async ensureGmailFolderCache(
+    userId: string,
+    config: any,
+  ): Promise<any[] | null> {
+    if (this.gmailFolderCache.has(userId)) {
+      return this.gmailMailboxesCache.get(userId) || null;
+    }
+
+    try {
+      const mailboxes = await this.imapService.listMailboxes(config);
+      this.buildGmailFolderCache(userId, mailboxes);
+      this.logger.log(
+        `Built Gmail folder cache for user ${userId} with ${mailboxes.length} folders`,
+      );
+      return mailboxes;
+    } catch (error) {
+      this.logger.warn(`Failed to build Gmail folder cache: ${error.message}`);
+      return null;
+    }
+  }
+
   private mapMailboxToImapFolder(
     mailboxId: string,
     provider?: MailProvider,
+    userId?: string,
   ): string {
     // Gmail-specific folder mapping
     if (provider === MailProvider.GOOGLE) {
-      const gmailMapping: Record<string, string> = {
+      const lowerMailboxId = mailboxId.toLowerCase();
+
+      // Try to use cached folder names first (built from IMAP attributes)
+      if (userId && this.gmailFolderCache.has(userId)) {
+        const cachedMapping = this.gmailFolderCache.get(userId)!;
+        if (cachedMapping[lowerMailboxId]) {
+          return cachedMapping[lowerMailboxId];
+        }
+      }
+
+      const gmailFallback: Record<string, string> = {
         inbox: "INBOX",
         sent: "[Gmail]/Sent Mail",
         drafts: "[Gmail]/Drafts",
@@ -584,7 +601,8 @@ export class EmailService {
         important: "[Gmail]/Important",
         archive: "[Gmail]/All Mail",
       };
-      return gmailMapping[mailboxId.toLowerCase()] || "INBOX";
+
+      return gmailFallback[lowerMailboxId] || "INBOX";
     }
 
     // Microsoft/Outlook folder mapping
@@ -661,9 +679,18 @@ export class EmailService {
       email: token.email,
     };
 
+    // Build folder mapping cache for Gmail (if not already cached)
+    if (token.provider === MailProvider.GOOGLE) {
+      await this.ensureGmailFolderCache(userId, config);
+    }
+
     // If mailbox is specified, use it directly
     if (mailboxId) {
-      const imapFolder = this.mapMailboxToImapFolder(mailboxId, token.provider);
+      const imapFolder = this.mapMailboxToImapFolder(
+        mailboxId,
+        token.provider,
+        userId,
+      );
       this.logger.log(
         `Fetching email ${emailId} from ${mailboxId} -> ${imapFolder}`,
       );
@@ -682,7 +709,11 @@ export class EmailService {
 
     for (const folder of foldersToSearch) {
       try {
-        const imapFolder = this.mapMailboxToImapFolder(folder, token.provider);
+        const imapFolder = this.mapMailboxToImapFolder(
+          folder,
+          token.provider,
+          userId,
+        );
         this.logger.log(
           `Searching for email ${emailId} in ${folder} -> ${imapFolder}`,
         );
@@ -928,15 +959,15 @@ export class EmailService {
       preview: this.stripHtmlTags(imapMessage.body).substring(0, 150),
       body: imapMessage.body,
       timestamp: imapMessage.date.toISOString(),
-      isRead: false,
-      isStarred: false,
+      isRead: imapMessage.isRead ?? false,
+      isStarred: imapMessage.isStarred ?? false,
       isImportant: false,
       attachments: (imapMessage.attachments || []).map((att, idx) => ({
         id: `${imapMessage.id}-att-${idx}`,
         filename: att.filename,
         mimeType: att.contentType,
         size: att.size,
-        url: `/api/attachments/${imapMessage.id}-att-${idx}`,
+        url: `/attachments/${imapMessage.id}-att-${idx}`,
       })),
       labels: [],
     };
@@ -978,12 +1009,21 @@ export class EmailService {
       email: token.email,
     };
 
+    // Build folder mapping cache for Gmail (if not already cached)
+    if (token.provider === MailProvider.GOOGLE) {
+      await this.ensureGmailFolderCache(userId, config);
+    }
+
     // Search for the email in common folders to find which mailbox it belongs to
     const foldersToSearch = ["inbox", "sent", "drafts", "trash", "spam"];
 
     for (const folder of foldersToSearch) {
       try {
-        const imapFolder = this.mapMailboxToImapFolder(folder, token.provider);
+        const imapFolder = this.mapMailboxToImapFolder(
+          folder,
+          token.provider,
+          userId,
+        );
         this.logger.log(
           `Searching for attachment in ${folder} -> ${imapFolder}`,
         );
@@ -1027,109 +1067,49 @@ export class EmailService {
   /**
    * Mark email as read
    */
+  /**
+   * Mark email as read - TODO: Implement IMAP flag update
+   */
   async markAsRead(id: string): Promise<Email> {
-    const email = await this.findEmailById(id, "");
-    email.isRead = true;
-
-    // Update mailbox unread count
-    this.updateMailboxUnreadCount(email.mailboxId);
-
-    return email;
-  }
-
-  /**
-   * Mark email as unread
-   */
-  async markAsUnread(id: string): Promise<Email> {
-    const email = await this.findEmailById(id, "");
-    email.isRead = false;
-
-    // Update mailbox unread count
-    this.updateMailboxUnreadCount(email.mailboxId);
-
-    return email;
-  }
-
-  /**
-   * Toggle star status
-   */
-  async toggleStar(id: string): Promise<Email> {
-    const email = await this.findEmailById(id, "");
-    email.isStarred = !email.isStarred;
-
-    // If starring, add to starred mailbox
-    if (email.isStarred && email.mailboxId !== "starred") {
-      // Create a copy in starred mailbox
-      const starredEmail = { ...email, mailboxId: "starred" };
-      this.emails.push(starredEmail);
-    } else if (!email.isStarred) {
-      // Remove from starred mailbox
-      this.emails = this.emails.filter(
-        (e) => !(e.id === id && e.mailboxId === "starred"),
-      );
-    }
-
-    this.updateMailboxCounts();
-
-    return email;
-  }
-
-  /**
-   * Delete email (move to trash)
-   */
-  async deleteEmail(id: string): Promise<void> {
-    const email = await this.findEmailById(id, "");
-
-    if (email.mailboxId === "trash") {
-      // Permanently delete if already in trash
-      this.emails = this.emails.filter((e) => e.id !== id);
-    } else {
-      // Move to trash
-      email.mailboxId = "trash";
-      this.updateMailboxCounts();
-    }
-  }
-
-  /**
-   * Search emails by subject, body, or sender
-   */
-  searchEmails(query: string): Email[] {
-    const lowerQuery = query.toLowerCase();
-
-    return this.emails.filter(
-      (email) =>
-        email.subject.toLowerCase().includes(lowerQuery) ||
-        email.body.toLowerCase().includes(lowerQuery) ||
-        email.from.name.toLowerCase().includes(lowerQuery) ||
-        email.from.email.toLowerCase().includes(lowerQuery) ||
-        email.preview.toLowerCase().includes(lowerQuery),
+    throw new Error(
+      "Mark as read is not yet implemented with IMAP. Please use modifyEmail endpoint with flags.",
     );
   }
 
   /**
-   * Update mailbox unread count
+   * Mark email as unread - TODO: Implement IMAP flag update
    */
-  private updateMailboxUnreadCount(mailboxId: string): void {
-    const mailbox = this.mailboxes.find((m) => m.id === mailboxId);
-    if (mailbox) {
-      const unreadCount = this.emails.filter(
-        (e) => e.mailboxId === mailboxId && !e.isRead,
-      ).length;
-      mailbox.unreadCount = unreadCount;
-    }
+  async markAsUnread(id: string): Promise<Email> {
+    throw new Error(
+      "Mark as unread is not yet implemented with IMAP. Please use modifyEmail endpoint with flags.",
+    );
   }
 
   /**
-   * Update all mailbox counts
+   * Toggle star status - TODO: Implement IMAP flag update
    */
-  private updateMailboxCounts(): void {
-    this.mailboxes.forEach((mailbox) => {
-      const mailboxEmails = this.emails.filter(
-        (e) => e.mailboxId === mailbox.id,
-      );
-      mailbox.totalCount = mailboxEmails.length;
-      mailbox.unreadCount = mailboxEmails.filter((e) => !e.isRead).length;
-    });
+  async toggleStar(id: string): Promise<Email> {
+    throw new Error(
+      "Toggle star is not yet implemented with IMAP. Please use modifyEmail endpoint with flags.",
+    );
+  }
+
+  /**
+   * Delete email (move to trash) - TODO: Implement IMAP move/delete
+   */
+  async deleteEmail(id: string): Promise<void> {
+    throw new Error(
+      "Delete email is not yet implemented with IMAP. Please use modifyEmail endpoint to move to trash.",
+    );
+  }
+
+  /**
+   * Search emails - TODO: Implement IMAP search
+   */
+  searchEmails(query: string): Email[] {
+    throw new Error(
+      "Search is not yet implemented with IMAP. Please use IMAP search criteria.",
+    );
   }
   async sendEmail(userId: string, userEmail: string, dto: any) {
     // Here you would integrate with an SMTP service to send the email.
@@ -1433,6 +1413,11 @@ export class EmailService {
             email: token.email,
           };
 
+          // Build folder mapping cache for Gmail (if not already cached)
+          if (token.provider === MailProvider.GOOGLE) {
+            await this.ensureGmailFolderCache(userId, config);
+          }
+
           // Cache for fetched emails to avoid refetching for cross-mailbox threading
           const emailCache = new Map<string, Email[]>();
 
@@ -1447,11 +1432,51 @@ export class EmailService {
             const imapFolder = this.mapMailboxToImapFolder(
               mailboxId,
               token.provider,
+              userId,
             );
+
+            // Fetch fewer emails for spam/drafts to improve performance (they don't show unread count)
+            // Trash needs full fetch because we show unread count
+            let fetchLimit = 1000;
+            if (mailboxId === "spam" || mailboxId === "drafts") {
+              fetchLimit = 100;
+            }
+
             try {
               const messages = await this.retryImapOperation(() =>
-                this.imapService.fetchEmails(config, imapFolder, 1000),
+                this.imapService.fetchEmails(config, imapFolder, fetchLimit),
               );
+
+              const unreadCount = messages.filter((m) => !m.isRead).length;
+
+              // For trash, check total message count to ensure we fetched enough
+              if (mailboxId === "trash") {
+                try {
+                  const totalCount = await this.imapService.getMessageCount(
+                    config,
+                    imapFolder,
+                  );
+                  this.logger.log(
+                    `Fetched ${messages.length}/${totalCount} messages from ${mailboxId} (${imapFolder}), ${unreadCount} unread`,
+                  );
+                  if (messages.length < totalCount) {
+                    this.logger.warn(
+                      `Trash has ${totalCount} total messages but only fetched ${messages.length}. Unread count may be inaccurate.`,
+                    );
+                  }
+                } catch (error) {
+                  this.logger.warn(
+                    `Failed to get total count for trash: ${error.message}`,
+                  );
+                  this.logger.log(
+                    `Fetched ${messages.length} messages from ${mailboxId} (${imapFolder}), ${unreadCount} unread`,
+                  );
+                }
+              } else {
+                this.logger.log(
+                  `Fetched ${messages.length} messages from ${mailboxId} (${imapFolder}), ${unreadCount} unread`,
+                );
+              }
 
               const mappedEmails: Email[] = messages.map((msg) => {
                 const fromName = msg.from.split("<")[0].trim();
@@ -1473,15 +1498,15 @@ export class EmailService {
                   preview: this.stripHtmlTags(msg.body).substring(0, 150),
                   body: msg.body,
                   timestamp: msg.date.toISOString(),
-                  isRead: false,
-                  isStarred: false,
+                  isRead: msg.isRead ?? false,
+                  isStarred: msg.isStarred ?? false,
                   isImportant: false,
                   attachments: (msg.attachments || []).map((att, idx) => ({
                     id: `${msg.id}-att-${idx}`,
                     filename: att.filename,
                     mimeType: att.contentType,
                     size: att.size,
-                    url: `/api/attachments/${msg.id}-att-${idx}`,
+                    url: `/attachments/${msg.id}-att-${idx}`,
                   })),
                   labels: [],
                   messageId: msg.messageId,
@@ -1506,7 +1531,8 @@ export class EmailService {
               // Fetch emails from this mailbox
               let allEmailsForThreading = await fetchAndMapEmails(mailbox.id);
 
-              // For mailboxes that need cross-mailbox threading, fetch related emails
+              // Only do cross-mailbox threading for inbox/sent/important/starred
+              // This improves performance and accuracy for other mailboxes
               const shouldFetchRelatedEmails = [
                 "inbox",
                 "sent",
@@ -1595,6 +1621,40 @@ export class EmailService {
 
               // Group into threads and count
               if (allEmailsForThreading.length > 0) {
+                // For spam/drafts/trash, don't do threading - just count emails directly
+                // This improves performance and accuracy
+                const needsThreading = !["spam", "drafts", "trash"].includes(
+                  mailbox.id,
+                );
+
+                if (!needsThreading) {
+                  // Simple count for spam/drafts/trash
+                  mailbox.totalCount = allEmailsForThreading.length;
+
+                  if (mailbox.id === "spam") {
+                    // Count unread emails for spam
+                    const unreadEmails = allEmailsForThreading.filter(
+                      (e) => !e.isRead,
+                    );
+                    mailbox.unreadCount = unreadEmails.length;
+
+                    // Debug: log sample of flags
+                    const sampleEmails = allEmailsForThreading.slice(0, 5);
+                    this.logger.log(
+                      `${mailbox.name}: ${mailbox.totalCount} total emails, ${mailbox.unreadCount} unread`,
+                    );
+                    this.logger.debug(
+                      `Sample flags: ${sampleEmails.map((e) => `${e.id}: isRead=${e.isRead}`).join(", ")}`,
+                    );
+                  } else {
+                    mailbox.unreadCount = 0;
+                    this.logger.log(
+                      `${mailbox.name}: ${mailbox.totalCount} emails (no threading)`,
+                    );
+                  }
+                  continue;
+                }
+
                 const threadedEmails = this.groupEmailsIntoThreads(
                   allEmailsForThreading,
                 );
@@ -1653,13 +1713,29 @@ export class EmailService {
                 }
 
                 mailbox.totalCount = filteredThreads.length;
-                mailbox.unreadCount = filteredThreads.filter(
-                  (e) => !e.isRead,
-                ).length;
 
-                this.logger.log(
-                  `${mailbox.name}: ${filteredThreads.length} threads (from ${allEmailsForThreading.length} total emails)`,
-                );
+                // Only show unread count for inbox and spam
+                // Count individual unread EMAILS (not threads) to match Gmail's count
+                if (mailbox.id === "inbox" || mailbox.id === "spam") {
+                  // Get all emails that belong to this mailbox
+                  const mailboxEmails = allEmailsForThreading.filter(
+                    (e) => e.mailboxId === mailbox.id,
+                  );
+                  // Count unread emails
+                  mailbox.unreadCount = mailboxEmails.filter(
+                    (e) => !e.isRead,
+                  ).length;
+
+                  this.logger.log(
+                    `${mailbox.name}: ${filteredThreads.length} threads, ${mailbox.unreadCount} unread emails (from ${mailboxEmails.length} total emails in mailbox)`,
+                  );
+                } else {
+                  // Keep unreadCount at 0 for other mailboxes
+                  mailbox.unreadCount = 0;
+                  this.logger.log(
+                    `${mailbox.name}: ${filteredThreads.length} threads, ${allEmailsForThreading.length} total emails`,
+                  );
+                }
               }
             } catch (error) {
               this.logger.warn(
@@ -1705,6 +1781,11 @@ export class EmailService {
       };
 
       const mailboxes = await this.imapService.listMailboxes(config);
+
+      // Build folder mapping cache for Gmail
+      if (token.provider === MailProvider.GOOGLE) {
+        this.buildGmailFolderCache(userId, mailboxes);
+      }
 
       return {
         success: true,
