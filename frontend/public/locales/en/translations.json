@@ -129,6 +129,9 @@
             "2": "To",
             "3": "Subject",
             "4": "Send Reply"
-        }
+        },
+        "emailDeleteError": "Failed to delete some emails. Please try again.",
+        "emailMarkError": "Failed to update some emails. Please try again.",
+        "emailStarError": "Failed to update star status. Please try again."
     }
 }

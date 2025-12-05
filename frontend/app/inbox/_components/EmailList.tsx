@@ -2,20 +2,20 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import type { Email } from "../_types";
+import type { Email, PreviewEmail } from "../_types";
 import EmailRow from "./EmailRow";
-import ComposeModal from "./ComposeModal";
 import EmailToolbar from "./EmailToolbar";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
 import { useGetMailInOneBoxQuery, useModifyEmailMutation } from "../_services";
 import { useKeyboardNavigation } from "@/hooks/useKeyboardNavigation";
 import { useTranslation } from "react-i18next";
+import { useToast } from "@/components/ui/toast-provider";
 
-interface EmailListProps {
+interface PreviewEmailListProps {
     selectedFolder: string;
-    selectedEmail: Email | null;
-    onSelectEmail: (email: Email) => void;
+    selectedPreviewEmail: PreviewEmail | null;
+    onSelectPreviewEmail: (previewEmail: PreviewEmail | null) => void;
     isComposeOpen: boolean;
     setIsComposeOpen: (open: boolean) => void;
     onEmailModified?: (email: Email) => void;
@@ -23,30 +23,31 @@ interface EmailListProps {
 
 export default function EmailList({
     selectedFolder,
-    selectedEmail,
-    onSelectEmail,
+    selectedPreviewEmail,
+    onSelectPreviewEmail,
     isComposeOpen,
     setIsComposeOpen,
-    onEmailModified,
-}: EmailListProps) {
+}: PreviewEmailListProps) {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const [isPreparing, setIsPreparing] = useState(true);
     const { result, isLoading, isFetching, refetch } = useQueryHandler(
         useGetMailInOneBoxQuery,
         { mailboxId: selectedFolder, page, limit: 50 },
-        { skip: !selectedFolder }
+        { skip: !selectedFolder || isPreparing }
     );
-    
+
     const modifyEmail = useMutationHandler(
         useModifyEmailMutation,
         "ModifyEmail"
     );
 
-    const [emails, setEmails] = useState<Email[]>([]);
-    const [selectedEmails, setSelectedEmails] = useState<Set<string>>(
-        new Set()
-    );
+    const [previewEmails, setPreviewEmails] = useState<PreviewEmail[]>([]);
+    const [selectedPreviewEmails, setSelectedPreviewEmails] = useState<
+        Set<string>
+    >(new Set());
 
     const [focusedIndex, setFocusedIndex] = useState<number>(-1);
     const emailListRef = useRef<HTMLDivElement>(null);
@@ -55,39 +56,33 @@ export default function EmailList({
 
     // Reset when folder changes
     useEffect(() => {
-        setEmails([]);
+        setPreviewEmails([]);
         setPage(1);
         setHasMore(true);
-        setSelectedEmails(new Set());
+        setSelectedPreviewEmails(new Set());
         setFocusedIndex(-1);
+        setIsPreparing(false);
     }, [selectedFolder]);
 
     useEffect(() => {
         if (result) {
-            console.log("Fetched emails:", result.data.emails);
-            const newEmails = result.data.emails;
-            
-            if (page === 1) {
-                // First page - replace all emails
-                setEmails(newEmails);
-            } else {
-                // Subsequent pages - append emails
-                setEmails((prev) => {
-                    const existingIds = new Set(prev.map(e => e.id));
-                    const uniqueNewEmails = newEmails.filter(e => !existingIds.has(e.id));
-                    return [...prev, ...uniqueNewEmails];
+            setPreviewEmails(result.data.emails);
+            setSelectedPreviewEmails((previous) => {
+                previous.forEach((id) => {
+                    if (!result.data.emails.find((email) => email.id === id)) {
+                        previous.delete(id);
+                    }
                 });
-            }
-            
-            // Check if there are more pages
-            const totalPages = result.data.totalPages;
-            setHasMore(page < totalPages);
+                return new Set(previous);
+            });
         }
-    }, [result, page]);
+    }, [result]);
 
     // Infinite scroll observer
+
     useEffect(() => {
-        if (isLoading || isFetching || !hasMore) return;
+        if (isLoading || isFetching || !hasMore || modifyEmail.isLoading)
+            return;
 
         observerRef.current = new IntersectionObserver(
             (entries) => {
@@ -107,32 +102,32 @@ export default function EmailList({
                 observerRef.current.disconnect();
             }
         };
-    }, [hasMore, isFetching, isLoading]);
+    }, [hasMore, isFetching, isLoading, modifyEmail.isLoading]);
 
     // Keyboard navigation
     useKeyboardNavigation({
         onArrowUp: () => {
-            if (emails.length === 0) return;
+            if (previewEmails.length === 0) return;
             setFocusedIndex((prev) =>
-                prev <= 0 ? emails.length - 1 : prev - 1
+                prev <= 0 ? previewEmails.length - 1 : prev - 1
             );
         },
         onArrowDown: () => {
-            if (emails.length === 0) return;
+            if (previewEmails.length === 0) return;
             setFocusedIndex((prev) =>
-                prev === -1 ? 0 : prev >= emails.length - 1 ? 0 : prev + 1
+                prev === -1
+                    ? 0
+                    : prev >= previewEmails.length - 1
+                    ? 0
+                    : prev + 1
             );
         },
         onEnter: () => {
-            if (focusedIndex >= 0 && focusedIndex < emails.length) {
-                handleSelectEmail(emails[focusedIndex]);
+            if (focusedIndex >= 0 && focusedIndex < previewEmails.length) {
+                handleSelectPreviewEmail(previewEmails[focusedIndex]);
             }
         },
-        onDelete: () => {
-            if (focusedIndex >= 0 && focusedIndex < emails.length) {
-                deleteEmails([emails[focusedIndex].id]);
-            }
-        },
+
         enabled: !isComposeOpen && focusedIndex >= 0,
     });
 
@@ -152,8 +147,8 @@ export default function EmailList({
     }, [focusedIndex]);
 
     // Toggle checkbox
-    const toggleSelectEmail = (emailId: string) => {
-        setSelectedEmails((prev) => {
+    const toggleSelectPreviewEmail = (emailId: string) => {
+        setSelectedPreviewEmails((prev) => {
             const newSet = new Set(prev);
             newSet.has(emailId) ? newSet.delete(emailId) : newSet.add(emailId);
             return newSet;
@@ -161,118 +156,108 @@ export default function EmailList({
     };
 
     // Select email
-    const handleSelectEmail = (email: Email) => {
-        onSelectEmail(email);
+    const handleSelectPreviewEmail = (previewEmail: PreviewEmail) => {
+        onSelectPreviewEmail(previewEmail);
     };
 
-    const selectAll = () => setSelectedEmails(new Set(emails.map((e) => e.id)));
+    const selectAll = () =>
+        setSelectedPreviewEmails(new Set(previewEmails.map((e) => e.id)));
+
     const deleteSelected = async () => {
-        const deletedIds = Array.from(selectedEmails);
-        setEmails((prev) => prev.filter((e) => !selectedEmails.has(e.id)));
-        setSelectedEmails(new Set());
+        const deletedIds = Array.from(selectedPreviewEmails);
 
         // Call API for each selected email
-        const promises = deletedIds.map((emailId) =>
-            modifyEmail.ModifyEmail({
+        const promises = deletedIds.map(async (emailId) => {
+            const result = await modifyEmail.ModifyEmail({
                 emailId,
                 mailBox: selectedFolder,
-                flags: { delete: true }
-            })
-        );
+                flags: { delete: true },
+            });
+            if (result) {
+                // setPreviewEmails((prev) =>
+                //     prev.filter((e) => e.id !== emailId)
+                // );
+                if (selectedPreviewEmail?.id === emailId) {
+                    onSelectPreviewEmail(null);
+                }
+            } else {
+                showToast(t("inbox.emailDeleteError"), "error");
+            }
+        });
 
         await Promise.all(promises);
+        setSelectedPreviewEmails(new Set());
     };
-    const deleteEmails = (ids: string[]) => {
-        setEmails((prev) => prev.filter((e) => !ids.includes(e.id)));
-    };
+
     const markSelected = async (read: boolean) => {
-        setEmails((prev) =>
-            prev.map((e) =>
-                selectedEmails.has(e.id) ? { ...e, isRead: read } : e
-            )
-        );
-
         // Call API for each selected email
-        const promises = Array.from(selectedEmails).map((emailId) =>
-            modifyEmail.ModifyEmail({
-                emailId,
-                mailBox: selectedFolder,
-                flags: { read }
-            })
+        const promises = Array.from(selectedPreviewEmails).map(
+            async (emailId) => {
+                const result = await modifyEmail.ModifyEmail({
+                    emailId,
+                    mailBox: selectedFolder,
+                    flags: { read },
+                });
+                if (result) {
+                    // // Optimistic update
+                    // setPreviewEmails((prev) =>
+                    //     prev.map((e) =>
+                    //         e.id === emailId ? { ...e, isRead: read } : e
+                    //     )
+                    // );
+                } else {
+                    showToast(t("inbox.emailMarkError"), "error");
+                }
+            }
         );
-
         await Promise.all(promises);
+        setSelectedPreviewEmails(new Set());
     };
     const refreshEmails = () => {
-        setEmails([]);
+        setPreviewEmails([]);
         setPage(1);
         setHasMore(true);
         refetch();
-        setSelectedEmails(new Set());
+        setSelectedPreviewEmails(new Set());
     };
 
     const toggleStar = async (emailId: string) => {
-        const email = emails.find((e) => e.id === emailId);
+        const email = previewEmails.find((e) => e.id === emailId);
         if (!email) return;
 
-        const updatedEmail = { ...email, isStarred: !email.isStarred };
-
-        // Optimistic update
-        setEmails((prev) =>
-            prev.map((e) =>
-                e.id === emailId ? updatedEmail : e
-            )
-        );
-
-        // Call API
         const result = await modifyEmail.ModifyEmail({
             emailId,
             mailBox: selectedFolder,
-            flags: { starred: !email.isStarred }
+            flags: { starred: !email.isStarred },
         });
-
-        // If failed, revert optimistic update
+        // Optimistic update
         if (!result) {
-            setEmails((prev) =>
-                prev.map((e) =>
-                    e.id === emailId ? email : e
-                )
-            );
-        } else {
-            onEmailModified?.(updatedEmail);
+            showToast(t("inbox.emailStarError"), "error");
         }
+        // const updatedEmail = { ...email, isStarred: !email.isStarred };
+        // setPreviewEmails((prev) =>
+        //     prev.map((e) => (e.id === emailId ? updatedEmail : e))
+        // );
     };
 
     const toggleRead = async (emailId: string) => {
-        const email = emails.find((e) => e.id === emailId);
+        const email = previewEmails.find((e) => e.id === emailId);
         if (!email) return;
-
-        const updatedEmail = { ...email, isRead: !email.isRead };
-
-        // Optimistic update
-        setEmails((prev) =>
-            prev.map((e) =>
-                e.id === emailId ? updatedEmail : e
-            )
-        );
 
         // Call API
         const result = await modifyEmail.ModifyEmail({
             emailId,
             mailBox: selectedFolder,
-            flags: { read: !email.isRead }
+            flags: { read: !email.isRead },
         });
-
-        // If failed, revert optimistic update
         if (!result) {
-            setEmails((prev) =>
-                prev.map((e) =>
-                    e.id === emailId ? email : e
-                )
-            );
-        } else {
-            onEmailModified?.(updatedEmail);
+            showToast(t("inbox.emailMarkError"), "error");
         }
+        const updatedEmail = { ...email, isRead: !email.isRead };
+        // Optimistic update
+        setPreviewEmails((prev) =>
+            prev.map((e) => (e.id === emailId ? updatedEmail : e))
+        );
     };
 
     const toolbarActions = [
@@ -304,7 +289,7 @@ export default function EmailList({
                 data-email-list
                 className="relative flex-1 custom-scroll overflow-y-auto divide-y divide-white/10"
             >
-                {isLoading || isFetching ? (
+                {isLoading || isFetching || modifyEmail.isLoading ? (
                     Array.from({ length: 8 }).map((_, i) => (
                         <div
                             key={i}
@@ -322,43 +307,51 @@ export default function EmailList({
                             </div>
                         </div>
                     ))
-                ) : emails.length === 0 ? (
+                ) : previewEmails.length === 0 ? (
                     <div className="p-4 text-center text-sm text-white/60">
                         {t("inbox.8")}
                     </div>
                 ) : (
                     <>
-                        {emails.map((email, index) => (
+                        {previewEmails.map((email, index) => (
                             <div
                                 key={email.id}
                                 data-email-row
                                 onClick={() => {
-                                    handleSelectEmail(email);
+                                    handleSelectPreviewEmail(email);
                                 }}
                             >
                                 <EmailRow
                                     email={email}
-                                    active={selectedEmail?.id === email.id}
-                                    selected={selectedEmails.has(email.id)}
-                                    onSelect={handleSelectEmail}
-                                    onToggleSelect={toggleSelectEmail}
+                                    active={
+                                        selectedPreviewEmail?.id === email.id
+                                    }
+                                    selected={selectedPreviewEmails.has(
+                                        email.id
+                                    )}
+                                    onSelect={handleSelectPreviewEmail}
+                                    onToggleSelect={toggleSelectPreviewEmail}
                                     onToggleStar={toggleStar}
                                     onToggleRead={toggleRead}
                                 />
                             </div>
                         ))}
-                        
+
                         {/* Infinite scroll trigger */}
                         {hasMore && (
                             <div ref={loadMoreRef} className="p-4 text-center">
                                 {isFetching ? (
                                     <div className="flex items-center justify-center gap-2 text-sm text-white/60">
                                         <div className="w-4 h-4 border-2 border-white/30 border-t-white/70 rounded-full animate-spin" />
-                                        <span>{t("inbox.9") || "Loading more..."}</span>
+                                        <span>
+                                            {t("inbox.9") || "Loading more..."}
+                                        </span>
                                     </div>
                                 ) : (
                                     <button
-                                        onClick={() => setPage((prev) => prev + 1)}
+                                        onClick={() =>
+                                            setPage((prev) => prev + 1)
+                                        }
                                         className="text-sm text-cyan-400 hover:text-cyan-300 transition"
                                     >
                                         {t("inbox.10") || "Load more"}

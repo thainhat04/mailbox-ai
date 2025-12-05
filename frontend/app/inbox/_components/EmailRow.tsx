@@ -1,7 +1,7 @@
 // components/Inbox/EmailRow.tsx
 "use client";
 
-import { Email } from "../_types";
+import { PreviewEmail } from "../_types";
 import { Star, Circle } from "lucide-react";
 import clsx from "clsx";
 import Checkbox from "@/components/ui/CheckBox";
@@ -9,10 +9,10 @@ import { formatEmailDate } from "@/helper/dateFormatter";
 import { useTranslation } from "react-i18next";
 
 interface EmailRowProps {
-    email: Email;
+    email: PreviewEmail;
     active: boolean;
     selected: boolean;
-    onSelect: (email: Email) => void;
+    onSelect: (previewEmail: PreviewEmail) => void;
     onToggleSelect: (emailId: string) => void;
     onToggleStar: (emailId: string) => void;
     onToggleRead: (emailId: string) => void;
@@ -38,7 +38,10 @@ export default function EmailRow({
                     ? "bg-cyan-100/10 ring-1 ring-cyan-300/20"
                     : "bg-black/10 ring-1 ring-white/10"
             )}
-            onClick={() => onSelect(email)}
+            onClick={() => {
+                onToggleRead(email.id);
+                onSelect(email);
+            }}
         >
             {/* Checkbox */}
             <div
@@ -58,7 +61,6 @@ export default function EmailRow({
                     <span
                         onClick={(e) => {
                             e.stopPropagation();
-                            onToggleRead(email.id);
                         }}
                         className="cursor-pointer"
                         title={email.isRead ? "Mark as unread" : "Mark as read"}

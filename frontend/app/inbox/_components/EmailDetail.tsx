@@ -1,6 +1,6 @@
 // components/Inbox/EmailDetail.tsx
 "use client";
-import type { EmailDetailProps, Email } from "../_types";
+import type { Email, PreviewEmail } from "../_types";
 import {
     Reply,
     Forward,
@@ -19,13 +19,16 @@ import SERVICES from "@/constants/services";
 import ReplyModal from "./ReplyModal";
 import ForwardModal from "./ForwardModal";
 import { useState, useEffect } from "react";
-import { useModifyEmailMutation } from "../_services";
+import { useModifyEmailMutation, useGetEmailByIdQuery } from "../_services";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
-import { ModifyEmailFlags } from "../_types/modify";
+import { useQueryHandler } from "@/hooks/useQueryHandler";
+import LoadingOverlay from "@/components/ui/LoadingOverlay";
+import { useToast } from "@/components/ui/toast-provider";
 
-interface EmailDetailWithBackProps extends EmailDetailProps {
+interface EmailDetailWithBackProps {
+    previewEmail: PreviewEmail | null;
     onBack?: () => void;
-    onEmailModified?: (email: Email) => void;
+    setPreviewEmail: (email: PreviewEmail | null) => void;
 }
 
 function formatBytes(bytes?: number) {
@@ -44,24 +47,38 @@ function displayAddress(a?: { name?: string; email?: string }) {
 }
 
 export default function EmailDetail({
-    email,
+    previewEmail,
     onBack,
-    onEmailModified,
+    setPreviewEmail,
 }: EmailDetailWithBackProps) {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const [isReplyOpen, setIsReplyOpen] = useState(false);
     const [isForwardOpen, setIsForwardOpen] = useState(false);
-    const [isStarred, setIsStarred] = useState(email?.isStarred || false);
+    const [isStarred, setIsStarred] = useState(false);
+    const [email, setEmail] = useState<Email | null>(null);
+    const { result, isFetching } = useQueryHandler(
+        useGetEmailByIdQuery,
+        {
+            mailboxId: previewEmail?.mailboxId || "",
+            id: previewEmail?.id || "",
+        },
+        {
+            skip: !previewEmail?.id || !previewEmail?.mailboxId,
+        }
+    );
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
     const modifyEmail = useMutationHandler(
         useModifyEmailMutation,
         "ModifyEmail"
     );
-    
-    // Update isStarred when email changes
+
     useEffect(() => {
-        setIsStarred(email?.isStarred || false);
-    }, [email?.id, email?.isStarred]);
+        if (result) {
+            setEmail(result.data);
+            setIsStarred(result.data.isStarred);
+        }
+    }, [result]);
 
     const handleDownloadAttachment = async (url: string, filename: string) => {
         try {
@@ -130,13 +147,12 @@ export default function EmailDetail({
             flags: { delete: true },
         });
         if (result) {
-            // Notify parent to update counts
-            if (email && onEmailModified) {
-                onEmailModified(email);
-            }
             if (onBack) {
                 onBack();
             }
+            setPreviewEmail(null);
+        } else {
+            showToast(t("inbox.emailDeleteError"), "error");
         }
     };
     const handleStar = async () => {
@@ -145,20 +161,15 @@ export default function EmailDetail({
 
         // Optimistic update
         const newStarred = !isStarred;
-        setIsStarred(newStarred);
 
         const result = await modifyEmail.ModifyEmail({
             emailId: email.id,
             mailBox: email.mailboxId || "",
             flags: { starred: newStarred },
         });
-        
+
         if (!result) {
-            setIsStarred(!newStarred);
-        } else if (email && onEmailModified) {
-            // Notify parent to update email list
-            const updatedEmail = { ...email, isStarred: newStarred };
-            onEmailModified(updatedEmail);
+            showToast(t("inbox.emailStarError"), "error");
         }
     };
 
@@ -174,6 +185,7 @@ export default function EmailDetail({
             ) : (
                 <div className="flex flex-col h-full">
                     {/* Mobile back button + Header */}
+                    <LoadingOverlay isVisible={isFetching} />
                     <header className="px-4 sm:px-6 py-4 sm:py-5 border-b border-white/15 flex items-start gap-3 sm:gap-0 flex-col sm:flex-col">
                         {/* Back button on mobile */}
                         {onBack && (
@@ -344,9 +356,7 @@ export default function EmailDetail({
                             <Star
                                 size={14}
                                 className={
-                                    isStarred
-                                        ? "text-yellow-300"
-                                        : "text-white"
+                                    isStarred ? "text-yellow-300" : "text-white"
                                 }
                             />
                             <span className="hidden sm:inline">
