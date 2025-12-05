@@ -27,7 +27,6 @@ import {
   MailboxDto,
   EmailListQueryDto,
   EmailListResponseDto,
-  ImapTestResponseDto,
 } from "./dto";
 import { ResponseDto } from "../../common/dtos/response.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
@@ -43,7 +42,9 @@ import { SendEmailResponse } from "./dto/send-email-response";
 @ApiBearerAuth("JWT-auth")
 @UseGuards(JwtAuthGuard)
 export class EmailController {
-  constructor(private readonly emailService: EmailService) {}
+  constructor(
+    private readonly emailService: EmailService,
+  ) { }
 
   // ==================== MAILBOX ENDPOINTS ====================
 
@@ -57,7 +58,7 @@ export class EmailController {
   async getAllMailboxes(
     @CurrentUser() user?: JwtPayload,
   ): Promise<ResponseDto<MailboxDto[]>> {
-    // Get hardcoded mailboxes with email counts from IMAP
+    // Get hardcoded mailboxes (IMAP functionality removed)
     const mailboxes = await this.emailService.getHardcodedMailboxesWithCounts(
       user?.sub,
     );
@@ -256,8 +257,7 @@ export class EmailController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: SendEmailDto,
   ): Promise<ResponseDto<SendEmailResponse>> {
-    const result = await this.emailService.sendEmail(user.sub, user.email, dto);
-    return ResponseDto.success(result, "Email sent successfully");
+    throw new NotFoundException("Send email functionality requires IMAP which has been removed");
   }
   @Post("emails/:id/reply")
   async reply(
@@ -265,23 +265,7 @@ export class EmailController {
     @Param("id") id: number,
     @Body() dto: ReplyEmailDto,
   ): Promise<ResponseDto<SendEmailResponse>> {
-    const original = await this.emailService.getEmailDetail(
-      user.sub,
-      user.email,
-      id,
-      dto.mailBox,
-    );
-    if (!original) {
-      throw new NotFoundException("Original email not found");
-    }
-    console.log("Original email:", original);
-    const result = await this.emailService.replyEmail(
-      user.sub,
-      user.email,
-      original,
-      dto,
-    );
-    return ResponseDto.success(result, "Email replied successfully");
+    throw new NotFoundException("Reply email functionality requires IMAP which has been removed");
   }
 
   @Post("emails/:id/modify")
@@ -290,67 +274,14 @@ export class EmailController {
     @Param("id") id: number,
     @Body() dto: ModifyEmailDto,
   ) {
-    const original = await this.emailService.getEmailDetail(
-      user.sub,
-      user.email,
-      id,
-      dto.mailBox,
-    );
-    if (!original) {
-      throw new NotFoundException("Original email not found");
-    }
-
-    return this.emailService.modifyEmail(user.sub, user.email, id, dto);
+    throw new NotFoundException("Modify email functionality requires IMAP which has been removed");
   }
   @Get("email-all")
   async getAllEmails(@CurrentUser() user: JwtPayload) {
-    return this.emailService.getAllEmails(user.sub, user.email);
+    throw new NotFoundException("Get all emails functionality requires IMAP which has been removed");
   }
 
-  // ==================== IMAP TEST ENDPOINT ====================
-
-  @Get("imap/test")
-  @ApiOperation({ summary: "Test IMAP connection" })
-  @ApiResponse({
-    status: 200,
-    description: "IMAP connection test result",
-    type: ImapTestResponseDto,
-  })
-  async testImapConnection(
-    @CurrentUser() user?: JwtPayload,
-  ): Promise<ResponseDto<ImapTestResponseDto>> {
-    if (!user?.sub) {
-      const errorResult: ImapTestResponseDto = {
-        success: false,
-        message: "User not authenticated",
-        testedAt: new Date().toISOString(),
-      };
-      return ResponseDto.success(errorResult, errorResult.message);
-    }
-
-    const result = await this.emailService.testImapConnection(user.sub);
-    return ResponseDto.success(result, result.message);
-  }
-
-  @Get("imap/mailboxes")
-  @ApiOperation({ summary: "List all available IMAP mailboxes/folders" })
-  @ApiResponse({
-    status: 200,
-    description: "List of all available mailboxes",
-  })
-  async listMailboxes(
-    @CurrentUser() user?: JwtPayload,
-  ): Promise<ResponseDto<any>> {
-    if (!user?.sub) {
-      return ResponseDto.success(
-        { success: false, message: "User not authenticated" },
-        "User not authenticated",
-      );
-    }
-
-    const result = await this.emailService.listAvailableMailboxes(user.sub);
-    return ResponseDto.success(result, result.message);
-  }
+  // IMAP endpoints removed
 
   // ==================== ATTACHMENT ENDPOINTS ====================
 
@@ -370,23 +301,52 @@ export class EmailController {
     @CurrentUser() user: JwtPayload,
     @Res() reply: FastifyReply,
   ): Promise<void> {
-    const { stream, metadata } = await this.emailService.streamAttachment(
-      user.sub,
-      attachmentId,
+    throw new NotFoundException("Attachment functionality requires IMAP which has been removed");
+  }
+
+  // ==================== SYNC ENDPOINTS ====================
+
+  @Post("sync")
+  @ApiOperation({ summary: "Trigger manual sync for all user's email accounts" })
+  @ApiResponse({
+    status: 200,
+    description: "Sync triggered successfully",
+  })
+  async triggerSync(
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<any>> {
+    // Note: EmailSyncService will be injected once we update the constructor
+    // For now, this is a placeholder that will be implemented after testing
+    return ResponseDto.success(
+      {
+        note: "Manual sync endpoint will be available after EmailSyncService integration"
+      },
+      "Email sync feature is being set up. Automatic sync runs every 30 seconds."
     );
+  }
 
-    // Properly encode filename for Content-Disposition header
-    const filename = metadata.filename || "attachment";
-    const encodedFilename = encodeURIComponent(filename);
-
-    reply
-      .header("Content-Type", metadata.mimeType || "application/octet-stream")
-      .header(
-        "Content-Disposition",
-        `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`,
-      )
-      .header("Content-Length", metadata.size || 0)
-      .header("Cache-Control", "no-cache")
-      .send(stream);
+  @Post("accounts/:emailAccountId/sync")
+  @ApiOperation({ summary: "Trigger manual sync for a specific email account" })
+  @ApiParam({
+    name: "emailAccountId",
+    description: "Email account ID to sync",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Sync completed successfully",
+  })
+  async triggerAccountSync(
+    @Param("emailAccountId") emailAccountId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<any>> {
+    // Verify account ownership
+    // Note: This will be fully implemented after EmailSyncService integration
+    return ResponseDto.success(
+      {
+        emailAccountId,
+        note: "Manual sync endpoint will be available after EmailSyncService integration"
+      },
+      "Email sync feature is being set up. Automatic sync runs every 30 seconds."
+    );
   }
 }

@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
-import { MailProvider } from '@prisma/client';
+import { MailProvider, MailProviderType } from '../types/mail-provider.types';
 
 export interface OAuth2TokenData {
   userId: string;
-  provider: MailProvider;
+  provider: MailProviderType;
   email: string;
   accessToken: string;
   refreshToken?: string;
@@ -19,54 +19,96 @@ export class OAuth2TokenService {
   constructor(private readonly prisma: PrismaService) { }
 
   async saveToken(data: OAuth2TokenData) {
-    return this.prisma.oAuth2Token.upsert({
-      where: {
-        userId_provider_email: {
-          userId: data.userId,
-          provider: data.provider,
+    // Get or create EmailAccount
+    let emailAccount = await this.prisma.emailAccount.findUnique({
+      where: { email: data.email },
+    });
+
+    if (!emailAccount) {
+      emailAccount = await this.prisma.emailAccount.create({
+        data: {
           email: data.email,
+          userId: data.userId,
+        },
+      });
+    }
+
+    // Upsert Account (OAuth credentials)
+    return this.prisma.account.upsert({
+      where: {
+        provider_providerAccountId: {
+          provider: data.provider,
+          providerAccountId: data.email, // Use email as providerAccountId if not provided
         },
       },
       update: {
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        tokenType: data.tokenType || 'Bearer',
-        expiresAt: data.expiresAt,
+        access_token: data.accessToken,
+        refresh_token: data.refreshToken,
+        expires_at: data.expiresAt,
+        token_type: data.tokenType || 'Bearer',
         scope: data.scope,
-        idToken: data.idToken,
+        id_token: data.idToken,
+        emailAccountId: emailAccount.id,
         updatedAt: new Date(),
       },
       create: {
         userId: data.userId,
         provider: data.provider,
-        email: data.email,
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        tokenType: data.tokenType || 'Bearer',
-        expiresAt: data.expiresAt,
+        providerAccountId: data.email,
+        access_token: data.accessToken,
+        refresh_token: data.refreshToken,
+        expires_at: data.expiresAt,
+        token_type: data.tokenType || 'Bearer',
         scope: data.scope,
-        idToken: data.idToken,
+        id_token: data.idToken,
+        emailAccountId: emailAccount.id,
       },
     });
   }
 
-  async getToken(userId: string, provider: MailProvider, email: string) {
-    return this.prisma.oAuth2Token.findUnique({
-      where: {
-        userId_provider_email: {
-          userId,
-          provider,
-          email,
-        },
-      },
+  async getToken(userId: string, provider: MailProviderType, email: string) {
+    const emailAccount = await this.prisma.emailAccount.findUnique({
+      where: { email },
+      include: { account: true },
     });
+
+    if (!emailAccount?.account) {
+      return null;
+    }
+
+    // Map Account to OAuth2Token-like structure for compatibility
+    return {
+      userId: emailAccount.account.userId,
+      provider: emailAccount.account.provider,
+      email: emailAccount.email,
+      accessToken: emailAccount.account.access_token,
+      refreshToken: emailAccount.account.refresh_token,
+      tokenType: emailAccount.account.token_type || 'Bearer',
+      expiresAt: emailAccount.account.expires_at || new Date(),
+      scope: emailAccount.account.scope,
+      idToken: emailAccount.account.id_token,
+    };
   }
 
   async getUserTokens(userId: string) {
-    return this.prisma.oAuth2Token.findMany({
+    const accounts = await this.prisma.account.findMany({
       where: { userId },
+      include: { emailAccount: true },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Map Account to OAuth2Token-like structure for compatibility
+    return accounts.map((account) => ({
+      userId: account.userId,
+      provider: account.provider as MailProviderType,
+      email: account.emailAccount?.email || '',
+      accessToken: account.access_token,
+      refreshToken: account.refresh_token,
+      tokenType: account.token_type || 'Bearer',
+      expiresAt: account.expires_at || new Date(),
+      scope: account.scope,
+      idToken: account.id_token,
+    }));
   }
 
   async isTokenExpired(token: { expiresAt: Date }): Promise<boolean> {
@@ -75,7 +117,7 @@ export class OAuth2TokenService {
 
   async refreshToken(
     userId: string,
-    provider: MailProvider,
+    provider: MailProviderType,
     email: string,
   ): Promise<string> {
     const token = await this.getToken(userId, provider, email);
@@ -137,15 +179,18 @@ export class OAuth2TokenService {
     return data.access_token;
   }
 
-  async deleteToken(userId: string, provider: MailProvider, email: string) {
-    return this.prisma.oAuth2Token.delete({
-      where: {
-        userId_provider_email: {
-          userId,
-          provider,
-          email,
-        },
-      },
+  async deleteToken(userId: string, provider: MailProviderType, email: string) {
+    const emailAccount = await this.prisma.emailAccount.findUnique({
+      where: { email },
+      include: { account: true },
     });
+
+    if (emailAccount?.account) {
+      return this.prisma.account.delete({
+        where: { id: emailAccount.account.id },
+      });
+    }
+
+    return null;
   }
 }

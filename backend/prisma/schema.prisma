@@ -1,94 +1,228 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
+// -------------------------------------------------------------
+// DATASOURCE + GENERATOR
+// -------------------------------------------------------------
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// USER — app user
+// -------------------------------------------------------------
 model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
+  id            String    @id @default(uuid())
+  email         String    @unique
   hashPassword  String
   name          String?
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  isActive      Boolean   @default(true)
+  role          UserRole  @default(USER)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
-  role          UserRole       @default(USER)
-  imapConfigs   ImapConfig[]
-  oauth2Tokens  OAuth2Token[]
-  refreshTokens RefreshToken[]
+
+  accounts      Account[]
+  sessions      Session[]
+  emailAccounts EmailAccount[]
 
   @@map("users")
 }
 
-model RefreshToken {
-  id        String    @id @default(uuid())
-  token     String    @unique
-  userId    String
-  expiresAt DateTime
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+// -------------------------------------------------------------
+// ACCOUNT — OAuth credentials (replaces OAuth2Token)
+// -------------------------------------------------------------
+model Account {
+  id                     String       @id @default(uuid())
+  userId                 String
+  user                   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  provider               String       // "google" or "microsoft"
+  type                   String       @default("oauth")
+  providerAccountId      String       // provider's user ID
+
+  // OAuth tokens
+  refresh_token          String?      @db.Text
+  refreshTokenExpiresAt  DateTime?
+  access_token           String?      @db.Text
+  expires_at             DateTime?
+  token_type             String?
+  scope                  String?      @db.Text
+  id_token               String?      @db.Text
+  session_state          String?
+
+  emailAccountId         String?      @unique
+
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  emailAccount           EmailAccount? @relation(fields: [emailAccountId], references: [id])
+
+  @@unique([provider, providerAccountId])
   @@index([userId])
-  @@index([token])
-  @@map("refresh_tokens")
+  @@map("accounts")
 }
 
-model OAuth2Token {
-  id           String       @id @default(uuid())
-  userId       String
-  provider     MailProvider
-  email        String
-  accessToken  String       @db.Text
-  refreshToken String?      @db.Text
-  tokenType    String       @default("Bearer")
-  expiresAt    DateTime
-  scope        String?      @db.Text
-  idToken      String?      @db.Text
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+// -------------------------------------------------------------
+// SESSION — app sessions
+// -------------------------------------------------------------
+model Session {
+  id            String    @id @default(uuid())
+  sessionToken  String    @unique
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, provider, email])
+  expires       DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
   @@index([userId])
-  @@index([email])
-  @@index([expiresAt])
-  @@map("oauth2_tokens")
+  @@map("sessions")
 }
 
-model ImapConfig {
-  id          String       @id @default(uuid())
-  userId      String
-  provider    MailProvider
-  email       String
-  imapHost    String
-  imapPort    Int
-  imapSecure  Boolean      @default(true)
-  smtpHost    String
-  smtpPort    Int
-  smtpSecure  Boolean      @default(true)
-  lastSyncAt  DateTime?
-  syncEnabled Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+// -------------------------------------------------------------
+// EMAILACCOUNT — mailbox identity
+// -------------------------------------------------------------
+model EmailAccount {
+  id                          String    @id @default(uuid())
+  email                       String    @unique
+  userId                      String
+  user                        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, provider, email])
+  name                        String?
+  image                       String?
+
+  // Gmail/Outlook sync state
+  watchEmailsExpirationDate   DateTime?
+  watchEmailsSubscriptionId   String?
+  lastSyncedHistoryId         String?   // for Gmail
+  lastDeltaLink               String?   // for Outlook
+
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+
+  account                     Account?
+  messages                    EmailMessage[]
+  labels                      Label[]
+
   @@index([userId])
-  @@index([syncEnabled])
-  @@map("imap_configs")
+  @@map("email_accounts")
 }
 
+// -------------------------------------------------------------
+// EMAILMESSAGE — message metadata
+// -------------------------------------------------------------
+model EmailMessage {
+  id                String        @id @default(uuid())
+
+  emailAccountId    String
+  emailAccount      EmailAccount  @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+
+  messageId         String        // provider's message ID
+  threadId          String        // provider's thread ID
+
+  from              String
+  fromName          String?
+  to                String[]
+  cc                String[]
+  bcc               String[]
+  replyTo           String?
+
+  subject           String?       @db.Text
+  snippet           String?       @db.Text
+  labels            String[]
+
+  date              DateTime
+  isRead            Boolean       @default(false)
+  isStarred         Boolean       @default(false)
+  hasAttachments    Boolean       @default(false)
+
+  // Threading
+  inReplyTo         String?
+  references        String[]
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  body              MessageBody?
+  attachments       Attachment[]
+
+  @@unique([emailAccountId, messageId])
+  @@index([emailAccountId, threadId])
+  @@index([emailAccountId, date])
+  @@index([emailAccountId, isRead])
+  @@map("email_messages")
+}
+
+// -------------------------------------------------------------
+// MESSAGEBODY — full message content
+// -------------------------------------------------------------
+model MessageBody {
+  id              String        @id @default(uuid())
+
+  emailMessageId  String        @unique
+  emailMessage    EmailMessage  @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+
+  bodyText        String?       @db.Text
+  bodyHtml        String?       @db.Text
+
+  createdAt       DateTime      @default(now())
+
+  @@map("message_bodies")
+}
+
+// -------------------------------------------------------------
+// ATTACHMENT
+// -------------------------------------------------------------
+model Attachment {
+  id              String        @id @default(uuid())
+
+  emailMessageId  String
+  emailMessage    EmailMessage  @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+
+  providerId      String
+  filename        String
+  mimeType        String
+  size            Int
+
+  contentId       String?
+  isInline        Boolean       @default(false)
+
+  createdAt       DateTime      @default(now())
+
+  @@index([emailMessageId])
+  @@map("attachments")
+}
+
+// -------------------------------------------------------------
+// LABEL — Gmail labels / Outlook categories
+// -------------------------------------------------------------
+model Label {
+  id               String        @id @default(uuid())
+
+  emailAccountId   String
+  emailAccount     EmailAccount  @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+
+  labelId          String
+  name             String
+  type             String?
+  color            String?
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@unique([emailAccountId, labelId])
+  @@index([emailAccountId])
+  @@map("labels")
+}
+
+// -------------------------------------------------------------
+// ENUMS
+// -------------------------------------------------------------
 enum UserRole {
   ADMIN
   USER
-}
-
-enum MailProvider {
-  GOOGLE
-  MICROSOFT
 }

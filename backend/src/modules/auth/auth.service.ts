@@ -91,39 +91,37 @@ export class AuthService {
         secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
       });
 
-      // Check if refresh token exists in database
-      const storedToken = await this.prisma.refreshToken.findUnique({
-        where: { token: refreshToken },
+      // Check if session with this refresh token exists in database
+      const session = await this.prisma.session.findUnique({
+        where: { sessionToken: refreshToken },
         include: { user: true },
       });
 
-      if (!storedToken) {
+      if (!session) {
         throw new BaseException("Invalid refresh token", CODES.TOKEN_INVALID);
       }
 
-      // Check if token is expired
-      if (storedToken.expiresAt < new Date()) {
-        await this.prisma.refreshToken.update({
-          where: { id: storedToken.id },
-          data: { deletedAt: new Date() },
+      // Check if session is expired
+      if (session.expires < new Date()) {
+        await this.prisma.session.delete({
+          where: { id: session.id },
         });
 
         throw new BaseException("Refresh token expired", CODES.TOKEN_EXPIRED);
       }
 
       // Check if user is active
-      if (!storedToken.user.isActive) {
+      if (!session.user.isActive) {
         throw new BaseException("Account is deactivated", CODES.USER_INACTIVE);
       }
 
-      // Soft delete old refresh token
-      await this.prisma.refreshToken.update({
-        where: { id: storedToken.id },
-        data: { deletedAt: new Date() },
+      // Delete old session
+      await this.prisma.session.delete({
+        where: { id: session.id },
       });
 
       // Generate new tokens
-      return this.generateTokens(storedToken.user);
+      return this.generateTokens(session.user);
     } catch (error) {
       // Re-throw BaseException to preserve error details
       if (error instanceof BaseException) {
@@ -138,10 +136,9 @@ export class AuthService {
   }
 
   async logout(refreshToken: string): Promise<void> {
-    // Soft delete refresh token from database
-    await this.prisma.refreshToken.updateMany({
-      where: { token: refreshToken },
-      data: { deletedAt: new Date() },
+    // Delete session from database
+    await this.prisma.session.deleteMany({
+      where: { sessionToken: refreshToken },
     });
   }
 
@@ -179,15 +176,15 @@ export class AuthService {
     });
 
     // Calculate expiration date for refresh token
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 30);
 
-    // Store refresh token in database
-    await this.prisma.refreshToken.create({
+    // Store session in database
+    await this.prisma.session.create({
       data: {
-        token: refreshToken,
+        sessionToken: refreshToken,
         userId: user.id,
-        expiresAt,
+        expires,
       },
     });
 

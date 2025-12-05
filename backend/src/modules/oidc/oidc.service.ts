@@ -8,7 +8,8 @@ import * as jwt from "jsonwebtoken";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../database/prisma.service";
 import { JwtService } from "@nestjs/jwt";
-import { UserRole, MailProvider } from "@prisma/client";
+import { UserRole } from "@prisma/client";
+import { MailProvider, MailProviderType } from "../email/types/mail-provider.types";
 import { AuthService } from "../auth/auth.service";
 import { BaseException } from "../../common/exceptions";
 import { CODES } from "../../common/constants";
@@ -182,6 +183,7 @@ export class OIDCService {
       user.id,
       provider,
       userInfo.email,
+      userInfo.sub,
       tokens,
     );
 
@@ -216,75 +218,92 @@ export class OIDCService {
     userId: string,
     provider: OAuthProvider,
     email: string,
+    providerAccountId: string,
     tokens: any,
   ) {
-    const mailProvider = provider === OAuthProvider.GOOGLE ? MailProvider.GOOGLE : MailProvider.MICROSOFT;
+    const mailProvider: string = provider === OAuthProvider.GOOGLE ? MailProvider.GOOGLE : MailProvider.MICROSOFT;
 
     // Calculate expiration time (default to 1 hour if not provided)
     const expiresIn = tokens.expires_in || 3600;
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-    // Save OAuth2 token
-    await this.prisma.oAuth2Token.upsert({
-      where: {
-        userId_provider_email: {
-          userId,
-          provider: mailProvider,
+    // Get or create EmailAccount first
+    let emailAccount = await this.prisma.emailAccount.findUnique({
+      where: { email },
+    });
+
+    if (!emailAccount) {
+      emailAccount = await this.prisma.emailAccount.create({
+        data: {
           email,
+          userId,
+        },
+      });
+    }
+
+    // Upsert Account (OAuth credentials) linked to EmailAccount
+    await this.prisma.account.upsert({
+      where: {
+        provider_providerAccountId: {
+          provider: mailProvider,
+          providerAccountId,
         },
       },
       update: {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        tokenType: tokens.token_type || 'Bearer',
-        expiresAt,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_at: expiresAt,
+        token_type: tokens.token_type || 'Bearer',
         scope: tokens.scope,
-        idToken: tokens.id_token,
+        id_token: tokens.id_token,
+        emailAccountId: emailAccount.id,
         updatedAt: new Date(),
       },
       create: {
         userId,
         provider: mailProvider,
-        email,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        tokenType: tokens.token_type || 'Bearer',
-        expiresAt,
+        providerAccountId,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_at: expiresAt,
+        token_type: tokens.token_type || 'Bearer',
         scope: tokens.scope,
-        idToken: tokens.id_token,
+        id_token: tokens.id_token,
+        emailAccountId: emailAccount.id,
       },
     });
 
+    // TODO: IMAP configuration model not in schema yet
     // Save IMAP configuration
-    const imapSettings = mailProvider === MailProvider.GOOGLE
-      ? { host: 'imap.gmail.com', port: 993, smtpHost: 'smtp.gmail.com', smtpPort: 587 }
-      : { host: 'outlook.office365.com', port: 993, smtpHost: 'smtp.office365.com', smtpPort: 587 };
+    // const imapSettings = mailProvider === MailProvider.GOOGLE
+    //   ? { host: 'imap.gmail.com', port: 993, smtpHost: 'smtp.gmail.com', smtpPort: 587 }
+    //   : { host: 'outlook.office365.com', port: 993, smtpHost: 'smtp.office365.com', smtpPort: 587 };
 
-    await this.prisma.imapConfig.upsert({
-      where: {
-        userId_provider_email: {
-          userId,
-          provider: mailProvider,
-          email,
-        },
-      },
-      update: {
-        imapHost: imapSettings.host,
-        imapPort: imapSettings.port,
-        smtpHost: imapSettings.smtpHost,
-        smtpPort: imapSettings.smtpPort,
-        updatedAt: new Date(),
-      },
-      create: {
-        userId,
-        provider: mailProvider,
-        email,
-        imapHost: imapSettings.host,
-        imapPort: imapSettings.port,
-        smtpHost: imapSettings.smtpHost,
-        smtpPort: imapSettings.smtpPort,
-      },
-    });
+    // await this.prisma.imapConfig.upsert({
+    //   where: {
+    //     userId_provider_email: {
+    //       userId,
+    //       provider: mailProvider,
+    //       email,
+    //     },
+    //   },
+    //   update: {
+    //     imapHost: imapSettings.host,
+    //     imapPort: imapSettings.port,
+    //     smtpHost: imapSettings.smtpHost,
+    //     smtpPort: imapSettings.smtpPort,
+    //     updatedAt: new Date(),
+    //   },
+    //   create: {
+    //     userId,
+    //     provider: mailProvider,
+    //     email,
+    //     imapHost: imapSettings.host,
+    //     imapPort: imapSettings.port,
+    //     smtpHost: imapSettings.smtpHost,
+    //     smtpPort: imapSettings.smtpPort,
+    //   },
+    // });
 
     console.log(`OAuth2 tokens and IMAP config saved for ${email} (${mailProvider})`);
   }

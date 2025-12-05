@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
+import { ScheduleModule } from "@nestjs/schedule";
 import { APP_GUARD } from "@nestjs/core";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
@@ -27,6 +28,9 @@ import { JwtAuthGuard } from "./common/guards";
         expiresIn: (process.env.JWT_EXPIRES_IN || "7d") as any,
       },
     }),
+
+    // Schedule module for cron jobs
+    ScheduleModule.forRoot(),
 
     // Database
     DatabaseModule,
