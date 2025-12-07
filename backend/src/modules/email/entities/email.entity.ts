@@ -32,10 +32,9 @@ export interface Email {
   isRead: boolean;
   isStarred: boolean;
   isImportant: boolean;
-  mailboxId: string;
+  labelId?: string;
   attachments?: Attachment[];
   labels?: string[];
-  // Threading fields
   messageId?: string;
   inReplyTo?: string;
   references?: string[];

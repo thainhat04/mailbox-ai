@@ -1,11 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { PrismaService } from '../../../database/prisma.service';
-import { MailProviderRegistry } from '../providers/provider.registry';
-import { EmailMessageRepository } from '../repositories/email-message.repository';
-import { OAuth2TokenService } from './oauth2-token.service';
-import { SyncConfig } from '../../../common/configs/sync.config';
-import { retryWithBackoff, isTokenExpiredError } from '../../../common/utils/retry.util';
+import { Injectable, Logger } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { PrismaService } from "../../../database/prisma.service";
+import { MailProviderRegistry } from "../providers/provider.registry";
+import { EmailMessageRepository } from "../repositories/email-message.repository";
+import { OAuth2TokenService } from "./oauth2-token.service";
+import { SyncConfig } from "../../../common/configs/sync.config";
+import {
+  retryWithBackoff,
+  isTokenExpiredError,
+} from "../../../common/utils/retry.util";
 
 /**
  * Email Sync Service
@@ -21,58 +24,69 @@ export class EmailSyncService {
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
     private readonly tokenService: OAuth2TokenService,
-  ) { }
+  ) {}
 
-  /**
-   * Cron job: Sync all email accounts every 3 minutes
-   * For testing, you can use CronExpression.EVERY_30_SECONDS
-   */
   @Cron(CronExpression.EVERY_30_SECONDS)
-  async syncAllAccounts(): Promise<void> {
-    this.logger.log('Starting scheduled email sync for all accounts');
+  async syncAllEmails(): Promise<void> {
+    this.logger.log('[EMAILS] Starting scheduled email sync');
 
     try {
-      // Get all email accounts
       const emailAccounts = await this.prisma.emailAccount.findMany({
-        include: {
-          account: true,
-        },
+        select: { id: true },
       });
 
       if (emailAccounts.length === 0) {
-        this.logger.debug('No email accounts found to sync');
         return;
       }
 
-      this.logger.log(`Found ${emailAccounts.length} email accounts to sync`);
+      let synced = 0;
+      let failed = 0;
 
-      // Sync accounts with concurrency control
-      await this.syncAccountsConcurrently(emailAccounts.map(acc => acc.id));
+      for (const account of emailAccounts) {
+        try {
+          const result = await this.syncAccount(account.id);
+          if (result.success) synced++;
+        } catch (error) {
+          this.logger.error(`[EMAILS] Failed for ${account.id}:`, error.message);
+          failed++;
+        }
+      }
 
-      this.logger.log('Scheduled email sync completed');
+      this.logger.log(`[EMAILS] Sync completed: ${synced} success, ${failed} failed`);
     } catch (error) {
-      this.logger.error('Failed to sync all accounts', error);
+      this.logger.error('[EMAILS] Sync failed:', error);
     }
   }
 
-  /**
-   * Sync multiple accounts concurrently with a limit
-   */
-  private async syncAccountsConcurrently(accountIds: string[]): Promise<void> {
-    const concurrency = SyncConfig.CONCURRENT_ACCOUNTS;
-    const results: Promise<any>[] = [];
+  @Cron(CronExpression.EVERY_HOUR)
+  async syncAllLabels(): Promise<void> {
+    this.logger.log('[LABELS] Starting scheduled label sync');
 
-    for (let i = 0; i < accountIds.length; i += concurrency) {
-      const batch = accountIds.slice(i, i + concurrency);
-      const batchPromises = batch.map(accountId =>
-        this.syncAccount(accountId).catch(error => {
-          this.logger.error(`Failed to sync account ${accountId}:`, error);
-          return { success: false, error };
-        })
-      );
+    try {
+      const emailAccounts = await this.prisma.emailAccount.findMany({
+        select: { id: true },
+      });
 
-      // Wait for batch to complete before starting next batch
-      await Promise.all(batchPromises);
+      if (emailAccounts.length === 0) {
+        return;
+      }
+
+      let totalSynced = 0;
+      let failed = 0;
+
+      for (const account of emailAccounts) {
+        try {
+          const count = await this.syncLabels(account.id);
+          totalSynced += count;
+        } catch (error) {
+          this.logger.error(`[LABELS] Failed for ${account.id}:`, error.message);
+          failed++;
+        }
+      }
+
+      this.logger.log(`[LABELS] Sync completed: ${totalSynced} labels synced, ${failed} failed`);
+    } catch (error) {
+      this.logger.error('[LABELS] Sync failed:', error);
     }
   }
 
@@ -87,7 +101,9 @@ export class EmailSyncService {
   }> {
     // Prevent duplicate syncs for the same account
     if (this.syncingAccounts.has(emailAccountId)) {
-      this.logger.debug(`Account ${emailAccountId} is already syncing, skipping`);
+      this.logger.debug(
+        `Account ${emailAccountId} is already syncing, skipping`,
+      );
       return { messagesAdded: 0, messagesDeleted: 0, success: false };
     }
 
@@ -103,7 +119,9 @@ export class EmailSyncService {
       });
 
       if (!emailAccount || !emailAccount.account) {
-        throw new Error(`Email account ${emailAccountId} not found or has no credentials`);
+        throw new Error(
+          `Email account ${emailAccountId} not found or has no credentials`,
+        );
       }
 
       // Ensure token is valid and refresh if needed
@@ -118,13 +136,16 @@ export class EmailSyncService {
       }
 
       // Get current sync state
-      const syncStateData = await this.messageRepository.getSyncState(emailAccountId);
+      const syncStateData =
+        await this.messageRepository.getSyncState(emailAccountId);
 
       // Convert SyncStateData to SyncState
-      const syncState = syncStateData ? {
-        historyId: syncStateData.lastSyncedHistoryId,
-        deltaLink: syncStateData.lastDeltaLink,
-      } : {};
+      const syncState = syncStateData
+        ? {
+            historyId: syncStateData.lastSyncedHistoryId,
+            deltaLink: syncStateData.lastDeltaLink,
+          }
+        : {};
 
       // Perform sync with retry logic
       const syncResult = await retryWithBackoff(
@@ -145,7 +166,7 @@ export class EmailSyncService {
       // Store synced messages in database
       const messagesAdded = await this.messageRepository.upsertMessages(
         emailAccountId,
-        syncResult.messages.map(msg => this.convertToMessageData(msg)),
+        syncResult.messages.map((msg) => this.convertToMessageData(msg)),
       );
 
       // Delete removed messages
@@ -155,13 +176,10 @@ export class EmailSyncService {
       );
 
       // Update sync state - convert SyncState back to SyncStateData
-      await this.messageRepository.updateSyncState(
-        emailAccountId,
-        {
-          lastSyncedHistoryId: syncResult.newSyncState.historyId,
-          lastDeltaLink: syncResult.newSyncState.deltaLink,
-        },
-      );
+      await this.messageRepository.updateSyncState(emailAccountId, {
+        lastSyncedHistoryId: syncResult.newSyncState.historyId,
+        lastDeltaLink: syncResult.newSyncState.deltaLink,
+      });
 
       this.logger.log(
         `Sync completed for account ${emailAccountId}: +${messagesAdded} messages, -${messagesDeleted} messages`,
@@ -177,7 +195,9 @@ export class EmailSyncService {
 
       // Handle token expiration errors
       if (isTokenExpiredError(error)) {
-        this.logger.warn(`Token expired for account ${emailAccountId}, will refresh on next sync`);
+        this.logger.warn(
+          `Token expired for account ${emailAccountId}, will refresh on next sync`,
+        );
       }
 
       return {
@@ -200,7 +220,7 @@ export class EmailSyncService {
     });
 
     if (!emailAccount?.account) {
-      throw new Error('Email account or credentials not found');
+      throw new Error("Email account or credentials not found");
     }
 
     const account = emailAccount.account;
@@ -210,22 +230,27 @@ export class EmailSyncService {
     const expiresAt = account.expires_at;
 
     if (!expiresAt) {
-      this.logger.warn(`Account ${emailAccountId} has no expiration date, assuming valid`);
+      this.logger.warn(
+        `Account ${emailAccountId} has no expiration date, assuming valid`,
+      );
       return;
     }
 
     const bufferTime = SyncConfig.TOKEN_REFRESH_BUFFER_MS;
-    const shouldRefresh = (expiresAt.getTime() - now.getTime()) < bufferTime;
+    const shouldRefresh = expiresAt.getTime() - now.getTime() < bufferTime;
 
     if (shouldRefresh) {
-      this.logger.log(`Token for account ${emailAccountId} is expiring soon, refreshing...`);
+      this.logger.log(
+        `Token for account ${emailAccountId} is expiring soon, refreshing...`,
+      );
 
       try {
         // Get provider to refresh token
-        const provider = await this.providerRegistry.getProvider(emailAccountId);
+        const provider =
+          await this.providerRegistry.getProvider(emailAccountId);
 
         if (!provider.refreshAccessToken) {
-          throw new Error('Provider does not support token refresh');
+          throw new Error("Provider does not support token refresh");
         }
 
         const newCredentials = await provider.refreshAccessToken();
@@ -240,9 +265,14 @@ export class EmailSyncService {
           },
         });
 
-        this.logger.log(`Token refreshed successfully for account ${emailAccountId}`);
+        this.logger.log(
+          `Token refreshed successfully for account ${emailAccountId}`,
+        );
       } catch (error) {
-        this.logger.error(`Failed to refresh token for account ${emailAccountId}:`, error);
+        this.logger.error(
+          `Failed to refresh token for account ${emailAccountId}:`,
+          error,
+        );
         throw error;
       }
     }
@@ -268,15 +298,17 @@ export class EmailSyncService {
     }
 
     const results = await Promise.allSettled(
-      emailAccounts.map(acc => this.syncAccount(acc.id)),
+      emailAccounts.map((acc) => this.syncAccount(acc.id)),
     );
 
     const synced = results.filter(
-      r => r.status === 'fulfilled' && r.value.success,
+      (r) => r.status === "fulfilled" && r.value.success,
     ).length;
 
     const failed = results.filter(
-      r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success),
+      (r) =>
+        r.status === "rejected" ||
+        (r.status === "fulfilled" && !r.value.success),
     ).length;
 
     return {
@@ -292,6 +324,147 @@ export class EmailSyncService {
   async performInitialSync(emailAccountId: string): Promise<void> {
     this.logger.log(`Performing initial sync for account: ${emailAccountId}`);
     await this.syncAccount(emailAccountId);
+  }
+
+  /**
+   * Sync labels from provider to database
+   */
+  async syncLabels(emailAccountId: string): Promise<number> {
+    this.logger.log(`Syncing labels for account: ${emailAccountId}`);
+
+    try {
+      // Ensure token is valid and refresh if needed
+      await this.ensureValidToken(emailAccountId);
+
+      // Get provider
+      const provider = await this.providerRegistry.getProvider(emailAccountId);
+
+      // Fetch labels from provider API with retry logic
+      const labels = await retryWithBackoff(
+        async () => {
+          try {
+            return await provider.listLabels();
+          } catch (error) {
+            // If 401, force refresh token and retry
+            if (isTokenExpiredError(error)) {
+              this.logger.warn(
+                `Token expired during API call, forcing refresh...`,
+              );
+              await this.forceRefreshToken(emailAccountId);
+              // Re-initialize provider with new token
+              const refreshedProvider =
+                await this.providerRegistry.getProvider(emailAccountId);
+              return await refreshedProvider.listLabels();
+            }
+            throw error;
+          }
+        },
+        {
+          maxAttempts: 2, // Only retry once after refresh
+          delayMs: 1000,
+          exponentialBackoff: false,
+        },
+        this.logger,
+      );
+
+      // Upsert labels to database
+      let syncedCount = 0;
+      for (const label of labels) {
+        await this.prisma.label.upsert({
+          where: {
+            emailAccountId_labelId: {
+              emailAccountId,
+              labelId: label.id,
+            },
+          },
+          create: {
+            emailAccountId,
+            labelId: label.id,
+            name: label.name,
+            type: label.type,
+            color: label.color,
+            messageListVisibility: label.messageListVisibility,
+            labelListVisibility: label.labelListVisibility,
+          },
+          update: {
+            name: label.name,
+            type: label.type,
+            color: label.color,
+            messageListVisibility: label.messageListVisibility,
+            labelListVisibility: label.labelListVisibility,
+            updatedAt: new Date(),
+          },
+        });
+        syncedCount++;
+      }
+
+      this.logger.log(
+        `Synced ${syncedCount} labels for account ${emailAccountId}`,
+      );
+      return syncedCount;
+    } catch (error) {
+      this.logger.error(
+        `Failed to sync labels for account ${emailAccountId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Force refresh token (used when API returns 401)
+   */
+  private async forceRefreshToken(emailAccountId: string): Promise<void> {
+    const emailAccount = await this.prisma.emailAccount.findUnique({
+      where: { id: emailAccountId },
+      include: { account: true },
+    });
+
+    if (!emailAccount?.account) {
+      throw new Error("Email account or credentials not found");
+    }
+
+    const account = emailAccount.account;
+    const provider = await this.providerRegistry.getProvider(emailAccountId);
+
+    if (!provider.refreshAccessToken) {
+      throw new Error("Provider does not support token refresh");
+    }
+
+    this.logger.log(`Force refreshing token for account ${emailAccountId}`);
+    const newCredentials = await provider.refreshAccessToken();
+
+    // Update credentials in database
+    await this.prisma.account.update({
+      where: { id: account.id },
+      data: {
+        access_token: newCredentials.accessToken,
+        expires_at: newCredentials.expiresAt,
+        updatedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`Token force refreshed for account ${emailAccountId}`);
+  }
+
+  /**
+   * Sync labels for all accounts of a user
+   */
+  async syncLabelsForUser(userId: string): Promise<number> {
+    this.logger.log(`Syncing labels for user: ${userId}`);
+
+    const emailAccounts = await this.prisma.emailAccount.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    let totalSynced = 0;
+    for (const account of emailAccounts) {
+      const count = await this.syncLabels(account.id);
+      totalSynced += count;
+    }
+
+    return totalSynced;
   }
 
   /**

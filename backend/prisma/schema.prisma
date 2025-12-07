@@ -201,18 +201,20 @@ model Attachment {
 // LABEL — Gmail labels / Outlook categories
 // -------------------------------------------------------------
 model Label {
-  id               String        @id @default(uuid())
+  id                      String        @id @default(uuid())
 
-  emailAccountId   String
-  emailAccount     EmailAccount  @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  emailAccountId          String
+  emailAccount            EmailAccount  @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
 
-  labelId          String
-  name             String
-  type             String?
-  color            String?
+  labelId                 String        // Provider's label ID (e.g., INBOX, SENT, etc.)
+  name                    String
+  type                    String?       // "system" or "user"
+  color                   String?
+  messageListVisibility   String?       // Gmail: show/hide in message list
+  labelListVisibility     String?       // Gmail: show/hide in label list
 
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
 
   @@unique([emailAccountId, labelId])
   @@index([emailAccountId])

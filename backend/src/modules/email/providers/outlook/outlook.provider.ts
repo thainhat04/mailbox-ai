@@ -56,7 +56,7 @@ export class OutlookProvider extends BaseMailProvider {
             refresh_token: this.credentials.refreshToken,
             grant_type: 'refresh_token',
             scope:
-              'https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send offline_access',
+              'https://outlook.office.com/Mail.ReadWrite https://outlook.office.com/Mail.Send offline_access',
           }),
         },
       );

@@ -56,6 +56,8 @@ export interface Label {
   name: string;
   type: 'system' | 'user';
   color?: string;
+  labelListVisibility?: string;
+  messageListVisibility?: string;
 }
 
 export interface SyncState {
@@ -129,6 +131,11 @@ export interface IMailProvider {
    * Initialize the provider with credentials
    */
   initialize(credentials: ProviderCredentials): Promise<void>;
+
+  /**
+   * Set callback for when credentials are updated (e.g., after refresh)
+   */
+  setCredentialsUpdateCallback?(callback: (credentials: ProviderCredentials) => Promise<void>): void;
 
   /**
    * Refresh access token if needed

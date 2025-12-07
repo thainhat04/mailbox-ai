@@ -62,7 +62,7 @@ export class EmailMessageRepository {
       `Upserting message ${messageData.messageId} for account ${emailAccountId}`,
     );
 
-    return this.prisma.emailMessage.upsert({
+    const message = await this.prisma.emailMessage.upsert({
       where: {
         emailAccountId_messageId: {
           emailAccountId,
@@ -135,6 +135,13 @@ export class EmailMessageRepository {
             : undefined,
       },
     });
+
+    // Upsert attachments if provided
+    if (messageData.attachments && messageData.attachments.length > 0) {
+      await this.upsertAttachments(message.id, messageData.attachments);
+    }
+
+    return message;
   }
 
   /**
