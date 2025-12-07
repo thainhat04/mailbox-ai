@@ -79,6 +79,31 @@ export class MailProviderRegistry {
     );
     await provider.initialize(credentials);
 
+    // Set up callback to persist token updates to database
+    if (provider.setCredentialsUpdateCallback) {
+      provider.setCredentialsUpdateCallback(async (newCredentials) => {
+        this.logger.log(`Updating credentials in database for account: ${emailAccountId}`);
+
+        const account = await this.prisma.emailAccount.findUnique({
+          where: { id: emailAccountId },
+          include: { account: true },
+        });
+
+        if (account?.account?.id) {
+          await this.prisma.account.update({
+            where: { id: account.account.id },
+            data: {
+              access_token: newCredentials.accessToken,
+              refresh_token: newCredentials.refreshToken,
+              expires_at: newCredentials.expiresAt,
+              updatedAt: new Date(),
+            },
+          });
+          this.logger.log(`Credentials updated in database for account: ${emailAccountId}`);
+        }
+      });
+    }
+
     // Cache the provider
     this.providerCache.set(emailAccountId, provider);
     this.logger.log(

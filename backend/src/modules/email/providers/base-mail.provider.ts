@@ -11,8 +11,8 @@ import {
   WatchRequest,
   WatchResponse,
   SyncState,
-} from '../interfaces/mail-provider.interface';
-import { MailProviderType } from '../types/mail-provider.types';
+} from "../interfaces/mail-provider.interface";
+import { MailProviderType } from "../types/mail-provider.types";
 
 /**
  * Base abstract class for email providers
@@ -21,6 +21,9 @@ import { MailProviderType } from '../types/mail-provider.types';
 export abstract class BaseMailProvider implements IMailProvider {
   protected credentials: ProviderCredentials;
   protected initialized = false;
+  protected onCredentialsUpdated?: (
+    credentials: ProviderCredentials,
+  ) => Promise<void>;
 
   constructor(public readonly provider: MailProviderType) {}
 
@@ -29,8 +32,20 @@ export abstract class BaseMailProvider implements IMailProvider {
    */
   async initialize(credentials: ProviderCredentials): Promise<void> {
     this.credentials = credentials;
+
+    // Validate and potentially refresh credentials BEFORE subclass initialization
     await this.validateCredentials();
+
     this.initialized = true;
+  }
+
+  /**
+   * Set callback for when credentials are updated (e.g., after refresh)
+   */
+  setCredentialsUpdateCallback(
+    callback: (credentials: ProviderCredentials) => Promise<void>,
+  ): void {
+    this.onCredentialsUpdated = callback;
   }
 
   /**
@@ -38,11 +53,11 @@ export abstract class BaseMailProvider implements IMailProvider {
    */
   protected async validateCredentials(): Promise<void> {
     if (!this.credentials) {
-      throw new Error('Credentials not initialized');
+      throw new Error("Credentials not initialized");
     }
 
     if (!this.credentials.accessToken) {
-      throw new Error('Access token is required');
+      throw new Error("Access token is required");
     }
 
     // Check if token is expired
@@ -52,7 +67,7 @@ export abstract class BaseMailProvider implements IMailProvider {
       if (this.refreshAccessToken) {
         this.credentials = await this.refreshAccessToken();
       } else {
-        throw new Error('Access token expired and no refresh method available');
+        throw new Error("Access token expired and no refresh method available");
       }
     }
   }
@@ -62,7 +77,44 @@ export abstract class BaseMailProvider implements IMailProvider {
    */
   protected ensureInitialized(): void {
     if (!this.initialized) {
-      throw new Error('Provider not initialized. Call initialize() first.');
+      throw new Error("Provider not initialized. Call initialize() first.");
+    }
+  }
+
+  /**
+   * Check if token is expired or about to expire
+   */
+  protected isTokenExpired(): boolean {
+    if (!this.credentials?.expiresAt) {
+      return false;
+    }
+
+    // Consider token expired if it expires within the next 5 minutes
+    const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
+    const expiryTime = new Date(this.credentials.expiresAt).getTime();
+    const now = Date.now();
+
+    return expiryTime - now < bufferTime;
+  }
+
+  /**
+   * Ensure token is valid, refresh if needed
+   */
+  protected async ensureValidToken(): Promise<void> {
+    this.ensureInitialized();
+
+    if (this.isTokenExpired()) {
+      if (!this.refreshAccessToken) {
+        throw new Error("Access token expired and no refresh method available");
+      }
+
+      const newCredentials = await this.refreshAccessToken();
+      this.credentials = newCredentials;
+
+      // Notify that credentials were updated (for database persistence)
+      if (this.onCredentialsUpdated) {
+        await this.onCredentialsUpdated(newCredentials);
+      }
     }
   }
 

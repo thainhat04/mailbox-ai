@@ -2,60 +2,88 @@ import {
   Injectable,
   NotFoundException,
   Logger,
+  BadRequestException,
 } from "@nestjs/common";
-import { Email, Mailbox } from "./entities";
-import { ModifyEmailDto } from "./dto/modify.dto";
+import { PrismaService } from "../../database/prisma.service";
+import { Email } from "./entities";
+import { SendEmailDto } from "./dto/send-email.dto";
+import { ReplyEmailDto } from "./dto/reply-emai.dto";
 import { OAuth2TokenService } from "./services/oauth2-token.service";
-import { EmailListQueryDto, MailboxType } from "./dto";
+import { MailProviderRegistry } from "./providers/provider.registry";
+import { EmailMessageRepository } from "./repositories/email-message.repository";
+import { EmailListQueryDto } from "./dto";
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
   constructor(
+    private readonly prisma: PrismaService,
     private readonly oauth2TokenService: OAuth2TokenService,
-  ) { }
+    private readonly providerRegistry: MailProviderRegistry,
+    private readonly messageRepository: EmailMessageRepository,
+  ) {}
 
-  /**
-   * Get a specific mailbox by ID
-   */
-  findMailboxById(id: string): Mailbox {
-    // List of valid hardcoded mailbox IDs
-    const validMailboxIds = [
-      "inbox",
-      "sent",
-      "drafts",
-      "starred",
-      "important",
-      "trash",
-      "spam",
-      "archive",
-    ];
-
-    // Check if it's a valid hardcoded mailbox
-    if (validMailboxIds.includes(id)) {
-      // Return a basic mailbox object (counts will be filled when needed)
-      return {
-        id,
-        name: id.charAt(0).toUpperCase() + id.slice(1),
-        type: MailboxType.CUSTOM,
-        unreadCount: 0,
-        totalCount: 0,
-        order: 0,
-      };
+  async getLabelById(labelId: string, userId: string): Promise<any> {
+    if (!userId) {
+      throw new BadRequestException("User ID is required");
     }
 
-    throw new NotFoundException(`Mailbox with ID "${id}" not found`);
+    // Get all email accounts for the user
+    const emailAccounts = await this.prisma.emailAccount.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (emailAccounts.length === 0) {
+      throw new NotFoundException("No email accounts found for user");
+    }
+
+    const accountIds = emailAccounts.map((acc) => acc.id);
+
+    // Try to find the label in the database
+    const label = await this.prisma.label.findFirst({
+      where: {
+        labelId,
+        emailAccountId: {
+          in: accountIds,
+        },
+      },
+    });
+
+    if (!label) {
+      throw new NotFoundException(`Label with ID "${labelId}" not found`);
+    }
+
+    // Get email counts for this label
+    const where: any = {
+      emailAccountId: {
+        in: accountIds,
+      },
+      labels: {
+        has: labelId,
+      },
+    };
+
+    const [unreadCount] = await Promise.all([
+      this.prisma.emailMessage.count({ where: { ...where, isRead: false } }),
+    ]);
+
+    return {
+      id: label.labelId,
+      name: label.name,
+      type: label.type,
+      color: label.color,
+      messageListVisibility: label.messageListVisibility || "show",
+      labelListVisibility: label.labelListVisibility || "show",
+      unreadCount,
+    };
   }
 
-  /**
-   * Get emails by mailbox ID with pagination and filtering
-   * Note: IMAP functionality has been removed
-   */
-  async findEmailsByMailbox(
-    mailboxId: string,
+  async findEmailsByLabel(
+    labelId: string,
     query: EmailListQueryDto,
-    userId?: string,
+    userId: string,
   ): Promise<{
     emails: Email[];
     page: number;
@@ -63,216 +91,426 @@ export class EmailService {
     total: number;
     totalPages: number;
   }> {
-    // Verify mailbox exists
-    this.findMailboxById(mailboxId);
+    if (!userId) {
+      throw new BadRequestException("User ID is required");
+    }
 
-    // Return empty result - IMAP functionality removed
     const page = query.page || 1;
     const limit = query.limit || 50;
+    const skip = (page - 1) * limit;
+
+    // Get emails from database (synced via cron job)
+    const where: any = {
+      emailAccount: {
+        userId,
+      },
+      labels: {
+        has: labelId,
+      },
+    };
+
+    // Filter by unread
+    if (query.unreadOnly) {
+      where.isRead = false;
+    }
+
+    // Filter by starred
+    if (query.starredOnly) {
+      where.isStarred = true;
+    }
+
+    const [messages, total] = await Promise.all([
+      this.prisma.emailMessage.findMany({
+        where,
+        orderBy: {
+          date: "desc",
+        },
+        skip,
+        take: limit,
+        include: {
+          body: true,
+          attachments: true,
+        },
+      }),
+      this.prisma.emailMessage.count({ where }),
+    ]);
+
+    // Convert database messages to Email entities
+    const emails = messages.map((msg) => this.convertToEmail(msg));
 
     return {
-      emails: [],
+      emails,
       page,
       limit,
-      total: 0,
-      totalPages: 0,
+      total,
+      totalPages: Math.ceil(total / limit),
     };
   }
 
-  /**
-   * Get a specific email by ID
-   * Note: IMAP functionality has been removed
-   */
   async findEmailById(
     id: string,
     userId: string,
-    mailboxId?: string,
+    labelIds?: string,
   ): Promise<Email> {
-    throw new NotFoundException("Email functionality requires IMAP which has been removed");
+    const message = await this.prisma.emailMessage.findFirst({
+      where: {
+        messageId: id,
+        emailAccount: {
+          userId,
+        },
+      },
+      include: {
+        body: true,
+        attachments: true,
+      },
+    });
+
+    if (!message) {
+      throw new NotFoundException(`Email with ID "${id}" not found`);
+    }
+
+    return this.convertToEmail(message);
   }
 
-  /**
-   * Mark email as read
-   * Note: IMAP functionality has been removed
-   */
-  async markAsRead(id: string): Promise<Email> {
-    throw new NotFoundException("Mark as read functionality requires IMAP which has been removed");
+  async markAsRead(id: string, userId: string): Promise<Email> {
+    // Get provider for user
+    const provider = await this.providerRegistry.getProviderForUser(userId);
+
+    // Modify message via Gmail API
+    const updated = await provider.modifyMessage(id, {
+      removeLabelIds: ["UNREAD"],
+    });
+
+    return this.convertProviderMessageToEmail(updated);
   }
 
-  /**
-   * Mark email as unread
-   * Note: IMAP functionality has been removed
-   */
-  async markAsUnread(id: string): Promise<Email> {
-    throw new NotFoundException("Mark as unread functionality requires IMAP which has been removed");
+  async markAsUnread(id: string, userId: string): Promise<Email> {
+    // Get provider for user
+    const provider = await this.providerRegistry.getProviderForUser(userId);
+
+    // Modify message via Gmail API
+    const updated = await provider.modifyMessage(id, {
+      addLabelIds: ["UNREAD"],
+    });
+
+    return this.convertProviderMessageToEmail(updated);
   }
 
-  /**
-   * Toggle star status
-   * Note: IMAP functionality has been removed
-   */
-  async toggleStar(id: string): Promise<Email> {
-    throw new NotFoundException("Toggle star functionality requires IMAP which has been removed");
+  async toggleStar(id: string, userId: string): Promise<Email> {
+    // Get provider for user
+    const provider = await this.providerRegistry.getProviderForUser(userId);
+
+    // Get current message to check star status
+    const current = await provider.getMessage(id);
+    const isStarred = current.labels.includes("STARRED");
+
+    // Toggle star via Gmail API
+    const updated = await provider.modifyMessage(id, {
+      ...(isStarred
+        ? { removeLabelIds: ["STARRED"] }
+        : { addLabelIds: ["STARRED"] }),
+    });
+
+    return this.convertProviderMessageToEmail(updated);
   }
 
-  /**
-   * Delete email
-   * Note: IMAP functionality has been removed
-   */
-  async deleteEmail(id: string): Promise<void> {
-    throw new NotFoundException("Delete email functionality requires IMAP which has been removed");
+  async deleteEmail(id: string, userId: string): Promise<void> {
+    // Get provider for user
+    const provider = await this.providerRegistry.getProviderForUser(userId);
+
+    // Move to trash via Gmail API
+    await provider.trashMessage(id);
+
+    // Mark as deleted in database (or move to trash label)
+    await this.prisma.emailMessage.updateMany({
+      where: {
+        messageId: id,
+        emailAccount: {
+          userId,
+        },
+      },
+      data: {
+        labels: {
+          push: "TRASH",
+        },
+      },
+    });
   }
 
-  /**
-   * Search emails
-   * Note: IMAP functionality has been removed
-   */
-  searchEmails(query: string): Email[] {
-    throw new NotFoundException("Search emails functionality requires IMAP which has been removed");
+  async searchEmails(query: string, userId: string): Promise<Email[]> {
+    const messages = await this.prisma.emailMessage.findMany({
+      where: {
+        emailAccount: {
+          userId,
+        },
+        OR: [
+          { subject: { contains: query, mode: "insensitive" } },
+          { snippet: { contains: query, mode: "insensitive" } },
+          { from: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      orderBy: {
+        date: "desc",
+      },
+      take: 50,
+      include: {
+        body: true,
+        attachments: true,
+      },
+    });
+
+    return messages.map((msg) => this.convertToEmail(msg));
   }
 
-  /**
-   * Send email
-   * Note: IMAP functionality has been removed
-   */
-  async sendEmail(userId: string, userEmail: string, dto: any) {
-    throw new NotFoundException("Send email functionality requires IMAP which has been removed");
+  async sendEmail(userId: string, dto: SendEmailDto) {
+    // Get provider for user
+    const provider = await this.providerRegistry.getProviderForUser(userId);
+
+    // Send email via Gmail API
+    const sentMessage = await provider.sendEmail({
+      to: [{ email: dto.to }],
+      cc: dto.cc?.map((email) => ({ email })),
+      bcc: dto.bcc?.map((email) => ({ email })),
+      subject: dto.subject,
+      bodyHtml: dto.html,
+      bodyText: dto.text,
+    });
+
+    return {
+      emailId: sentMessage.id,
+      sendAt: sentMessage.date,
+      labelId: sentMessage.labels,
+    };
   }
 
-  /**
-   * Get email detail
-   * Note: IMAP functionality has been removed
-   */
-  async getEmailDetail(
-    userId: string,
-    userEmail: string,
-    id: number,
-    mailbox: string = "INBOX",
-  ) {
-    throw new NotFoundException("Get email detail functionality requires IMAP which has been removed");
+  async replyEmail(userId: string, originalId: string, dto: ReplyEmailDto) {
+    // Get provider for user
+    const provider = await this.providerRegistry.getProviderForUser(userId);
+
+    // Get original message
+    const original = await provider.getMessage(originalId);
+
+    // Send reply via Gmail API
+    const sentMessage = await provider.sendEmail({
+      to: [original.from],
+      subject: `Re: ${original.subject || "(no subject)"}`,
+      bodyHtml: dto.replyHtml,
+      bodyText: dto.replyText,
+      inReplyTo: original.id,
+      references: original.references
+        ? [...original.references, original.id]
+        : [original.id],
+    });
+
+    return {
+      emailId: sentMessage.id,
+      sendAt: sentMessage.date,
+      labelId: sentMessage.labels,
+    };
   }
 
-  /**
-   * Reply to email
-   * Note: IMAP functionality has been removed
-   */
-  async replyEmail(userId: string, userEmail: string, original: any, dto: any) {
-    throw new NotFoundException("Reply email functionality requires IMAP which has been removed");
-  }
 
-  /**
-   * Modify email
-   * Note: IMAP functionality has been removed
-   */
-  async modifyEmail(
-    userId: string,
-    userEmail: string,
-    id: number,
-    dto: ModifyEmailDto,
-  ) {
-    throw new NotFoundException("Modify email functionality requires IMAP which has been removed");
-  }
-
-  /**
-   * Get all emails
-   * Note: IMAP functionality has been removed
-   */
-  async getAllEmails(userId: string, userEmail: string) {
-    throw new NotFoundException("Get all emails functionality requires IMAP which has been removed");
-  }
-
-  /**
-   * Stream email attachment
-   * Note: IMAP functionality has been removed
-   */
   async streamAttachment(
     userId: string,
     attachmentId: string,
-  ): Promise<{ stream: NodeJS.ReadableStream; metadata: any }> {
-    throw new NotFoundException("Stream attachment functionality requires IMAP which has been removed");
+  ): Promise<{ data: Buffer; metadata: any }> {
+    // Parse attachmentId format: "messageId-providerId"
+    // Note: providerId can contain dashes, so only split on first dash
+    const dashIndex = attachmentId.indexOf("-");
+
+    if (dashIndex === -1) {
+      throw new BadRequestException("Invalid attachment ID format");
+    }
+
+    const messageId = attachmentId.substring(0, dashIndex);
+    const providerId = attachmentId.substring(dashIndex + 1);
+
+    if (!messageId || !providerId) {
+      throw new BadRequestException("Invalid attachment ID format");
+    }
+
+    // Get email message to verify access and get attachment info
+    const message = await this.prisma.emailMessage.findFirst({
+      where: {
+        messageId,
+        emailAccount: {
+          userId,
+        },
+      },
+      include: {
+        attachments: {
+          where: {
+            providerId,
+          },
+        },
+      },
+    });
+
+    if (!message) {
+      throw new NotFoundException(`Email with ID "${messageId}" not found`);
+    }
+
+    if (!message.attachments || message.attachments.length === 0) {
+      throw new NotFoundException(`Attachment "${providerId}" not found`);
+    }
+
+    const attachment = message.attachments[0];
+
+    // Get provider for user
+    const provider = await this.providerRegistry.getProviderForUser(userId);
+
+    // Get attachment data via provider API
+    const data = await provider.getAttachment(messageId, providerId);
+
+    return {
+      data,
+      metadata: {
+        messageId,
+        providerId,
+        filename: attachment.filename,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+      },
+    };
   }
 
-  /**
-   * Get hardcoded mailboxes with email counts
-   * Note: IMAP functionality has been removed, returns empty counts
-   */
-  async getHardcodedMailboxesWithCounts(userId?: string): Promise<Mailbox[]> {
-    // Define hardcoded mailboxes
-    const hardcodedMailboxes: Mailbox[] = [
-      {
-        id: "inbox",
-        name: "Inbox",
-        type: MailboxType.INBOX,
-        icon: "📥",
-        unreadCount: 0,
-        totalCount: 0,
-        order: 1,
-      },
-      {
-        id: "sent",
-        name: "Sent",
-        type: MailboxType.SENT,
-        icon: "📤",
-        unreadCount: 0,
-        totalCount: 0,
-        order: 2,
-      },
-      {
-        id: "drafts",
-        name: "Drafts",
-        type: MailboxType.DRAFTS,
-        icon: "📝",
-        unreadCount: 0,
-        totalCount: 0,
-        order: 3,
-      },
-      {
-        id: "starred",
-        name: "Starred",
-        type: MailboxType.STARRED,
-        icon: "⭐",
-        unreadCount: 0,
-        totalCount: 0,
-        order: 4,
-      },
-      {
-        id: "important",
-        name: "Important",
-        type: MailboxType.CUSTOM,
-        icon: "❗",
-        unreadCount: 0,
-        totalCount: 0,
-        order: 5,
-      },
-      {
-        id: "trash",
-        name: "Trash",
-        type: MailboxType.TRASH,
-        icon: "🗑️",
-        unreadCount: 0,
-        totalCount: 0,
-        order: 6,
-      },
-      {
-        id: "spam",
-        name: "Spam",
-        type: MailboxType.CUSTOM,
-        icon: "⚠️",
-        unreadCount: 0,
-        totalCount: 0,
-        order: 7,
-      },
-      {
-        id: "archive",
-        name: "Archive",
-        type: MailboxType.ARCHIVE,
-        icon: "📦",
-        unreadCount: 0,
-        totalCount: 0,
-        order: 8,
-      },
-    ];
+  async getLabels(userId: string): Promise<any[]> {
+    if (!userId) {
+      throw new BadRequestException("User ID is required");
+    }
 
-    return hardcodedMailboxes;
+    // Get all email accounts for the user
+    const emailAccounts = await this.prisma.emailAccount.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (emailAccounts.length === 0) {
+      return [];
+    }
+
+    const accountIds = emailAccounts.map((acc) => acc.id);
+
+    // Get labels
+    const labels = await this.prisma.label.findMany({
+      where: {
+        emailAccountId: {
+          in: accountIds,
+        },
+      },
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+    });
+
+    // Get email counts for each label
+    const labelsWithCounts = await Promise.all(
+      labels.map(async (label) => {
+        const where: any = {
+          emailAccountId: {
+            in: accountIds,
+          },
+          labels: {
+            has: label.labelId,
+          },
+        };
+
+        const unreadCount = await this.prisma.emailMessage.count({
+          where: { ...where, isRead: false },
+        });
+
+        return {
+          id: label.labelId,
+          name: label.name,
+          type: label.type,
+          color: label.color,
+          messageListVisibility: label.messageListVisibility || "show",
+          labelListVisibility: label.labelListVisibility || "show",
+          unreadCount,
+        };
+      }),
+    );
+
+    return labelsWithCounts;
+  }
+
+  private convertProviderMessageToEmail(message: any): Email {
+    return {
+      id: message.id,
+      from: {
+        name: message.from.name || message.from.email,
+        email: message.from.email,
+      },
+      to: message.to.map((addr: any) => ({
+        name: addr.name || addr.email,
+        email: addr.email,
+      })),
+      cc: message.cc?.map((addr: any) => ({
+        name: addr.name || addr.email,
+        email: addr.email,
+      })),
+      bcc: message.bcc?.map((addr: any) => ({
+        name: addr.name || addr.email,
+        email: addr.email,
+      })),
+      subject: message.subject || "(no subject)",
+      body: message.bodyHtml || message.bodyText || "",
+      preview: message.snippet || "",
+      timestamp: message.date.toISOString(),
+      isRead: message.isRead,
+      isStarred: message.isStarred,
+      isImportant: message.labels?.includes("IMPORTANT") || false,
+      labelId: message.labels,
+      attachments: message.attachments?.map((att: any) => ({
+        id: att.id,
+        filename: att.filename,
+        size: att.size,
+        mimeType: att.mimeType,
+        url: `/api/v1/attachments/${message.id}-${att.id}`,
+      })),
+      labels: message.labels || [],
+      messageId: message.id,
+      inReplyTo: message.inReplyTo,
+      references: message.references || [],
+    };
+  }
+
+  private convertToEmail(message: any): Email {
+    return {
+      id: message.messageId,
+      from: {
+        name: message.fromName || message.from,
+        email: message.from,
+      },
+      to: message.to.map((email: string) => ({
+        name: email,
+        email: email,
+      })),
+      cc: message.cc?.map((email: string) => ({
+        name: email,
+        email: email,
+      })),
+      bcc: message.bcc?.map((email: string) => ({
+        name: email,
+        email: email,
+      })),
+      subject: message.subject || "(no subject)",
+      body: message.body?.bodyHtml || message.body?.bodyText || "",
+      preview: message.snippet || "",
+      timestamp: message.date.toISOString(),
+      isRead: message.isRead,
+      isStarred: message.isStarred,
+      isImportant: message.labels?.includes("IMPORTANT") || false,
+      labelId: message.labels,
+      attachments: message.attachments?.map((att: any) => ({
+        id: `${message.messageId}-${att.providerId}`,
+        filename: att.filename,
+        size: att.size,
+        mimeType: att.mimeType,
+        url: `/api/v1/attachments/${message.messageId}-${att.providerId}`,
+      })) || [],
+      labels: message.labels || [],
+      messageId: message.messageId,
+      inReplyTo: message.inReplyTo,
+      references: message.references || [],
+    };
   }
 }
