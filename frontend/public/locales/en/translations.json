@@ -1,4 +1,7 @@
 {
+    "ERROR_CODE": {
+        "EMAIL_ALREADY_EXISTS": "Email already exists."
+    },
     "common": {
         "language": "Language",
         "english": "English",
@@ -22,6 +25,7 @@
             "6": "Don't have an account?",
             "7": "Sign up",
             "8": "Login successful. Redirecting...",
+            "9": "Invalid login information. Please try again.",
             "error": {
                 "requiredEmail": "Email address is required.",
                 "requiredPassword": "Password is required."
@@ -66,5 +70,65 @@
     "user": {
         "1": "Logout",
         "2": "Go Home"
+    },
+    "inbox": {
+        "1": "mailboxes",
+        "2": "Compose",
+        "3": "Refresh",
+        "4": "Select All",
+        "5": "Delete",
+        "6": "Mark as Read",
+        "7": "Mark as Unread",
+        "8": "No emails found.",
+        "9": "Select an email to view the contents",
+        "10": "Unread",
+        "11": "Loading folders...",
+        "12": "Error loading folders",
+        "13": "No folders found",
+        "14": "Loading emails...",
+        "compose": {
+            "1": "Compose Email",
+            "2": "To",
+            "3": "Subject",
+            "4": "Message",
+            "5": "Send",
+            "6": "Cancel",
+            "7": "name@gmail.com",
+            "8": "Your subject here...",
+            "9": "Write your message here...",
+            "10": "Attachments",
+            "errors": {
+                "toRequired": "Please enter a recipient (To).",
+                "toInvalid": "Invalid To email address.",
+                "ccInvalid": "Invalid CC email address.",
+                "bccInvalid": "Invalid BCC email address.",
+                "subjectRequired": "Please enter a subject.",
+                "messageRequired": "Please enter email content."
+            },
+            "fileTooLarge": "File {{name}} exceeds the maximum size of {{size}}MB.",
+            "emailSent": "Email sent successfully.",
+            "emailSendError": "Failed to send email: {{error}}"
+        },
+        "detail": {
+            "1": "From",
+            "2": "To",
+            "3": "Cc",
+            "4": "Received",
+            "5": "Reply",
+            "6": "Forward",
+            "7": "Delete",
+            "8": "Star",
+            "9": "Attachments",
+            "10": "Download",
+            "11": "Open",
+            "12": "Unread",
+            "13": "Processing..."
+        },
+        "reply": {
+            "1": "Reply to Email",
+            "2": "To",
+            "3": "Subject",
+            "4": "Send Reply"
+        }
     }
 }

@@ -6,8 +6,10 @@ import clsx from "clsx";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useGetMailBoxesQuery } from "../_services";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function FolderList({ selected, onSelect }: FolderListProps) {
+    const { t } = useTranslation();
     const { result, error, isLoading, isFetching } = useQueryHandler(
         useGetMailBoxesQuery,
         undefined
@@ -15,13 +17,17 @@ export default function FolderList({ selected, onSelect }: FolderListProps) {
     const folders: Folder[] = result?.data || [];
     const domFolders = useMemo(() => {
         if (isLoading || isFetching) {
-            return <li>Loading folders...</li>;
+            return Array.from({ length: 5 }).map((_, i) => (
+                <li key={i}>
+                    <div className="h-9 w-full rounded-lg bg-white/5 animate-pulse" />
+                </li>
+            ));
         }
         if (error) {
-            return <li>Error loading folders</li>;
+            return <li>{t("inbox.12")}</li>;
         }
         if (folders.length === 0) {
-            return <li>No folders found</li>;
+            return <li>{t("inbox.13")}</li>;
         }
         return folders.map((f) => {
             const isActive = selected === f.id;
@@ -37,21 +43,34 @@ export default function FolderList({ selected, onSelect }: FolderListProps) {
                         )}
                         aria-current={isActive ? "true" : undefined}
                     >
-                        <span className="truncate">{f.name}</span>
-                        {f.unreadCount != 0 && (
-                            <span className="ml-2 inline-flex min-w-6 justify-center rounded-full bg-linear-to-r from-cyan-500 to-sky-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
-                                {f.unreadCount}
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {f.icon && <span className="text-base shrink-0">{f.icon}</span>}
+                            <span className="truncate">
+                                {f.name}
+                                {(() => {
+                                    let count = 0;
+                                    
+                                    if (f.id === 'inbox' || f.id === 'spam') {
+                                        count = f.unreadCount || 0;
+                                    }
+                                    
+                                    return count > 0 ? (
+                                        <span className="ml-1.5 text-[11px] text-white/50">
+                                            ({count})
+                                        </span>
+                                    ) : null;
+                                })()}
                             </span>
-                        )}
+                        </div>
                     </button>
                 </li>
             );
         });
-    }, [folders, isLoading, isFetching, error, selected]);
+    }, [folders, isLoading, isFetching, error, selected, onSelect, t]);
     return (
         <aside className="flex-1 custom-scroll overflow-y-auto border-r border-white/10 bg-white/5 backdrop-blur-md relative">
             <h2 className="px-5 py-4 text-xs font-semibold tracking-wide text-white/70 uppercase">
-                Mailboxes
+                {t("inbox.1")}
             </h2>
             <ul role="list" className="space-y-1 px-2 pb-6">
                 {domFolders}

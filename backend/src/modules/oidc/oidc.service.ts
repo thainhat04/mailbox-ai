@@ -9,6 +9,9 @@ import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../database/prisma.service";
 import { JwtService } from "@nestjs/jwt";
 import { UserRole } from "@prisma/client";
+import {
+  MailProvider,
+} from "../email/types/mail-provider.types";
 import { AuthService } from "../auth/auth.service";
 import { BaseException } from "../../common/exceptions";
 import { CODES } from "../../common/constants";
@@ -31,7 +34,7 @@ export class OIDCService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly authService: AuthService,
-  ) { }
+  ) {}
 
   // STEP 1: Create Auth URL (Redirect User -> Provider)
   private createAuthUrl(provider: OIDCProviderConfig, state: string): string {
@@ -53,7 +56,10 @@ export class OIDCService {
   }
 
   // STEP 2: Exchange Code For Tokens (CALL TOKEN ENDPOINT)
-  private async exchangeCodeForTokens(provider: OIDCProviderConfig, code: string) {
+  private async exchangeCodeForTokens(
+    provider: OIDCProviderConfig,
+    code: string,
+  ) {
     const data = new URLSearchParams({
       client_id: provider.clientId,
       client_secret: provider.clientSecret ?? "",
@@ -177,9 +183,22 @@ export class OIDCService {
       });
     }
 
+    // Save OAuth2 tokens for mail access
+    await this.saveOAuth2Tokens(
+      user.id,
+      provider,
+      userInfo.email,
+      userInfo.sub,
+      tokens,
+    );
+
     const tokenResponse = await this.authService.generateTokens(user);
 
-    if (!tokenResponse || !tokenResponse.accessToken || !tokenResponse.refreshToken) {
+    if (
+      !tokenResponse ||
+      !tokenResponse.accessToken ||
+      !tokenResponse.refreshToken
+    ) {
       console.error("Token generation failed:", {
         hasTokenResponse: !!tokenResponse,
         hasAccessToken: !!tokenResponse?.accessToken,
@@ -203,6 +222,69 @@ export class OIDCService {
     return result;
   }
 
+  // Save OAuth2 tokens for mail server access
+  private async saveOAuth2Tokens(
+    userId: string,
+    provider: OAuthProvider,
+    email: string,
+    providerAccountId: string,
+    tokens: any,
+  ) {
+    const mailProvider: string =
+      provider === OAuthProvider.GOOGLE
+        ? MailProvider.GOOGLE
+        : MailProvider.MICROSOFT;
+
+    // Calculate expiration time (default to 1 hour if not provided)
+    const expiresIn = tokens.expires_in || 3600;
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    // Get or create EmailAccount first
+    let emailAccount = await this.prisma.emailAccount.findUnique({
+      where: { email },
+    });
+
+    if (!emailAccount) {
+      emailAccount = await this.prisma.emailAccount.create({
+        data: {
+          email,
+          userId,
+        },
+      });
+    }
+
+    // Upsert Account (OAuth credentials) linked to EmailAccount
+    await this.prisma.account.upsert({
+      where: {
+        provider_providerAccountId: {
+          provider: mailProvider,
+          providerAccountId,
+        },
+      },
+      update: {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_at: expiresAt,
+        token_type: tokens.token_type || "Bearer",
+        scope: tokens.scope,
+        id_token: tokens.id_token,
+        emailAccountId: emailAccount.id,
+        updatedAt: new Date(),
+      },
+      create: {
+        userId,
+        provider: mailProvider,
+        providerAccountId,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_at: expiresAt,
+        token_type: tokens.token_type || "Bearer",
+        scope: tokens.scope,
+        id_token: tokens.id_token,
+        emailAccountId: emailAccount.id,
+      },
+    });
+  }
 
   async oauthSignIn(
     provider: OAuthProvider,

@@ -52,6 +52,7 @@ function CallbackPage() {
     useEffect(() => {
         if (raw && raw.error) {
             router.push(constants.URL_LOGIN);
+            showToast(t("auth.login.9"), "error", constants.TIME_TOAST);
         }
     }, [raw]);
 

@@ -1,4 +1,7 @@
 {
+    "ERROR_CODE": {
+        "EMAIL_ALREADY_EXISTS": "Email đã tồn tại."
+    },
     "common": {
         "language": "Ngôn ngữ",
         "english": "English",
@@ -22,6 +25,7 @@
             "6": "Chưa có tài khoản?",
             "7": "Đăng ký",
             "8": "Đăng nhập thành công. Đang chuyển hướng...",
+            "9": "Thông tin đăng nhập không hợp lệ. Vui lòng thử lại.",
             "error": {
                 "requiredEmail": "Địa chỉ email là bắt buộc.",
                 "requiredPassword": "Mật khẩu là bắt buộc."
@@ -66,5 +70,65 @@
     "user": {
         "1": "Đăng xuất",
         "2": "Về trang chủ"
+    },
+    "inbox": {
+        "1": "Hộp thư",
+        "2": "Soạn thư",
+        "3": "Làm mới",
+        "4": "Chọn tất cả",
+        "5": "Xóa",
+        "6": "Đánh dấu đã đọc",
+        "7": "Đánh dấu chưa đọc",
+        "8": "Không tìm thấy email.",
+        "9": "Chọn một email để xem nội dung",
+        "10": "Chưa đọc",
+        "11": "Đang tải folder...",
+        "12": "Có lỗi khi tải folder",
+        "13": "Không tìm thấy folder nào",
+        "14": "Đang tải email...",
+        "compose": {
+            "1": "Soạn thư mới",
+            "2": "Người nhận",
+            "3": "Chủ đề",
+            "4": "Nội dung thư",
+            "5": "Gửi",
+            "6": "Hủy",
+            "7": "name@gmail.com",
+            "8": "Chủ đề của bạn ở đây...",
+            "9": "Viết nội dung thư của bạn ở đây...",
+            "10": "Tệp đính kèm",
+            "errors": {
+                "toRequired": "Vui lòng nhập người nhận (To).",
+                "toInvalid": "Địa chỉ email To không hợp lệ.",
+                "ccInvalid": "Địa chỉ email CC không hợp lệ.",
+                "bccInvalid": "Địa chỉ email BCC không hợp lệ.",
+                "subjectRequired": "Vui lòng nhập tiêu đề.",
+                "messageRequired": "Vui lòng nhập nội dung email."
+            },
+            "fileTooLarge": "File {{name}} vượt quá kích thước tối đa {{size}}MB.",
+            "emailSent": "Email đã được gửi.",
+            "emailSendError": "Lỗi khi gửi email: {{error}}"
+        },
+        "detail": {
+            "1": "Người gửi",
+            "2": "Người nhận",
+            "3": "Cc",
+            "4": "Đã nhận",
+            "5": "Trả lời",
+            "6": "Chuyển tiếp",
+            "7": "Xóa",
+            "8": "Đánh dấu",
+            "9": "Tệp đính kèm",
+            "10": "Tải xuống",
+            "11": "Mở",
+            "12": "Chưa đọc",
+            "13": "Đang xử lý..."
+        },
+        "reply": {
+            "1": "Trả lời email",
+            "2": "Người nhận",
+            "3": "Chủ đề",
+            "4": "Gửi trả lời"
+        }
     }
 }

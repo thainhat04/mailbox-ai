@@ -1,12 +1,14 @@
 "use client";
-
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import FolderList from "./FolderList";
 import EmailList from "./EmailList";
 import EmailDetail from "./EmailDetail";
 import { Email } from "../_types";
-import UserMenu from "@/components/ui/UserMenu";
+import HeaderInbox from "@/components/common/HeaderInbox";
 import { ArrowLeft } from "lucide-react";
+import ComposeModal from "./ComposeModal";
+import { useMutationHandler } from "@/hooks/useMutationHandler";
+import { useModifyEmailMutation } from "../_services";
 
 type ViewType = "folders" | "list" | "detail";
 
@@ -15,14 +17,47 @@ export default function InboxLayout() {
     const [selectedFolder, setSelectedFolder] = useState<string>("");
     const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
 
+    const modifyEmail = useMutationHandler(
+        useModifyEmailMutation,
+        "ModifyEmail"
+    );
+
     const handleFolderSelect = (folderId: string) => {
         setSelectedFolder(folderId);
         setView("list");
     };
 
-    const handleEmailSelect = (email: Email) => {
-        setSelectedEmail(email);
+    // Callback to update selected email after modifications
+    const handleEmailModified = useCallback((updatedEmail: Email) => {
+        // Update selected email if it's the same one
+        if (selectedEmail && selectedEmail.id === updatedEmail.id) {
+            setSelectedEmail(updatedEmail);
+        }
+        // RTK Query cache is updated automatically via onQueryStarted
+    }, [selectedEmail]);
+
+    const handleEmailSelect = async (email: Email) => {
+
+        // Save original read status before optimistic update
+        const wasUnread = !email.isRead;
+
+        // Update selected email with optimistic read status
+        const updatedEmail = { ...email, isRead: true };
+        setSelectedEmail(updatedEmail);
         setView("detail");
+
+        // Call API to mark as read if not already read
+        if (wasUnread) {
+            try {
+
+                // Notify EmailList to update
+                handleEmailModified(updatedEmail);
+            } catch (error) {
+                console.error("Failed to mark as read:", error);
+                // Revert optimistic update on error
+                setSelectedEmail(email);
+            }
+        }
     };
 
     const handleBackFromList = () => {
@@ -34,23 +69,26 @@ export default function InboxLayout() {
         setSelectedEmail(null);
         setView("list");
     };
+    const [isComposeOpen, setIsComposeOpen] = useState(false);
 
     return (
-        <div className="relative h-screen w-full flex overflow-hidden text-white">
+        <div className="relative h-screen w-full flex flex-col overflow-hidden text-white">
             {/* Gradient background */}
             <div className="absolute inset-0 bg-linear-to-br from-[#0f111a] via-[#1a1b2b] to-[#2c1e4f] backdrop-blur-sm" />
+            <ComposeModal
+                isOpen={isComposeOpen}
+                onClose={() => setIsComposeOpen(false)}
+            />
+            <HeaderInbox />
 
             {/* Desktop Layout (≥768px) - 3 columns always visible */}
-            <div className="hidden md:flex relative z-10 h-full w-full">
+            <div className="hidden md:flex relative z-10 flex-1 w-full overflow-hidden">
                 {/* Folders */}
-                <div className="w-1/5 z-10000 h-full border-r border-white/10 backdrop-blur-md flex flex-col">
+                <div className="w-1/5 h-full border-r border-white/10 backdrop-blur-md flex flex-col">
                     <FolderList
                         selected={selectedFolder}
                         onSelect={handleFolderSelect}
                     />
-                    <div className="bg-white/5 p-4 border-t border-white/10 flex justify-center">
-                        <UserMenu isTop={true} isHideEmail={true} />
-                    </div>
                 </div>
 
                 {/* Email List */}
@@ -59,26 +97,29 @@ export default function InboxLayout() {
                         selectedFolder={selectedFolder}
                         selectedEmail={selectedEmail}
                         onSelectEmail={handleEmailSelect}
+                        onEmailModified={handleEmailModified}
+                        isComposeOpen={isComposeOpen}
+                        setIsComposeOpen={setIsComposeOpen}
                     />
                 </div>
 
                 {/* Email Detail */}
                 <div className="flex-1 h-full backdrop-blur-md overflow-x-auto custom-scroll">
-                    <EmailDetail email={selectedEmail} />
+                    <EmailDetail
+                        email={selectedEmail}
+                        onEmailModified={handleEmailModified}
+                    />
                 </div>
             </div>
 
             {/* Mobile Layout (<768px) - One view at a time */}
-            <div className="md:hidden relative z-10 h-full w-full flex flex-col">
+            <div className="md:hidden relative z-10 flex-1 w-full flex flex-col overflow-hidden">
                 {view === "folders" && (
                     <div className="flex-1 overflow-hidden flex flex-col">
                         <FolderList
                             selected={selectedFolder}
                             onSelect={handleFolderSelect}
                         />
-                        <div className="bg-white/5 p-4 border-t border-white/10 flex justify-center">
-                            <UserMenu isTop={true} isHideEmail={true} />
-                        </div>
                     </div>
                 )}
 
@@ -104,6 +145,9 @@ export default function InboxLayout() {
                                 selectedFolder={selectedFolder}
                                 selectedEmail={selectedEmail}
                                 onSelectEmail={handleEmailSelect}
+                                onEmailModified={handleEmailModified}
+                                isComposeOpen={isComposeOpen}
+                                setIsComposeOpen={setIsComposeOpen}
                             />
                         </div>
                     </div>
@@ -114,6 +158,7 @@ export default function InboxLayout() {
                         <EmailDetail
                             email={selectedEmail}
                             onBack={handleBackFromDetail}
+                            onEmailModified={handleEmailModified}
                         />
                     </div>
                 )}

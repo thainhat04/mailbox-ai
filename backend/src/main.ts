@@ -16,6 +16,7 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter({
       logger: true,
+      maxParamLength: 1000,
     }),
   );
 

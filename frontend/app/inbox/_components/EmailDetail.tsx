@@ -1,6 +1,6 @@
 // components/Inbox/EmailDetail.tsx
 "use client";
-import type { EmailDetailProps } from "../_types";
+import type { EmailDetailProps, Email } from "../_types";
 import {
     Reply,
     Forward,
@@ -13,9 +13,19 @@ import {
 } from "lucide-react";
 import { formatEmailDate } from "@/helper/dateFormatter";
 import EmailBody from "./EmailBody";
+import { useTranslation } from "react-i18next";
+import { AppConfig } from "@/config";
+import SERVICES from "@/constants/services";
+import ReplyModal from "./ReplyModal";
+import ForwardModal from "./ForwardModal";
+import { useState, useEffect } from "react";
+import { useModifyEmailMutation } from "../_services";
+import { useMutationHandler } from "@/hooks/useMutationHandler";
+import { ModifyEmailFlags } from "../_types/modify";
 
 interface EmailDetailWithBackProps extends EmailDetailProps {
     onBack?: () => void;
+    onEmailModified?: (email: Email) => void;
 }
 
 function formatBytes(bytes?: number) {
@@ -36,8 +46,121 @@ function displayAddress(a?: { name?: string; email?: string }) {
 export default function EmailDetail({
     email,
     onBack,
+    onEmailModified,
 }: EmailDetailWithBackProps) {
+    const { t } = useTranslation();
+    const [isReplyOpen, setIsReplyOpen] = useState(false);
+    const [isForwardOpen, setIsForwardOpen] = useState(false);
+    const [isStarred, setIsStarred] = useState(email?.isStarred || false);
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
+    const modifyEmail = useMutationHandler(
+        useModifyEmailMutation,
+        "ModifyEmail"
+    );
+    
+    // Update isStarred when email changes
+    useEffect(() => {
+        setIsStarred(email?.isStarred || false);
+    }, [email?.id, email?.isStarred]);
+
+    const handleDownloadAttachment = async (url: string, filename: string) => {
+        try {
+            const token = localStorage.getItem(SERVICES.accessToken);
+            const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to download attachment");
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = downloadUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(downloadUrl);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error("Error downloading attachment:", error);
+            alert("Failed to download attachment");
+        }
+    };
+
+    const handleViewAttachment = async (
+        url: string,
+        filename: string,
+        mimeType: string
+    ) => {
+        try {
+            const token = localStorage.getItem(SERVICES.accessToken);
+            const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load attachment");
+            }
+
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            window.open(blobUrl, "_blank");
+
+            // Clean up after a delay to allow the browser to load it
+            setTimeout(() => {
+                window.URL.revokeObjectURL(blobUrl);
+            }, 100);
+        } catch (error) {
+            console.error("Error viewing attachment:", error);
+            alert("Failed to view attachment");
+        }
+    };
+    const handleDelete = async () => {
+        if (!email?.id) return;
+        if (modifyEmail.isLoading) return;
+        const result = await modifyEmail.ModifyEmail({
+            emailId: email.id,
+            mailBox: email.mailboxId || "",
+            flags: { delete: true },
+        });
+        if (result) {
+            // Notify parent to update counts
+            if (email && onEmailModified) {
+                onEmailModified(email);
+            }
+            if (onBack) {
+                onBack();
+            }
+        }
+    };
+    const handleStar = async () => {
+        if (!email?.id) return;
+        if (modifyEmail.isLoading) return;
+
+        // Optimistic update
+        const newStarred = !isStarred;
+        setIsStarred(newStarred);
+
+        const result = await modifyEmail.ModifyEmail({
+            emailId: email.id,
+            mailBox: email.mailboxId || "",
+            flags: { starred: newStarred },
+        });
+        
+        if (!result) {
+            setIsStarred(!newStarred);
+        } else if (email && onEmailModified) {
+            // Notify parent to update email list
+            const updatedEmail = { ...email, isStarred: newStarred };
+            onEmailModified(updatedEmail);
+        }
+    };
 
     return (
         <div className="flex-1 h-full flex flex-col text-white relative w-full md:w-auto">
@@ -46,7 +169,7 @@ export default function EmailDetail({
                     <div className="rounded-full bg-white/10 p-4">
                         <Forward className="text-white/50" />
                     </div>
-                    <p className="text-sm">Chọn một email để xem nội dung</p>
+                    <p className="text-sm">{t("inbox.9")}</p>
                 </div>
             ) : (
                 <div className="flex flex-col h-full">
@@ -70,20 +193,20 @@ export default function EmailDetail({
 
                         <div className="flex flex-col gap-1 text-xs w-full">
                             <p className="text-white/70">
-                                From:{" "}
+                                {t("inbox.detail.1")}:{" "}
                                 <span className="font-medium text-white break-all">
                                     {displayAddress(email.from)}
                                 </span>
                             </p>
                             <p className="text-white/70">
-                                To:{" "}
+                                {t("inbox.detail.2")}:{" "}
                                 <span className="font-medium text-white break-all">
                                     {email.to?.map(displayAddress).join(", ")}
                                 </span>
                             </p>
                             {!!email.cc?.length && (
                                 <p className="text-white/70">
-                                    Cc:{" "}
+                                    {t("inbox.detail.3")}:{" "}
                                     <span className="font-medium text-white break-all">
                                         {email.cc
                                             .map(displayAddress)
@@ -92,7 +215,8 @@ export default function EmailDetail({
                                 </p>
                             )}
                             <p className="text-white/60 mt-1">
-                                Received: {formatEmailDate(email.timestamp)}
+                                {t("inbox.detail.4")}:{" "}
+                                {formatEmailDate(email.timestamp)}
                             </p>
                         </div>
                     </header>
@@ -115,7 +239,8 @@ export default function EmailDetail({
                                         size={16}
                                         className="text-white/70"
                                     />
-                                    Attachments ({email.attachments.length})
+                                    {t("inbox.detail.9")} (
+                                    {email.attachments.length})
                                 </div>
                                 <ul className="space-y-2">
                                     {email.attachments.map((att) => (
@@ -141,9 +266,13 @@ export default function EmailDetail({
                                                 </div>
                                             </div>
                                             <div className="ml-auto sm:ml-3 flex shrink-0 items-center gap-1 sm:gap-2 w-full sm:w-auto">
-                                                <a
-                                                    href={att.url}
-                                                    download={att.filename}
+                                                <button
+                                                    onClick={() =>
+                                                        handleDownloadAttachment(
+                                                            att.url,
+                                                            att.filename
+                                                        )
+                                                    }
                                                     className="flex-1 sm:flex-none inline-flex items-center justify-center sm:justify-start gap-1 rounded-md bg-white/8 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white hover:bg-white/[0.14] transition"
                                                     aria-label={`Download ${att.filename}`}
                                                 >
@@ -151,16 +280,20 @@ export default function EmailDetail({
                                                         size={12}
                                                         className="hidden sm:block"
                                                     />
-                                                    Download
-                                                </a>
-                                                <a
-                                                    href={att.url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
+                                                    {t("inbox.detail.10")}
+                                                </button>
+                                                <button
+                                                    onClick={() =>
+                                                        handleViewAttachment(
+                                                            att.url,
+                                                            att.filename,
+                                                            att.mimeType
+                                                        )
+                                                    }
                                                     className="flex-1 sm:flex-none inline-flex items-center justify-center rounded-md border border-white/15 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white/85 hover:bg-white/8 transition"
                                                 >
-                                                    Open
-                                                </a>
+                                                    {t("inbox.detail.11")}
+                                                </button>
                                             </div>
                                         </li>
                                     ))}
@@ -171,30 +304,91 @@ export default function EmailDetail({
 
                     {/* Footer actions - Responsive */}
                     <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-white/15 flex flex-wrap gap-2 sm:gap-3">
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition">
+                        <button
+                            onClick={() => setIsReplyOpen(true)}
+                            className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition"
+                        >
                             <Reply size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">Reply</span>
+                            <span className="hidden sm:inline">
+                                {t("inbox.detail.5")}
+                            </span>
                         </button>
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition">
+                        <button
+                            onClick={() => setIsForwardOpen(true)}
+                            className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/20 transition"
+                        >
                             <Forward size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">Forward</span>
+                            <span className="hidden sm:inline">
+                                {t("inbox.detail.6")}
+                            </span>
                         </button>
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-red-600/20 transition">
+                        <button
+                            onClick={handleDelete}
+                            className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-red-600/20 transition"
+                        >
                             <Trash2 size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">Delete</span>
+                            <span className="hidden sm:inline">
+                                {t("inbox.detail.7")}
+                            </span>
                         </button>
-                        <button className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-yellow-500/20 transition">
-                            <Star size={14} className="sm:size-4" />{" "}
-                            <span className="hidden sm:inline">Star</span>
+                        <button
+                            onClick={handleStar}
+                            className={`flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg px-3 sm:px-4 py-2 text-xs font-medium transition ${
+                                isStarred
+                                    ? "bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30"
+                                    : "bg-white/10 text-white hover:bg-white/[0.14]"
+                            }`}
+                            aria-pressed={isStarred}
+                            disabled={modifyEmail.isLoading}
+                        >
+                            <Star
+                                size={14}
+                                className={
+                                    isStarred
+                                        ? "text-yellow-300"
+                                        : "text-white"
+                                }
+                            />
+                            <span className="hidden sm:inline">
+                                {t("inbox.detail.8")}
+                            </span>
                         </button>
                     </div>
 
                     {/* Unread badge */}
                     {!email.isRead && (
                         <span className="absolute top-4 right-4 sm:right-6 rounded-full bg-cyan-400/15 px-2 py-1 text-[10px] font-medium text-cyan-300 ring-1 ring-cyan-300/30">
-                            Chưa đọc
+                            {t("inbox.detail.12")}
                         </span>
                     )}
+                </div>
+            )}
+
+            {/* Reply Modal */}
+            <ReplyModal
+                isOpen={isReplyOpen}
+                onClose={() => setIsReplyOpen(false)}
+                email={email}
+            />
+
+            {/* Forward Modal */}
+            <ForwardModal
+                isOpen={isForwardOpen}
+                onClose={() => setIsForwardOpen(false)}
+                email={email}
+            />
+            {modifyEmail.isLoading && (
+                <div
+                    className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm cursor-wait"
+                    role="status"
+                    aria-live="polite"
+                >
+                    <div className="flex flex-col items-center gap-2">
+                        <span className="inline-block h-10 w-10 rounded-full border-4 border-white/20 border-t-white animate-spin" />
+                        <span className="text-sm text-white/90">
+                            {t("inbox.detail.13")}
+                        </span>
+                    </div>
                 </div>
             )}
         </div>

@@ -1,133 +1,131 @@
-import { Controller, Get, Param, Query, Patch, Delete } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  Patch,
+  Delete,
+  UseGuards,
+  Post,
+  Body,
+  Res,
+} from "@nestjs/common";
+import type { FastifyReply } from "fastify";
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
   ApiBearerAuth,
-  ApiParam,
-  ApiQuery,
 } from "@nestjs/swagger";
 import { EmailService } from "./email.service";
 import {
   EmailDto,
-  MailboxDto,
   EmailListQueryDto,
   EmailListResponseDto,
+  LabelDto,
 } from "./dto";
 import { ResponseDto } from "../../common/dtos/response.dto";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import type { JwtPayload } from "../../common/decorators/current-user.decorator";
+import { SendEmailDto } from "./dto/send-email.dto";
+import { ReplyEmailDto } from "./dto/reply-emai.dto";
+import { ModifyEmailDto } from "./dto/modify.dto";
+import { SendEmailResponse } from "./dto/send-email-response";
 
 @ApiTags("Email")
-@Controller("api")
+@Controller()
 @ApiBearerAuth("JWT-auth")
+@UseGuards(JwtAuthGuard)
 export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
-  // ==================== MAILBOX ENDPOINTS ====================
-
-  @Get("mailboxes")
-  @ApiOperation({ summary: "Get all mailboxes" })
-  @ApiResponse({
-    status: 200,
-    description: "Mailboxes retrieved successfully",
-    type: [MailboxDto],
-  })
-  async getAllMailboxes(): Promise<ResponseDto<MailboxDto[]>> {
-    const mailboxes = this.emailService.findAllMailboxes();
-    return ResponseDto.success(mailboxes, "Mailboxes retrieved successfully");
+  @Get("labels")
+  async getAllLabels(
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<LabelDto[]>> {
+    const labels = await this.emailService.getLabels(user.sub);
+    return ResponseDto.success(labels, "Labels retrieved successfully");
   }
 
-  @Get("mailboxes/:id")
-  @ApiOperation({ summary: "Get mailbox by ID" })
-  @ApiParam({ name: "id", description: "Mailbox ID" })
-  @ApiResponse({
-    status: 200,
-    description: "Mailbox retrieved successfully",
-    type: MailboxDto,
-  })
-  @ApiResponse({ status: 404, description: "Mailbox not found" })
-  async getMailboxById(
-    @Param("id") id: string,
-  ): Promise<ResponseDto<MailboxDto>> {
-    const mailbox = this.emailService.findMailboxById(id);
-    return ResponseDto.success(mailbox, "Mailbox retrieved successfully");
+  @Get("labels/:labelId")
+  async getLabelById(
+    @Param("labelId") labelId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<LabelDto>> {
+    const label = await this.emailService.getLabelById(labelId, user.sub);
+    return ResponseDto.success(label, "Label retrieved successfully");
   }
 
-  @Get("mailboxes/:id/emails")
-  @ApiOperation({ summary: "Get emails in a mailbox with pagination" })
-  @ApiParam({ name: "id", description: "Mailbox ID" })
-  @ApiQuery({ name: "page", required: false, type: Number })
-  @ApiQuery({ name: "limit", required: false, type: Number })
-  @ApiQuery({ name: "unreadOnly", required: false, type: Boolean })
-  @ApiQuery({ name: "starredOnly", required: false, type: Boolean })
-  @ApiResponse({
-    status: 200,
-    description: "Emails retrieved successfully",
-    type: EmailListResponseDto,
-  })
-  @ApiResponse({ status: 404, description: "Mailbox not found" })
-  async getEmailsByMailbox(
-    @Param("id") id: string,
+  @Get("labels/:labelId/emails")
+  async getEmailsByLabel(
+    @Param("labelId") labelId: string,
     @Query() query: EmailListQueryDto,
+    @CurrentUser() user: JwtPayload,
   ): Promise<ResponseDto<EmailListResponseDto>> {
-    const result = this.emailService.findEmailsByMailbox(id, query);
+    const result = await this.emailService.findEmailsByLabel(
+      labelId,
+      query,
+      user.sub,
+    );
     return ResponseDto.success(result, "Emails retrieved successfully");
   }
 
-  // ==================== EMAIL ENDPOINTS ====================
+  @Get("emails")
+  @ApiOperation({ summary: "Get emails with pagination (from default INBOX)" })
+  async getEmails(
+    @Query() query: EmailListQueryDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailListResponseDto>> {
+    const labelIds = query.labelIds || "INBOX";
+    const result = await this.emailService.findEmailsByLabel(
+      labelIds,
+      query,
+      user.sub,
+    );
+    return ResponseDto.success(result, "Emails retrieved successfully");
+  }
+
+  @Get("emails/search")
+  @ApiOperation({ summary: "Search emails" })
+  async searchEmails(
+    @Query("q") query: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailDto[]>> {
+    const emails = await this.emailService.searchEmails(query, user.sub);
+    return ResponseDto.success(
+      emails,
+      `Found ${emails.length} matching emails`,
+    );
+  }
 
   @Get("emails/:id")
   @ApiOperation({ summary: "Get email by ID" })
-  @ApiParam({ name: "id", description: "Email ID" })
-  @ApiResponse({
-    status: 200,
-    description: "Email retrieved successfully",
-    type: EmailDto,
-  })
-  @ApiResponse({ status: 404, description: "Email not found" })
-  async getEmailById(@Param("id") id: string): Promise<ResponseDto<EmailDto>> {
-    const email = this.emailService.findEmailById(id);
+  async getEmailById(
+    @Param("id") id: string,
+    @Query("mailbox") mailbox: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailDto>> {
+    const email = await this.emailService.findEmailById(id, user.sub, mailbox);
     return ResponseDto.success(email, "Email retrieved successfully");
   }
 
   @Patch("emails/:id/read")
   @ApiOperation({ summary: "Mark email as read" })
-  @ApiParam({ name: "id", description: "Email ID" })
-  @ApiResponse({
-    status: 200,
-    description: "Email marked as read",
-    type: EmailDto,
-  })
-  @ApiResponse({ status: 404, description: "Email not found" })
-  async markAsRead(@Param("id") id: string): Promise<ResponseDto<EmailDto>> {
-    const email = this.emailService.markAsRead(id);
+  async markAsRead(
+    @Param("id") id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailDto>> {
+    const email = await this.emailService.markAsRead(id, user.sub);
     return ResponseDto.success(email, "Email marked as read");
-  }
-
-  @Patch("emails/:id/unread")
-  @ApiOperation({ summary: "Mark email as unread" })
-  @ApiParam({ name: "id", description: "Email ID" })
-  @ApiResponse({
-    status: 200,
-    description: "Email marked as unread",
-    type: EmailDto,
-  })
-  @ApiResponse({ status: 404, description: "Email not found" })
-  async markAsUnread(@Param("id") id: string): Promise<ResponseDto<EmailDto>> {
-    const email = this.emailService.markAsUnread(id);
-    return ResponseDto.success(email, "Email marked as unread");
   }
 
   @Patch("emails/:id/star")
   @ApiOperation({ summary: "Toggle star status" })
-  @ApiParam({ name: "id", description: "Email ID" })
-  @ApiResponse({
-    status: 200,
-    description: "Email star status toggled",
-    type: EmailDto,
-  })
-  @ApiResponse({ status: 404, description: "Email not found" })
-  async toggleStar(@Param("id") id: string): Promise<ResponseDto<EmailDto>> {
-    const email = this.emailService.toggleStar(id);
+  async toggleStar(
+    @Param("id") id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailDto>> {
+    const email = await this.emailService.toggleStar(id, user.sub);
     return ResponseDto.success(email, "Email star status toggled");
   }
 
@@ -135,29 +133,54 @@ export class EmailController {
   @ApiOperation({
     summary: "Delete email (move to trash or permanently delete)",
   })
-  @ApiParam({ name: "id", description: "Email ID" })
-  @ApiResponse({ status: 200, description: "Email deleted successfully" })
-  @ApiResponse({ status: 404, description: "Email not found" })
-  async deleteEmail(@Param("id") id: string): Promise<ResponseDto<null>> {
-    this.emailService.deleteEmail(id);
+  async deleteEmail(
+    @Param("id") id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<null>> {
+    await this.emailService.deleteEmail(id, user.sub);
     return ResponseDto.success(null, "Email deleted successfully");
   }
 
-  @Get("emails/search")
-  @ApiOperation({ summary: "Search emails" })
-  @ApiQuery({ name: "q", description: "Search query" })
-  @ApiResponse({
-    status: 200,
-    description: "Search results retrieved",
-    type: [EmailDto],
-  })
-  async searchEmails(
-    @Query("q") query: string,
-  ): Promise<ResponseDto<EmailDto[]>> {
-    const emails = this.emailService.searchEmails(query);
-    return ResponseDto.success(
-      emails,
-      `Found ${emails.length} matching emails`,
+  @Post("emails/send")
+  @ApiOperation({ summary: "Send an email" })
+  async send(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: SendEmailDto,
+  ): Promise<ResponseDto<SendEmailResponse>> {
+    const result = await this.emailService.sendEmail(user.sub, dto);
+    return ResponseDto.success(result, "Email sent successfully");
+  }
+
+  @Post("emails/:id/reply")
+  async reply(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") id: string,
+    @Body() dto: ReplyEmailDto,
+  ): Promise<ResponseDto<SendEmailResponse>> {
+    const result = await this.emailService.replyEmail(user.sub, id, dto);
+    return ResponseDto.success(result, "Reply sent successfully");
+  }
+
+  @Get("attachments/:attachmentId")
+  @ApiOperation({ summary: "Stream email attachment" })
+  async streamAttachment(
+    @Param("attachmentId") attachmentId: string,
+    @CurrentUser() user: JwtPayload,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const { data, metadata } = await this.emailService.streamAttachment(
+      user.sub,
+      attachmentId,
     );
+
+    // Set headers for file download with proper filename and content type
+    reply.header("Content-Type", metadata.mimeType || "application/octet-stream");
+    reply.header(
+      "Content-Disposition",
+      `attachment; filename="${metadata.filename || attachmentId}"`,
+    );
+    reply.header("Content-Length", metadata.size?.toString() || data.length.toString());
+
+    reply.send(data);
   }
 }

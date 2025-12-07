@@ -48,10 +48,11 @@ export function useMutationHandler<
     );
 
     // Các callback riêng biệt
-    const action = useCallback(
-        (args: Parameters<Trigger>[0]) => handleAction(args, false),
-        [handleAction]
-    );
+    const action: (args: Parameters<Trigger>[0]) => Promise<Result | null> =
+        useCallback(
+            (args: Parameters<Trigger>[0]) => handleAction(args, false),
+            [handleAction]
+        );
 
     const unwrapAction: (args: Parameters<Trigger>[0]) => Promise<Result> =
         useCallback((args) => handleAction(args, true), [handleAction]);

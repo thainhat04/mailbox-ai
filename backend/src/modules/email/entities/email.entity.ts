@@ -11,6 +11,7 @@ export interface Email {
   from: {
     name: string;
     email: string;
+    avatar?: string;
   };
   to: Array<{
     name: string;
@@ -31,7 +32,13 @@ export interface Email {
   isRead: boolean;
   isStarred: boolean;
   isImportant: boolean;
-  mailboxId: string;
+  labelId?: string;
   attachments?: Attachment[];
   labels?: string[];
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string[];
+  // Thread metadata
+  threadCount?: number;
+  threadEmails?: string[];
 }
