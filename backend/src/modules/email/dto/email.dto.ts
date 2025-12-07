@@ -173,31 +173,3 @@ export class EmailListResponseDto {
   totalPages: number;
 }
 
-export class ImapTestResponseDto {
-  @ApiProperty({ example: true })
-  success: boolean;
-
-  @ApiProperty({ example: "IMAP connection successful" })
-  message: string;
-
-  @ApiProperty({ example: "user@example.com", required: false })
-  email?: string;
-
-  @ApiProperty({ example: "GOOGLE", required: false })
-  provider?: string;
-
-  @ApiProperty({ example: "imap.gmail.com", required: false })
-  host?: string;
-
-  @ApiProperty({ example: 993, required: false })
-  port?: number;
-
-  @ApiProperty({ example: "Connection established successfully", required: false })
-  details?: string;
-
-  @ApiProperty({ example: 5, required: false })
-  testEmailCount?: number;
-
-  @ApiProperty({ example: "2024-11-18T10:30:00Z", required: false })
-  testedAt?: string;
-}
