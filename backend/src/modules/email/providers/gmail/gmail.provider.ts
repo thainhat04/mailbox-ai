@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { MailProvider } from '../../types/mail-provider.types';
-import { BaseMailProvider } from '../base-mail.provider';
+import { Injectable, Logger } from "@nestjs/common";
+import { MailProvider } from "../../types/mail-provider.types";
+import { BaseMailProvider } from "../base-mail.provider";
 import {
   ProviderCredentials,
   ListMessagesRequest,
@@ -15,8 +15,8 @@ import {
   WatchRequest,
   WatchResponse,
   SyncState,
-} from '../../interfaces/mail-provider.interface';
-import { GmailApiClient } from './gmail-api.client';
+} from "../../interfaces/mail-provider.interface";
+import { GmailApiClient } from "./gmail-api.client";
 
 /**
  * Gmail Provider Implementation
@@ -32,33 +32,39 @@ export class GmailProvider extends BaseMailProvider {
   }
 
   async initialize(credentials: ProviderCredentials): Promise<void> {
+    // Call parent initialize which validates/refreshes credentials
     await super.initialize(credentials);
+
+    // Now create API client with the validated/refreshed access token
     this.apiClient = new GmailApiClient(this.credentials.accessToken);
-    this.logger.log('Gmail provider initialized');
+
+    this.logger.log("Gmail provider initialized");
   }
 
   async refreshAccessToken(): Promise<ProviderCredentials> {
-    this.logger.log('Refreshing Gmail access token');
+    this.logger.log("Refreshing Gmail access token");
 
     if (!this.credentials.refreshToken) {
-      throw new Error('No refresh token available');
+      throw new Error("No refresh token available");
     }
 
     try {
-      const response = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      const response = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           client_id: process.env.GOOGLE_CLIENT_ID!,
           client_secret: process.env.GOOGLE_CLIENT_SECRET!,
           refresh_token: this.credentials.refreshToken,
-          grant_type: 'refresh_token',
+          grant_type: "refresh_token",
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(`Failed to refresh token: ${errorData.error || response.statusText}`);
+        throw new Error(
+          `Failed to refresh token: ${errorData.error || response.statusText}`,
+        );
       }
 
       const data = await response.json();
@@ -72,14 +78,18 @@ export class GmailProvider extends BaseMailProvider {
         expiresAt,
       };
 
-      // Update provider credentials and API client
+      // Update provider credentials
       this.credentials = newCredentials;
-      this.apiClient.updateAccessToken(data.access_token);
 
-      this.logger.log('Gmail access token refreshed successfully');
+      // Update API client if it exists (it won't exist during initialization)
+      if (this.apiClient) {
+        this.apiClient.updateAccessToken(data.access_token);
+      }
+
+      this.logger.log("Gmail access token refreshed successfully");
       return newCredentials;
     } catch (error) {
-      this.logger.error('Failed to refresh Gmail token', error);
+      this.logger.error("Failed to refresh Gmail token", error);
       throw error;
     }
   }
@@ -89,19 +99,33 @@ export class GmailProvider extends BaseMailProvider {
   async listMessages(
     request: ListMessagesRequest,
   ): Promise<ListMessagesResponse> {
-    this.ensureInitialized();
-    this.logger.debug(`Listing messages with request: ${JSON.stringify(request)}`);
+    await this.ensureValidToken();
+    this.logger.debug(
+      `Listing messages with request: ${JSON.stringify(request)}`,
+    );
 
-    // TODO: Implement Gmail API messages.list
-    // GET https://gmail.googleapis.com/gmail/v1/users/me/messages
-    throw new Error('listMessages not implemented');
+    const params: any = {
+      maxResults: request.maxResults || 50,
+      pageToken: request.pageToken,
+      labelIds: request.labelIds,
+      q: request.query,
+      includeSpamTrash: request.includeSpam,
+    };
+
+    const response = await this.apiClient.listMessages(params);
+
+    return {
+      messages: response.messages || [],
+      nextPageToken: response.nextPageToken,
+      resultSizeEstimate: response.resultSizeEstimate || 0,
+    };
   }
 
   async getMessage(messageId: string): Promise<EmailMessage> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Getting message: ${messageId}`);
 
-    const gmailMessage = await this.apiClient.getMessage(messageId, 'full');
+    const gmailMessage = await this.apiClient.getMessage(messageId, "full");
     return this.parseGmailMessage(gmailMessage);
   }
 
@@ -109,104 +133,149 @@ export class GmailProvider extends BaseMailProvider {
     bodyText?: string;
     bodyHtml?: string;
   }> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Getting message body: ${messageId}`);
 
-    // TODO: Implement Gmail API messages.get with format=full
-    // Parse MIME parts to extract text/html bodies
-    throw new Error('getMessageBody not implemented');
+    const gmailMessage = await this.apiClient.getMessage(messageId, "full");
+    return this.extractBody(gmailMessage.payload);
   }
 
   async sendEmail(request: SendEmailRequest): Promise<EmailMessage> {
-    this.ensureInitialized();
-    this.logger.debug(`Sending email to: ${request.to.map(t => t.email).join(', ')}`);
+    await this.ensureValidToken();
+    this.logger.debug(
+      `Sending email to: ${request.to.map((t) => t.email).join(", ")}`,
+    );
 
-    // TODO: Implement Gmail API messages.send
-    // POST https://gmail.googleapis.com/gmail/v1/users/me/messages/send
     // Create RFC 2822 formatted message
-    throw new Error('sendEmail not implemented');
+    const messageParts: string[] = [];
+
+    // Headers
+    messageParts.push(`To: ${request.to.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+
+    if (request.cc && request.cc.length > 0) {
+      messageParts.push(`Cc: ${request.cc.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+    }
+
+    if (request.bcc && request.bcc.length > 0) {
+      messageParts.push(`Bcc: ${request.bcc.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+    }
+
+    messageParts.push(`Subject: ${request.subject || "(no subject)"}`);
+
+    if (request.inReplyTo) {
+      messageParts.push(`In-Reply-To: ${request.inReplyTo}`);
+    }
+
+    if (request.references && request.references.length > 0) {
+      messageParts.push(`References: ${request.references.join(" ")}`);
+    }
+
+    messageParts.push("MIME-Version: 1.0");
+    messageParts.push("Content-Type: text/html; charset=UTF-8");
+    messageParts.push(""); // Empty line between headers and body
+    messageParts.push(request.bodyHtml || request.bodyText || "");
+
+    const message = messageParts.join("\r\n");
+
+    // Encode to base64url
+    const encodedMessage = Buffer.from(message)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    const response = await this.apiClient.sendMessage({ raw: encodedMessage });
+
+    // Fetch the sent message details
+    return this.getMessage(response.id);
   }
 
   async modifyMessage(
     messageId: string,
     request: ModifyEmailRequest,
   ): Promise<EmailMessage> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Modifying message: ${messageId}`);
 
-    // TODO: Implement Gmail API messages.modify
-    // POST https://gmail.googleapis.com/gmail/v1/users/me/messages/{id}/modify
-    throw new Error('modifyMessage not implemented');
+    await this.apiClient.modifyMessage(messageId, {
+      addLabelIds: request.addLabelIds,
+      removeLabelIds: request.removeLabelIds,
+    });
+
+    // Return updated message
+    return this.getMessage(messageId);
   }
 
   async trashMessage(messageId: string): Promise<void> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Trashing message: ${messageId}`);
 
-    // TODO: Implement Gmail API messages.trash
-    // POST https://gmail.googleapis.com/gmail/v1/users/me/messages/{id}/trash
-    throw new Error('trashMessage not implemented');
+    await this.apiClient.trashMessage(messageId);
   }
 
   async deleteMessage(messageId: string): Promise<void> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Deleting message: ${messageId}`);
 
-    // TODO: Implement Gmail API messages.delete
-    // DELETE https://gmail.googleapis.com/gmail/v1/users/me/messages/{id}
-    throw new Error('deleteMessage not implemented');
+    await this.apiClient.deleteMessage(messageId);
   }
 
   // ----------------- Thread Operations -----------------
 
   async getThread(threadId: string): Promise<EmailThread> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Getting thread: ${threadId}`);
 
     // TODO: Implement Gmail API threads.get
     // GET https://gmail.googleapis.com/gmail/v1/users/me/threads/{id}
-    throw new Error('getThread not implemented');
+    throw new Error("getThread not implemented");
   }
 
   async modifyThread(
     threadId: string,
     request: ModifyEmailRequest,
   ): Promise<EmailThread> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Modifying thread: ${threadId}`);
 
     // TODO: Implement Gmail API threads.modify
     // POST https://gmail.googleapis.com/gmail/v1/users/me/threads/{id}/modify
-    throw new Error('modifyThread not implemented');
+    throw new Error("modifyThread not implemented");
   }
 
   async trashThread(threadId: string): Promise<void> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Trashing thread: ${threadId}`);
 
     // TODO: Implement Gmail API threads.trash
     // POST https://gmail.googleapis.com/gmail/v1/users/me/threads/{id}/trash
-    throw new Error('trashThread not implemented');
+    throw new Error("trashThread not implemented");
   }
 
   // ----------------- Label Operations -----------------
 
   async listLabels(): Promise<Label[]> {
-    this.ensureInitialized();
-    this.logger.debug('Listing labels');
+    await this.ensureValidToken();
+    this.logger.debug("Listing labels");
 
-    // TODO: Implement Gmail API labels.list
-    // GET https://gmail.googleapis.com/gmail/v1/users/me/labels
-    throw new Error('listLabels not implemented');
+    const response = await this.apiClient.listLabels();
+
+    return (response.labels || []).map((label: any) => ({
+      id: label.id,
+      name: label.name,
+      type: this.getLabelType(label.type),
+      labelListVisibility: label.labelListVisibility,
+      messageListVisibility: label.messageListVisibility,
+    }));
   }
 
   async createLabel(name: string, color?: string): Promise<Label> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Creating label: ${name}`);
 
     // TODO: Implement Gmail API labels.create
     // POST https://gmail.googleapis.com/gmail/v1/users/me/labels
-    throw new Error('createLabel not implemented');
+    throw new Error("createLabel not implemented");
   }
 
   async updateLabel(
@@ -214,21 +283,21 @@ export class GmailProvider extends BaseMailProvider {
     name: string,
     color?: string,
   ): Promise<Label> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Updating label: ${labelId}`);
 
     // TODO: Implement Gmail API labels.update
     // PUT https://gmail.googleapis.com/gmail/v1/users/me/labels/{id}
-    throw new Error('updateLabel not implemented');
+    throw new Error("updateLabel not implemented");
   }
 
   async deleteLabel(labelId: string): Promise<void> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Deleting label: ${labelId}`);
 
     // TODO: Implement Gmail API labels.delete
     // DELETE https://gmail.googleapis.com/gmail/v1/users/me/labels/{id}
-    throw new Error('deleteLabel not implemented');
+    throw new Error("deleteLabel not implemented");
   }
 
   // ----------------- Attachment Operations -----------------
@@ -237,32 +306,36 @@ export class GmailProvider extends BaseMailProvider {
     messageId: string,
     attachmentId: string,
   ): Promise<Buffer> {
-    this.ensureInitialized();
-    this.logger.debug(`Getting attachment: ${attachmentId} from message: ${messageId}`);
+    await this.ensureValidToken();
+    this.logger.debug(
+      `Getting attachment: ${attachmentId} from message: ${messageId}`,
+    );
 
-    // TODO: Implement Gmail API messages.attachments.get
-    // GET https://gmail.googleapis.com/gmail/v1/users/me/messages/{messageId}/attachments/{id}
-    throw new Error('getAttachment not implemented');
+    const response = await this.apiClient.getAttachment(messageId, attachmentId);
+
+    // Decode base64url data
+    const base64 = response.data.replace(/-/g, "+").replace(/_/g, "/");
+    return Buffer.from(base64, "base64");
   }
 
   // ----------------- Sync Operations -----------------
 
   async setupWatch(request: WatchRequest): Promise<WatchResponse> {
-    this.ensureInitialized();
-    this.logger.debug('Setting up Gmail watch');
+    await this.ensureValidToken();
+    this.logger.debug("Setting up Gmail watch");
 
     // TODO: Implement Gmail API users.watch
     // POST https://gmail.googleapis.com/gmail/v1/users/me/watch
-    throw new Error('setupWatch not implemented');
+    throw new Error("setupWatch not implemented");
   }
 
   async stopWatch(): Promise<void> {
-    this.ensureInitialized();
-    this.logger.debug('Stopping Gmail watch');
+    await this.ensureValidToken();
+    this.logger.debug("Stopping Gmail watch");
 
     // TODO: Implement Gmail API users.stop
     // POST https://gmail.googleapis.com/gmail/v1/users/me/stop
-    throw new Error('stopWatch not implemented');
+    throw new Error("stopWatch not implemented");
   }
 
   async syncChanges(syncState: SyncState): Promise<{
@@ -270,7 +343,7 @@ export class GmailProvider extends BaseMailProvider {
     deletedMessageIds: string[];
     newSyncState: SyncState;
   }> {
-    this.ensureInitialized();
+    await this.ensureValidToken();
     this.logger.debug(`Syncing changes from historyId: ${syncState.historyId}`);
 
     const messages: EmailMessage[] = [];
@@ -279,11 +352,11 @@ export class GmailProvider extends BaseMailProvider {
     // Check if this is initial sync or incremental sync
     if (!syncState.historyId) {
       // Initial sync - fetch messages from last 30 days
-      this.logger.log('Performing initial sync (last 30 days)');
+      this.logger.log("Performing initial sync (last 30 days)");
 
       const response = await this.apiClient.listMessages({
         maxResults: 100,
-        q: 'newer_than:30d',
+        q: "newer_than:30d",
       });
 
       // Fetch full message details for each message
@@ -293,7 +366,9 @@ export class GmailProvider extends BaseMailProvider {
             const fullMessage = await this.getMessage(msg.id);
             messages.push(fullMessage);
           } catch (error) {
-            this.logger.error(`Failed to fetch message ${msg.id}: ${error.message}`);
+            this.logger.error(
+              `Failed to fetch message ${msg.id}: ${error.message}`,
+            );
           }
         }
       }
@@ -312,7 +387,9 @@ export class GmailProvider extends BaseMailProvider {
     }
 
     // Incremental sync using history API
-    this.logger.log(`Performing incremental sync from historyId: ${syncState.historyId}`);
+    this.logger.log(
+      `Performing incremental sync from historyId: ${syncState.historyId}`,
+    );
 
     try {
       const historyResponse = await this.apiClient.listHistory({
@@ -358,7 +435,9 @@ export class GmailProvider extends BaseMailProvider {
             const fullMessage = await this.getMessage(messageId);
             messages.push(fullMessage);
           } catch (error) {
-            this.logger.error(`Failed to fetch message ${messageId}: ${error.message}`);
+            this.logger.error(
+              `Failed to fetch message ${messageId}: ${error.message}`,
+            );
           }
         }
       }
@@ -373,8 +452,11 @@ export class GmailProvider extends BaseMailProvider {
       };
     } catch (error) {
       // If history.list fails (e.g., historyId too old), fall back to full sync
-      if (error.response?.status === 404 || error.message?.includes('historyId')) {
-        this.logger.warn('History ID expired, performing full sync');
+      if (
+        error.response?.status === 404 ||
+        error.message?.includes("historyId")
+      ) {
+        this.logger.warn("History ID expired, performing full sync");
         return this.syncChanges({ historyId: undefined });
       }
       throw error;
@@ -388,8 +470,8 @@ export class GmailProvider extends BaseMailProvider {
     name?: string;
     avatarUrl?: string;
   }> {
-    this.ensureInitialized();
-    this.logger.debug('Getting Gmail profile');
+    await this.ensureValidToken();
+    this.logger.debug("Getting Gmail profile");
 
     const profile = await this.apiClient.getProfile();
     return {
@@ -421,14 +503,18 @@ export class GmailProvider extends BaseMailProvider {
       snippet: gmailMessage.snippet,
       bodyText,
       bodyHtml,
-      date: headers.date ? new Date(headers.date) : new Date(parseInt(gmailMessage.internalDate)),
-      isRead: !gmailMessage.labelIds?.includes('UNREAD'),
-      isStarred: gmailMessage.labelIds?.includes('STARRED') || false,
+      date: headers.date
+        ? new Date(headers.date)
+        : new Date(parseInt(gmailMessage.internalDate)),
+      isRead: !gmailMessage.labelIds?.includes("UNREAD"),
+      isStarred: gmailMessage.labelIds?.includes("STARRED") || false,
       hasAttachments: attachments.length > 0,
       labels: gmailMessage.labelIds || [],
       attachments,
       inReplyTo: headers.inReplyTo,
-      references: headers.references ? headers.references.split(' ').filter(Boolean) : [],
+      references: headers.references
+        ? headers.references.split(" ").filter(Boolean)
+        : [],
     };
   }
 
@@ -451,7 +537,7 @@ export class GmailProvider extends BaseMailProvider {
    */
   protected parseGmailEmailAddress(addressString?: string): EmailAddress {
     if (!addressString) {
-      return { email: '' };
+      return { email: "" };
     }
 
     // Handle format: "Name <email@example.com>" or just "email@example.com"
@@ -476,15 +562,18 @@ export class GmailProvider extends BaseMailProvider {
 
     // Simple split by comma - in production, use a proper email parser
     return addressString
-      .split(',')
-      .map(addr => this.parseGmailEmailAddress(addr.trim()))
-      .filter(addr => addr.email);
+      .split(",")
+      .map((addr) => this.parseGmailEmailAddress(addr.trim()))
+      .filter((addr) => addr.email);
   }
 
   /**
    * Extract body text and HTML from MIME parts
    */
-  protected extractBody(payload: any): { bodyText?: string; bodyHtml?: string } {
+  protected extractBody(payload: any): {
+    bodyText?: string;
+    bodyHtml?: string;
+  } {
     if (!payload) {
       return {};
     }
@@ -493,9 +582,9 @@ export class GmailProvider extends BaseMailProvider {
     let bodyHtml: string | undefined;
 
     const findBodyParts = (part: any) => {
-      if (part.mimeType === 'text/plain' && part.body?.data) {
+      if (part.mimeType === "text/plain" && part.body?.data) {
         bodyText = this.decodeBase64Url(part.body.data);
-      } else if (part.mimeType === 'text/html' && part.body?.data) {
+      } else if (part.mimeType === "text/html" && part.body?.data) {
         bodyHtml = this.decodeBase64Url(part.body.data);
       }
 
@@ -529,10 +618,13 @@ export class GmailProvider extends BaseMailProvider {
           filename: part.filename,
           mimeType: part.mimeType,
           size: part.body.size || 0,
-          contentId: part.headers?.find((h: any) => h.name === 'Content-ID')?.value,
-          isInline: part.headers?.some((h: any) =>
-            h.name === 'Content-Disposition' && h.value.includes('inline')
-          ) || false,
+          contentId: part.headers?.find((h: any) => h.name === "Content-ID")
+            ?.value,
+          isInline:
+            part.headers?.some(
+              (h: any) =>
+                h.name === "Content-Disposition" && h.value.includes("inline"),
+            ) || false,
         });
       }
 
@@ -550,17 +642,24 @@ export class GmailProvider extends BaseMailProvider {
   }
 
   /**
+   * Convert Gmail label type to generic type
+   */
+  protected getLabelType(gmailType: string): "system" | "user" {
+    return gmailType === "system" ? "system" : "user";
+  }
+
+  /**
    * Decode base64url encoded string
    */
   protected decodeBase64Url(data: string): string {
     try {
       // Convert base64url to base64
-      const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
+      const base64 = data.replace(/-/g, "+").replace(/_/g, "/");
       // Decode base64 to UTF-8 string
-      return Buffer.from(base64, 'base64').toString('utf-8');
+      return Buffer.from(base64, "base64").toString("utf-8");
     } catch (error) {
-      this.logger.error('Failed to decode base64url data', error);
-      return '';
+      this.logger.error("Failed to decode base64url data", error);
+      return "";
     }
   }
 }

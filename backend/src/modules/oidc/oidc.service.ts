@@ -9,7 +9,9 @@ import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../database/prisma.service";
 import { JwtService } from "@nestjs/jwt";
 import { UserRole } from "@prisma/client";
-import { MailProvider, MailProviderType } from "../email/types/mail-provider.types";
+import {
+  MailProvider,
+} from "../email/types/mail-provider.types";
 import { AuthService } from "../auth/auth.service";
 import { BaseException } from "../../common/exceptions";
 import { CODES } from "../../common/constants";
@@ -32,7 +34,7 @@ export class OIDCService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly authService: AuthService,
-  ) { }
+  ) {}
 
   // STEP 1: Create Auth URL (Redirect User -> Provider)
   private createAuthUrl(provider: OIDCProviderConfig, state: string): string {
@@ -54,7 +56,10 @@ export class OIDCService {
   }
 
   // STEP 2: Exchange Code For Tokens (CALL TOKEN ENDPOINT)
-  private async exchangeCodeForTokens(provider: OIDCProviderConfig, code: string) {
+  private async exchangeCodeForTokens(
+    provider: OIDCProviderConfig,
+    code: string,
+  ) {
     const data = new URLSearchParams({
       client_id: provider.clientId,
       client_secret: provider.clientSecret ?? "",
@@ -189,7 +194,11 @@ export class OIDCService {
 
     const tokenResponse = await this.authService.generateTokens(user);
 
-    if (!tokenResponse || !tokenResponse.accessToken || !tokenResponse.refreshToken) {
+    if (
+      !tokenResponse ||
+      !tokenResponse.accessToken ||
+      !tokenResponse.refreshToken
+    ) {
       console.error("Token generation failed:", {
         hasTokenResponse: !!tokenResponse,
         hasAccessToken: !!tokenResponse?.accessToken,
@@ -221,7 +230,10 @@ export class OIDCService {
     providerAccountId: string,
     tokens: any,
   ) {
-    const mailProvider: string = provider === OAuthProvider.GOOGLE ? MailProvider.GOOGLE : MailProvider.MICROSOFT;
+    const mailProvider: string =
+      provider === OAuthProvider.GOOGLE
+        ? MailProvider.GOOGLE
+        : MailProvider.MICROSOFT;
 
     // Calculate expiration time (default to 1 hour if not provided)
     const expiresIn = tokens.expires_in || 3600;
@@ -253,7 +265,7 @@ export class OIDCService {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         expires_at: expiresAt,
-        token_type: tokens.token_type || 'Bearer',
+        token_type: tokens.token_type || "Bearer",
         scope: tokens.scope,
         id_token: tokens.id_token,
         emailAccountId: emailAccount.id,
@@ -266,48 +278,13 @@ export class OIDCService {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         expires_at: expiresAt,
-        token_type: tokens.token_type || 'Bearer',
+        token_type: tokens.token_type || "Bearer",
         scope: tokens.scope,
         id_token: tokens.id_token,
         emailAccountId: emailAccount.id,
       },
     });
-
-    // TODO: IMAP configuration model not in schema yet
-    // Save IMAP configuration
-    // const imapSettings = mailProvider === MailProvider.GOOGLE
-    //   ? { host: 'imap.gmail.com', port: 993, smtpHost: 'smtp.gmail.com', smtpPort: 587 }
-    //   : { host: 'outlook.office365.com', port: 993, smtpHost: 'smtp.office365.com', smtpPort: 587 };
-
-    // await this.prisma.imapConfig.upsert({
-    //   where: {
-    //     userId_provider_email: {
-    //       userId,
-    //       provider: mailProvider,
-    //       email,
-    //     },
-    //   },
-    //   update: {
-    //     imapHost: imapSettings.host,
-    //     imapPort: imapSettings.port,
-    //     smtpHost: imapSettings.smtpHost,
-    //     smtpPort: imapSettings.smtpPort,
-    //     updatedAt: new Date(),
-    //   },
-    //   create: {
-    //     userId,
-    //     provider: mailProvider,
-    //     email,
-    //     imapHost: imapSettings.host,
-    //     imapPort: imapSettings.port,
-    //     smtpHost: imapSettings.smtpHost,
-    //     smtpPort: imapSettings.smtpPort,
-    //   },
-    // });
-
-    console.log(`OAuth2 tokens and IMAP config saved for ${email} (${mailProvider})`);
   }
-
 
   async oauthSignIn(
     provider: OAuthProvider,

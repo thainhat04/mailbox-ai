@@ -14,8 +14,6 @@ export const MicrosoftOIDCConfig: OIDCProviderConfig = {
     "email",
     "profile",
     "offline_access", // Get refresh token
-    "https://outlook.office.com/IMAP.AccessAsUser.All", // IMAP access
-    "https://outlook.office.com/SMTP.Send", // SMTP send access
     "https://outlook.office.com/Mail.ReadWrite", // Read/write mail via Graph API
     "https://outlook.office.com/Mail.Send", // Send mail via Graph API
   ],

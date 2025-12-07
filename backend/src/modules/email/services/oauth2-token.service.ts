@@ -166,7 +166,7 @@ export class OAuth2TokenService {
           client_secret: process.env.MICROSOFT_CLIENT_SECRET!,
           refresh_token: refreshToken,
           grant_type: 'refresh_token',
-          scope: 'https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send offline_access',
+          scope: 'https://outlook.office.com/Mail.ReadWrite https://outlook.office.com/Mail.Send offline_access',
         }),
       },
     );

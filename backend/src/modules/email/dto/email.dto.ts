@@ -103,9 +103,9 @@ export class EmailDto {
   @IsBoolean()
   isImportant: boolean;
 
-  @ApiProperty({ example: "inbox" })
+  @ApiProperty()
   @IsString()
-  mailboxId: string;
+  labelId?: string;
 
   @ApiProperty({ type: [AttachmentDto], required: false })
   @IsOptional()
@@ -143,7 +143,7 @@ export class EmailListQueryDto {
   @ApiProperty({ required: false, default: "INBOX" })
   @IsOptional()
   @IsString()
-  mailbox?: string;
+  labelIds?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
