@@ -9,13 +9,10 @@ import {
   Post,
   Body,
   Res,
+  Put,
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-} from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
 import { EmailService } from "./email.service";
 import {
   EmailDto,
@@ -129,6 +126,54 @@ export class EmailController {
     return ResponseDto.success(email, "Email star status toggled");
   }
 
+  @Put("emails/:id/modify")
+  @ApiOperation({ summary: "Modify email flags (read, starred, delete)" })
+  async modifyEmail(
+    @Param("id") id: string,
+    @Body() dto: ModifyEmailDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailDto | null>> {
+    let email: EmailDto | undefined;
+
+    // Handle read flag
+    if (dto.flags.read !== undefined) {
+      if (dto.flags.read) {
+        email = await this.emailService.markAsRead(id, user.sub);
+      } else {
+        email = await this.emailService.markAsUnread(id, user.sub);
+      }
+    }
+
+    // Handle starred flag
+    if (dto.flags.starred !== undefined) {
+      // Get current email to check star status
+      const currentEmail =
+        email ||
+        (await this.emailService.findEmailById(id, user.sub, dto.labelId));
+      const isCurrentlyStarred = currentEmail.isStarred;
+
+      // Only toggle if the desired state is different from current state
+      if (dto.flags.starred !== isCurrentlyStarred) {
+        email = await this.emailService.toggleStar(id, user.sub);
+      } else {
+        email = currentEmail;
+      }
+    }
+
+    // Handle delete flag
+    if (dto.flags.delete) {
+      await this.emailService.deleteEmail(id, user.sub);
+      return ResponseDto.success(null, "Email deleted successfully");
+    }
+
+    // If no email was modified or we need to fetch it
+    const finalEmail =
+      email ||
+      (await this.emailService.findEmailById(id, user.sub, dto.labelId));
+
+    return ResponseDto.success(finalEmail, "Email modified successfully");
+  }
+
   @Delete("emails/:id")
   @ApiOperation({
     summary: "Delete email (move to trash or permanently delete)",
@@ -174,12 +219,18 @@ export class EmailController {
     );
 
     // Set headers for file download with proper filename and content type
-    reply.header("Content-Type", metadata.mimeType || "application/octet-stream");
+    reply.header(
+      "Content-Type",
+      metadata.mimeType || "application/octet-stream",
+    );
     reply.header(
       "Content-Disposition",
       `attachment; filename="${metadata.filename || attachmentId}"`,
     );
-    reply.header("Content-Length", metadata.size?.toString() || data.length.toString());
+    reply.header(
+      "Content-Length",
+      metadata.size?.toString() || data.length.toString(),
+    );
 
     reply.send(data);
   }
