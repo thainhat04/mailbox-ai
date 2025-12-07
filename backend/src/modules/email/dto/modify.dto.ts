@@ -34,22 +34,12 @@ export class ModifyEmailFlagsDto {
 }
 
 export class ModifyEmailDto {
-  @ApiPropertyOptional({
-    example: "INBOX",
-    description: "Tên mailbox muốn chỉnh sửa (mặc định là INBOX)",
-  })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  mailBox?: string;
+  labelId?: string;
 
-  @ApiProperty({
-    description: "Các flag muốn thay đổi",
-    example: {
-      read: true,
-      starred: false,
-      delete: false,
-    },
-  })
+  @ApiProperty()
   @ValidateNested()
   @Type(() => ModifyEmailFlagsDto)
   flags: ModifyEmailFlagsDto;
