@@ -22,7 +22,7 @@ export class EmailService {
     private readonly oauth2TokenService: OAuth2TokenService,
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
-  ) {}
+  ) { }
 
   async getLabelById(labelId: string, userId: string): Promise<any> {
     if (!userId) {
