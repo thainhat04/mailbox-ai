@@ -272,10 +272,10 @@ export class EmailController {
 
   // ============ SNOOZE ENDPOINTS ============
 
-  @Post(":id/snooze")
-  @ApiOperation({ summary: "Snooze email" })
+  @Post(":id/freeze")
+  @ApiOperation({ summary: "Freeze email" })
   @ApiBody({ type: SnoozeEmailDto })
-  async snoozeEmail(
+  async freezeEmail(
     @CurrentUser() user: JwtPayload,
     @Param("id") emailId: string,
     @Body() snoozeDto: SnoozeEmailDto,
@@ -283,21 +283,21 @@ export class EmailController {
     return this.kanbanService.snoozeEmail(user.sub, emailId, snoozeDto);
   }
 
-  @Post(":id/unsnooze")
-  @ApiOperation({ summary: "Unsnooze email manually" })
-  async unsnoozeEmail(
+  @Post(":id/unfreeze")
+  @ApiOperation({ summary: "Unfreeze email manually" })
+  async unfreezeEmail(
     @CurrentUser() user: JwtPayload,
     @Param("id") emailId: string,
   ) {
     return this.kanbanService.unsnoozeEmail(user.sub, emailId);
   }
 
-  @Get("snoozed")
-  @ApiOperation({ summary: "Get all snoozed emails" })
-  async getSnoozedEmails(
+  @Get("frozen")
+  @ApiOperation({ summary: "Get all frozen emails" })
+  async getFrozenEmails(
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.kanbanService.getSnoozedEmails(user.sub);
+    return this.kanbanService.getFrozenEmails(user.sub);
   }
 
   // ============ SUMMARY ENDPOINTS ============

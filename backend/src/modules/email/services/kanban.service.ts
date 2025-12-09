@@ -50,7 +50,7 @@ export class KanbanService {
     includeDoneAll?: boolean,
   ): Promise<KanbanBoardDto> {
     // Fetch emails for each status in parallel
-    const [inbox, toDo, inProgress, done, snoozed] = await Promise.all([
+    const [inbox, todo, processing, done, frozen] = await Promise.all([
       this.emailMessageRepository.findByKanbanStatus(
         userId,
         'INBOX',
@@ -58,12 +58,12 @@ export class KanbanService {
       ),
       this.emailMessageRepository.findByKanbanStatus(
         userId,
-        'TO_DO',
+        'TODO',
         false,
       ),
       this.emailMessageRepository.findByKanbanStatus(
         userId,
-        'IN_PROGRESS',
+        'PROCESSING',
         false,
       ),
       this.emailMessageRepository.findByKanbanStatus(
@@ -73,21 +73,21 @@ export class KanbanService {
       ),
       this.emailMessageRepository.findByKanbanStatus(
         userId,
-        'SNOOZED',
+        'FROZEN',
         false,
       ),
     ]);
 
     // Pre-generate summaries for emails that don't have one
-    const allEmails = [...inbox, ...toDo, ...inProgress, ...done, ...snoozed];
+    const allEmails = [...inbox, ...todo, ...processing, ...done, ...frozen];
     await this.ensureSummaries(userId, allEmails);
 
     return {
       inbox: inbox as any,
-      toDo: toDo as any,
-      inProgress: inProgress as any,
+      todo: todo as any,
+      processing: processing as any,
       done: done as any,
-      snoozed: snoozed as any,
+      frozen: frozen as any,
     };
   }
 
@@ -117,10 +117,10 @@ export class KanbanService {
       snoozeDto.customDateTime,
     );
 
-    // Update to SNOOZED status
+    // Update to FROZEN status
     return this.emailMessageRepository.updateKanbanStatus(
       emailId,
-      'SNOOZED',
+      'FROZEN',
       snoozedUntil,
     );
   }
@@ -146,12 +146,12 @@ export class KanbanService {
   }
 
   /**
-   * Get list of snoozed emails
+   * Get list of frozen emails
    */
-  async getSnoozedEmails(userId: string) {
+  async getFrozenEmails(userId: string) {
     return this.emailMessageRepository.findByKanbanStatus(
       userId,
-      'SNOOZED',
+      'FROZEN',
       false,
     );
   }
