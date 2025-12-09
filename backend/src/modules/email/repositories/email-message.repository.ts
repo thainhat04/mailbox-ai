@@ -368,14 +368,14 @@ export class EmailMessageRepository {
   }
 
   /**
-   * Find snoozed emails that are ready to be unsnoozed
+   * Find frozen emails that are ready to be unfrozen
    */
-  async findExpiredSnoozedEmails(): Promise<PrismaEmailMessage[]> {
+  async findExpiredFrozenEmails(): Promise<PrismaEmailMessage[]> {
     const now = new Date();
 
     return this.prisma.emailMessage.findMany({
       where: {
-        kanbanStatus: 'SNOOZED',
+        kanbanStatus: 'FROZEN',
         snoozedUntil: {
           lte: now,
         },
@@ -396,8 +396,8 @@ export class EmailMessageRepository {
       statusChangedAt: new Date(),
     };
 
-    // Clear snoozedUntil if moving away from SNOOZED status
-    if (status !== 'SNOOZED') {
+    // Clear snoozedUntil if moving away from FROZEN status
+    if (status !== 'FROZEN') {
       updateData.snoozedUntil = null;
     } else if (snoozedUntil) {
       updateData.snoozedUntil = snoozedUntil;
