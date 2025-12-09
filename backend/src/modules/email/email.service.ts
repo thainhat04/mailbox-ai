@@ -150,7 +150,6 @@ export class EmailService {
   async findEmailById(
     id: string,
     userId: string,
-    labelIds?: string,
   ): Promise<Email> {
     const message = await this.prisma.emailMessage.findFirst({
       where: {

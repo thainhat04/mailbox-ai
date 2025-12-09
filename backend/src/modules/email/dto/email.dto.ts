@@ -129,6 +129,32 @@ export class EmailDto {
   @IsArray()
   @IsString({ each: true })
   threadEmails?: string[];
+
+  // Kanban workflow fields
+  @ApiProperty({ example: "INBOX", required: false })
+  @IsOptional()
+  @IsString()
+  kanbanStatus?: string;
+
+  @ApiProperty({ example: "2024-11-20T15:30:00Z", required: false })
+  @IsOptional()
+  @IsString()
+  statusChangedAt?: string;
+
+  @ApiProperty({ example: "2024-11-20T16:30:00Z", required: false })
+  @IsOptional()
+  @IsString()
+  snoozedUntil?: string;
+
+  @ApiProperty({ example: "✨ AI Summary: This email discusses...", required: false })
+  @IsOptional()
+  @IsString()
+  summary?: string;
+
+  @ApiProperty({ example: "2024-11-20T15:30:00Z", required: false })
+  @IsOptional()
+  @IsString()
+  summaryGeneratedAt?: string;
 }
 
 export class EmailListQueryDto {
