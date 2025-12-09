@@ -16,16 +16,16 @@ export class SnoozeSchedulerService {
   @Cron('*/1 * * * *')
   async checkAndUnsnoozeEmails() {
     try {
-      // Find snoozed emails where snoozedUntil <= now
-      const emailsToUnsnooze =
-        await this.emailMessageRepository.findExpiredSnoozedEmails();
+      // Find frozen emails where frozenUntil <= now
+      const emailsToUnfreeze =
+        await this.emailMessageRepository.findExpiredFrozenEmails();
 
-      if (emailsToUnsnooze.length === 0) {
+      if (emailsToUnfreeze.length === 0) {
         return;
       }
 
       // Batch update to INBOX
-      const emailIds = emailsToUnsnooze.map((e) => e.id);
+      const emailIds = emailsToUnfreeze.map((e) => e.id);
 
       await this.emailMessageRepository.unsnoozeExpiredEmails(emailIds);
 
