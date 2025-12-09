@@ -150,7 +150,6 @@ export class EmailService {
   async findEmailById(
     id: string,
     userId: string,
-    labelIds?: string,
   ): Promise<Email> {
     const message = await this.prisma.emailMessage.findFirst({
       where: {
@@ -266,6 +265,13 @@ export class EmailService {
     // Get provider for user
     const provider = await this.providerRegistry.getProviderForUser(userId);
 
+    // Convert attachments from DTO format to provider format
+    const attachments = dto.attachments?.map((att) => ({
+      filename: att.filename,
+      mimeType: att.mimeType,
+      content: Buffer.from(att.contentBase64 || '', 'base64'),
+    }));
+
     // Send email via Gmail API
     const sentMessage = await provider.sendEmail({
       to: [{ email: dto.to }],
@@ -274,6 +280,7 @@ export class EmailService {
       subject: dto.subject,
       bodyHtml: dto.html,
       bodyText: dto.text,
+      attachments,
     });
 
     return {
