@@ -12,8 +12,10 @@ import {
   Put,
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
-import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from "@nestjs/swagger";
 import { EmailService } from "./email.service";
+import { KanbanService } from "./services/kanban.service";
+import { SummaryService } from "./services/summary.service";
 import {
   EmailDto,
   EmailListQueryDto,
@@ -28,13 +30,18 @@ import { SendEmailDto } from "./dto/send-email.dto";
 import { ReplyEmailDto } from "./dto/reply-emai.dto";
 import { ModifyEmailDto } from "./dto/modify.dto";
 import { SendEmailResponse } from "./dto/send-email-response";
+import { UpdateKanbanStatusDto, SnoozeEmailDto } from "./dto/kanban.dto";
 
 @ApiTags("Email")
 @Controller()
 @ApiBearerAuth("JWT-auth")
 @UseGuards(JwtAuthGuard)
 export class EmailController {
-  constructor(private readonly emailService: EmailService) {}
+  constructor(
+    private readonly emailService: EmailService,
+    private readonly kanbanService: KanbanService,
+    private readonly summaryService: SummaryService,
+  ) {}
 
   @Get("labels")
   async getAllLabels(
@@ -99,10 +106,9 @@ export class EmailController {
   @ApiOperation({ summary: "Get email by ID" })
   async getEmailById(
     @Param("id") id: string,
-    @Query("mailbox") mailbox: string | undefined,
     @CurrentUser() user: JwtPayload,
   ): Promise<ResponseDto<EmailDto>> {
-    const email = await this.emailService.findEmailById(id, user.sub, mailbox);
+    const email = await this.emailService.findEmailById(id, user.sub);
     return ResponseDto.success(email, "Email retrieved successfully");
   }
 
@@ -149,7 +155,7 @@ export class EmailController {
       // Get current email to check star status
       const currentEmail =
         email ||
-        (await this.emailService.findEmailById(id, user.sub, dto.labelId));
+        (await this.emailService.findEmailById(id, user.sub));
       const isCurrentlyStarred = currentEmail.isStarred;
 
       // Only toggle if the desired state is different from current state
@@ -169,7 +175,7 @@ export class EmailController {
     // If no email was modified or we need to fetch it
     const finalEmail =
       email ||
-      (await this.emailService.findEmailById(id, user.sub, dto.labelId));
+      (await this.emailService.findEmailById(id, user.sub));
 
     return ResponseDto.success(finalEmail, "Email modified successfully");
   }
@@ -233,5 +239,80 @@ export class EmailController {
     );
 
     reply.send(data);
+  }
+
+  // ============ KANBAN ENDPOINTS ============
+
+  @Get("kanban/board")
+  @ApiOperation({ summary: "Get Kanban board view (all columns)" })
+  async getKanbanBoard(
+    @CurrentUser() user: JwtPayload,
+    @Query("includeDoneAll") includeDoneAll?: boolean,
+  ) {
+    return this.kanbanService.getKanbanBoard(
+      user.sub,
+      includeDoneAll,
+    );
+  }
+
+  @Patch(":id/kanban/status")
+  @ApiOperation({ summary: "Update email kanban status (drag-and-drop)" })
+  @ApiBody({ type: UpdateKanbanStatusDto })
+  async updateKanbanStatus(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") emailId: string,
+    @Body() updateDto: UpdateKanbanStatusDto,
+  ) {
+    return this.kanbanService.updateKanbanStatus(
+      user.sub,
+      emailId,
+      updateDto.status,
+    );
+  }
+
+  // ============ SNOOZE ENDPOINTS ============
+
+  @Post(":id/snooze")
+  @ApiOperation({ summary: "Snooze email" })
+  @ApiBody({ type: SnoozeEmailDto })
+  async snoozeEmail(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") emailId: string,
+    @Body() snoozeDto: SnoozeEmailDto,
+  ) {
+    return this.kanbanService.snoozeEmail(user.sub, emailId, snoozeDto);
+  }
+
+  @Post(":id/unsnooze")
+  @ApiOperation({ summary: "Unsnooze email manually" })
+  async unsnoozeEmail(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") emailId: string,
+  ) {
+    return this.kanbanService.unsnoozeEmail(user.sub, emailId);
+  }
+
+  @Get("snoozed")
+  @ApiOperation({ summary: "Get all snoozed emails" })
+  async getSnoozedEmails(
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.kanbanService.getSnoozedEmails(user.sub);
+  }
+
+  // ============ SUMMARY ENDPOINTS ============
+
+  @Get(":id/summary")
+  @ApiOperation({ summary: "Get email summary (cached or generate)" })
+  async getEmailSummary(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") emailId: string,
+    @Query("forceRegenerate") forceRegenerate?: boolean,
+  ) {
+    return this.summaryService.getEmailSummary(
+      user.sub,
+      emailId,
+      forceRegenerate,
+    );
   }
 }
