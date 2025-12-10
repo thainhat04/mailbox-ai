@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import type { Email, PreviewEmail } from "../../_types";
+import type { PreviewEmail } from "../../_types";
 import EmailRow from "./EmailRow";
 import EmailToolbar from "./EmailToolbar";
 import { useQueryHandler } from "@/hooks/useQueryHandler";

@@ -1,6 +1,5 @@
 "use client";
 import KanbanWrapper from "./KanbanWrapper";
-import Board from "./Board";
 import useKanban from "../../hooks/useKanban";
 import RefreshButton from "./RefreshButton";
 function KanbanLayout() {
