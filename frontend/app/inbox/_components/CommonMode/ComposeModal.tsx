@@ -2,23 +2,20 @@
 
 import { X, Paperclip } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useForwardEmail } from "../hooks/useForwardEmail";
+import { useComposeEmail } from "../../hooks/useComposeEmail";
 import EmailAttachmentItem from "./EmailAttachmentItem";
-import { useSendEmailMutation } from "../_services";
+import { useSendEmailMutation } from "../../_services";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
 import { useEffect } from "react";
 import { useToast } from "@/components/ui/toast-provider";
-import { Email } from "../_types";
 
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    email: Email | null;
 }
 
-export default function ForwardModal({ isOpen, onClose, email }: Props) {
-    if (!isOpen || !email) return null;
-
+export default function ComposeModal({ isOpen, onClose }: Props) {
+    if (!isOpen) return null;
     const sendEmailMutation = useMutationHandler(
         useSendEmailMutation,
         "SendEmail"
@@ -42,8 +39,7 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
         removeAttachment,
         buildBody,
         errors,
-        reset,
-    } = useForwardEmail(email);
+    } = useComposeEmail();
 
     const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
         e.stopPropagation();
@@ -60,7 +56,6 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
         if (!body) return;
         sendEmailMutation.SendEmail(body);
     };
-
     useEffect(() => {
         if (sendEmailMutation.error) {
             showToast(
@@ -71,15 +66,11 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
             );
         }
     }, [sendEmailMutation.error]);
-
     useEffect(() => {
         if (sendEmailMutation.result) {
             showToast(t("inbox.compose.emailSent"), "success");
-            reset();
-            onClose();
         }
     }, [sendEmailMutation.result]);
-
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center"
@@ -102,7 +93,7 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
                     <h2 className="bg-linear-to-r from-cyan-300 to-purple-300 bg-clip-text text-base font-semibold text-transparent">
-                        Forward Email
+                        {t("inbox.compose.1")}
                     </h2>
 
                     <button
@@ -212,7 +203,7 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
                             placeholder={t("inbox.compose.9")!}
-                            className="h-60 w-full resize-y rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm leading-relaxed placeholder:text-white/40 outline-none focus:border-white/20 focus:ring-2 focus:ring-cyan-500/50"
+                            className="h-40 w-full resize-y rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm leading-relaxed placeholder:text-white/40 outline-none focus:border-white/20 focus:ring-2 focus:ring-cyan-500/50"
                         />
                         {errors.message && (
                             <p className="text-xs text-red-400 mt-1">
@@ -221,6 +212,7 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
                         )}
                     </div>
 
+                    {/* FILE UPLOAD */}
                     {/* FILE UPLOAD */}
                     <div className="pt-2">
                         <label className="flex items-center gap-2 text-sm font-medium text-white mb-1">

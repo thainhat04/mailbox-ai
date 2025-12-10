@@ -1,63 +1,30 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import FolderList from "./FolderList";
 import EmailList from "./EmailList";
 import EmailDetail from "./EmailDetail";
-import { Email } from "../_types";
+import { PreviewEmail } from "../../_types";
 import HeaderInbox from "@/components/common/HeaderInbox";
 import { ArrowLeft } from "lucide-react";
 import ComposeModal from "./ComposeModal";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
-import { useModifyEmailMutation } from "../_services";
+import { useModifyEmailMutation } from "../../_services";
 
 type ViewType = "folders" | "list" | "detail";
 
 export default function InboxLayout() {
     const [view, setView] = useState<ViewType>("folders");
     const [selectedFolder, setSelectedFolder] = useState<string>("");
-    const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
-
-    const modifyEmail = useMutationHandler(
-        useModifyEmailMutation,
-        "ModifyEmail"
-    );
+    const [selectedPreviewEmail, setSelectedPreviewEmail] =
+        useState<PreviewEmail | null>(null);
 
     const handleFolderSelect = (folderId: string) => {
         setSelectedFolder(folderId);
         setView("list");
     };
-
-    // Callback to update selected email after modifications
-    const handleEmailModified = useCallback((updatedEmail: Email) => {
-        // Update selected email if it's the same one
-        if (selectedEmail && selectedEmail.id === updatedEmail.id) {
-            setSelectedEmail(updatedEmail);
-        }
-        // RTK Query cache is updated automatically via onQueryStarted
-    }, [selectedEmail]);
-
-    const handleEmailSelect = async (email: Email) => {
-
-        // Save original read status before optimistic update
-        const wasUnread = !email.isRead;
-
-        // Update selected email with optimistic read status
-        const updatedEmail = { ...email, isRead: true };
-        setSelectedEmail(updatedEmail);
+    const handlePreviewEmailSelect = (previewEmail: PreviewEmail | null) => {
+        setSelectedPreviewEmail(previewEmail);
         setView("detail");
-
-        // Call API to mark as read if not already read
-        if (wasUnread) {
-            try {
-
-                // Notify EmailList to update
-                handleEmailModified(updatedEmail);
-            } catch (error) {
-                console.error("Failed to mark as read:", error);
-                // Revert optimistic update on error
-                setSelectedEmail(email);
-            }
-        }
     };
 
     const handleBackFromList = () => {
@@ -66,7 +33,7 @@ export default function InboxLayout() {
     };
 
     const handleBackFromDetail = () => {
-        setSelectedEmail(null);
+        setSelectedPreviewEmail(null);
         setView("list");
     };
     const [isComposeOpen, setIsComposeOpen] = useState(false);
@@ -79,7 +46,6 @@ export default function InboxLayout() {
                 isOpen={isComposeOpen}
                 onClose={() => setIsComposeOpen(false)}
             />
-            <HeaderInbox />
 
             {/* Desktop Layout (≥768px) - 3 columns always visible */}
             <div className="hidden md:flex relative z-10 flex-1 w-full overflow-hidden">
@@ -95,9 +61,8 @@ export default function InboxLayout() {
                 <div className="w-2/5 h-full border-r border-white/10 backdrop-blur-md">
                     <EmailList
                         selectedFolder={selectedFolder}
-                        selectedEmail={selectedEmail}
-                        onSelectEmail={handleEmailSelect}
-                        onEmailModified={handleEmailModified}
+                        selectedPreviewEmail={selectedPreviewEmail}
+                        onSelectPreviewEmail={handlePreviewEmailSelect}
                         isComposeOpen={isComposeOpen}
                         setIsComposeOpen={setIsComposeOpen}
                     />
@@ -106,8 +71,8 @@ export default function InboxLayout() {
                 {/* Email Detail */}
                 <div className="flex-1 h-full backdrop-blur-md overflow-x-auto custom-scroll">
                     <EmailDetail
-                        email={selectedEmail}
-                        onEmailModified={handleEmailModified}
+                        previewEmail={selectedPreviewEmail}
+                        setPreviewEmail={setSelectedPreviewEmail}
                     />
                 </div>
             </div>
@@ -143,9 +108,8 @@ export default function InboxLayout() {
                         <div className="flex-1 overflow-hidden">
                             <EmailList
                                 selectedFolder={selectedFolder}
-                                selectedEmail={selectedEmail}
-                                onSelectEmail={handleEmailSelect}
-                                onEmailModified={handleEmailModified}
+                                selectedPreviewEmail={selectedPreviewEmail}
+                                onSelectPreviewEmail={handlePreviewEmailSelect}
                                 isComposeOpen={isComposeOpen}
                                 setIsComposeOpen={setIsComposeOpen}
                             />
@@ -156,9 +120,9 @@ export default function InboxLayout() {
                 {view === "detail" && (
                     <div className="flex-1 overflow-hidden flex flex-col">
                         <EmailDetail
-                            email={selectedEmail}
+                            previewEmail={selectedPreviewEmail}
                             onBack={handleBackFromDetail}
-                            onEmailModified={handleEmailModified}
+                            setPreviewEmail={setSelectedPreviewEmail}
                         />
                     </div>
                 )}

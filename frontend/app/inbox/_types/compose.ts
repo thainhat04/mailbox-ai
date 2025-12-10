@@ -33,4 +33,5 @@ export interface ReplyEmailWithId {
 export interface ComposeEmailResponse {
     emailId: string;
     sendAt: Date;
+    labelId: string[];
 }

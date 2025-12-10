@@ -7,11 +7,7 @@ export interface ModifyEmailFlags {
 }
 
 export interface ModifyEmail {
-    mailBox?: string;
+    mailBox: string[];
     emailId: string;
     flags: ModifyEmailFlags;
-}
-
-export interface ModifyEmailResponse {
-    success: boolean;
 }
