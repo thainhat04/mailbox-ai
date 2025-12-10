@@ -20,7 +20,6 @@ export function useQueryHandler<T, A = void>(
         isFetching,
         refetch,
     } = queryResult;
-
     const [result, setResult] = useState<T | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -28,9 +27,7 @@ export function useQueryHandler<T, A = void>(
 
     // cập nhật result khi có data
     useEffect(() => {
-        if (data) {
-            setResult(data);
-        }
+        setResult(data || null);
     }, [data]);
 
     // chuẩn hóa error

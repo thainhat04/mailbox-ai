@@ -1,6 +1,6 @@
 // components/Inbox/EmailDetail.tsx
 "use client";
-import type { Email, PreviewEmail } from "../_types";
+import type { Email, PreviewEmail } from "../../_types";
 import {
     Reply,
     Forward,
@@ -19,7 +19,7 @@ import SERVICES from "@/constants/services";
 import ReplyModal from "./ReplyModal";
 import ForwardModal from "./ForwardModal";
 import { useState, useEffect } from "react";
-import { useModifyEmailMutation, useGetEmailByIdQuery } from "../_services";
+import { useModifyEmailMutation, useGetEmailByIdQuery } from "../../_services";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import LoadingOverlay from "@/components/ui/LoadingOverlay";
@@ -60,11 +60,10 @@ export default function EmailDetail({
     const { result, isFetching } = useQueryHandler(
         useGetEmailByIdQuery,
         {
-            mailboxId: previewEmail?.mailboxId || "",
             id: previewEmail?.id || "",
         },
         {
-            skip: !previewEmail?.id || !previewEmail?.mailboxId,
+            skip: !previewEmail?.id,
         }
     );
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
@@ -82,6 +81,7 @@ export default function EmailDetail({
 
     const handleDownloadAttachment = async (url: string, filename: string) => {
         try {
+            url = url.replace("/api/v1/", "/");
             const token = localStorage.getItem(SERVICES.accessToken);
             const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
                 headers: {
@@ -115,6 +115,7 @@ export default function EmailDetail({
     ) => {
         try {
             const token = localStorage.getItem(SERVICES.accessToken);
+            url = url.replace("/api/v1/", "/");
             const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -143,7 +144,7 @@ export default function EmailDetail({
         if (modifyEmail.isLoading) return;
         const result = await modifyEmail.ModifyEmail({
             emailId: email.id,
-            mailBox: email.mailboxId || "",
+            mailBox: email.labelId,
             flags: { delete: true },
         });
         if (result) {
@@ -151,6 +152,7 @@ export default function EmailDetail({
                 onBack();
             }
             setPreviewEmail(null);
+            setEmail(null);
         } else {
             showToast(t("inbox.emailDeleteError"), "error");
         }
@@ -164,7 +166,7 @@ export default function EmailDetail({
 
         const result = await modifyEmail.ModifyEmail({
             emailId: email.id,
-            mailBox: email.mailboxId || "",
+            mailBox: email.labelId,
             flags: { starred: newStarred },
         });
 
@@ -364,13 +366,6 @@ export default function EmailDetail({
                             </span>
                         </button>
                     </div>
-
-                    {/* Unread badge */}
-                    {!email.isRead && (
-                        <span className="absolute top-4 right-4 sm:right-6 rounded-full bg-cyan-400/15 px-2 py-1 text-[10px] font-medium text-cyan-300 ring-1 ring-cyan-300/30">
-                            {t("inbox.detail.12")}
-                        </span>
-                    )}
                 </div>
             )}
 

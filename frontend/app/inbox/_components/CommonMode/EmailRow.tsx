@@ -1,12 +1,13 @@
 // components/Inbox/EmailRow.tsx
 "use client";
 
-import { PreviewEmail } from "../_types";
+import { PreviewEmail } from "../../_types";
 import { Star, Circle } from "lucide-react";
 import clsx from "clsx";
 import Checkbox from "@/components/ui/CheckBox";
 import { formatEmailDate } from "@/helper/dateFormatter";
 import { useTranslation } from "react-i18next";
+import { useState } from "react";
 
 interface EmailRowProps {
     email: PreviewEmail;
@@ -14,7 +15,7 @@ interface EmailRowProps {
     selected: boolean;
     onSelect: (previewEmail: PreviewEmail) => void;
     onToggleSelect: (emailId: string) => void;
-    onToggleStar: (emailId: string) => void;
+    onToggleStar: (emailId: string) => Promise<void>;
     onToggleRead: (emailId: string) => void;
 }
 
@@ -28,6 +29,7 @@ export default function EmailRow({
     onToggleRead,
 }: EmailRowProps) {
     const { t } = useTranslation();
+    const [isTogglingStar, setIsTogglingStar] = useState(false);
     return (
         <div
             className={clsx(
@@ -96,9 +98,12 @@ export default function EmailRow({
                     <span
                         className="cursor-pointer"
                         title={email.isStarred ? "Unstar" : "Star"}
-                        onClick={(e) => {
+                        onClick={async (e) => {
+                            if (isTogglingStar) return;
+                            setIsTogglingStar(true);
                             e.stopPropagation();
-                            onToggleStar(email.id);
+                            await onToggleStar(email.id);
+                            setIsTogglingStar(false);
                         }}
                     >
                         <Star

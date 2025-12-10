@@ -9,13 +9,18 @@ import type {
     PreviewEmailRequest,
     Email,
     EmailRequest,
+    PreviewEmail,
+    KanbanBoardData,
+    KanbanItem,
+    SetFrozenRequest,
 } from "../_types";
 import type { SuccessResponse } from "@/types/success-response";
 import { api } from "@/services/index";
 import { HTTP_METHOD } from "@/constants/services";
 import constant from "../_constants";
-import { ModifyEmail, ModifyEmailResponse } from "../_types/modify";
+import { ModifyEmail } from "../_types/modify";
 import type { RootState } from "@/store";
+import { EmailSummaryData, UpdateKanbanStatusRequest } from "../_types/kanban";
 
 const inboxApi = api.injectEndpoints({
     endpoints: (builder) => ({
@@ -47,8 +52,7 @@ const inboxApi = api.injectEndpoints({
                 },
             }),
             providesTags: (_, __, arg) => [
-                { type: "Emails", mailboxId: arg.mailboxId },
-                { type: "Emails", mailboxId: arg.mailboxId, page: arg.page },
+                { type: "Emails", id: `${arg.mailboxId}-${arg.page}` },
             ],
         }),
 
@@ -63,13 +67,13 @@ const inboxApi = api.injectEndpoints({
             }),
             invalidatesTags: (result, _, __) => {
                 if (!result) return [];
+                const boxTrigger = result.data.labelId.map((labelId) => ({
+                    type: "Emails" as const,
+                    id: `${labelId}-1`,
+                }));
                 return [
-                    {
-                        type: "Emails",
-                        mailboxId: result.data.mailboxId,
-                        page: 1,
-                    },
                     { type: "Emails", id: "MAILBOXES_LIST" },
+                    ...boxTrigger,
                 ];
             },
         }),
@@ -82,27 +86,24 @@ const inboxApi = api.injectEndpoints({
                 method: HTTP_METHOD.POST,
                 body: body.replyData,
             }),
-            invalidatesTags: (result, _, __) => {
+            invalidatesTags: (result, _, arg) => {
                 if (!result) return [];
-                return [
-                    {
-                        type: "Emails",
-                        mailboxId: result.data.mailboxId,
-                        page: 1,
-                    },
-                    { type: "Emails", id: "MAILBOXES_LIST" },
-                ];
+                const boxTrigger = result.data.labelId.map((labelId) => ({
+                    type: "Emails" as const,
+                    id: `${labelId}-1`,
+                }));
+                return [...boxTrigger, { type: "Emails", id: arg.emailId }];
             },
         }),
         modifyEmail: builder.mutation<
-            SuccessResponse<ModifyEmailResponse>,
+            SuccessResponse<PreviewEmail>,
             ModifyEmail
         >({
             query: (body) => ({
                 url: constant.URL_MODIFY_EMAIL(body.emailId),
-                method: "POST",
+                method: HTTP_METHOD.PUT,
                 body: {
-                    mailBox: body.mailBox,
+                    labelId: "INBOX",
                     flags: body.flags,
                 },
             }),
@@ -116,19 +117,13 @@ const inboxApi = api.injectEndpoints({
                         getState() as RootState,
                         "getMailInOneBox"
                     );
-                const allCacheEmailEntries =
-                    inboxApi.util.selectCachedArgsForQuery(
-                        getState() as RootState,
-                        "getEmailById"
-                    );
 
-                const targetEntries = allCachePreviewEntries.filter(
-                    (entry) => entry.mailboxId === arg.mailBox
-                );
+                const mailboxList = arg.mailBox;
 
-                const targetEmailEntries = allCacheEmailEntries.filter(
-                    (entry) => entry.id === arg.emailId
+                const targetEntries = allCachePreviewEntries.filter((entry) =>
+                    mailboxList.includes(entry.mailboxId)
                 );
+                let _email: PreviewEmail | undefined = undefined;
 
                 for (const entry of targetEntries) {
                     const patch = dispatch(
@@ -145,12 +140,27 @@ const inboxApi = api.injectEndpoints({
                                     const email = draft.data.emails.find(
                                         (e) => e.id === arg.emailId
                                     );
+
                                     if (email) {
+                                        _email = { ...email };
                                         if (arg.flags.read !== undefined) {
                                             email.isRead = arg.flags.read;
                                         }
                                         if (arg.flags.starred !== undefined) {
                                             email.isStarred = arg.flags.starred;
+                                            if (arg.flags.starred) {
+                                                email.labelId = Array.from(
+                                                    new Set([
+                                                        ...email.labelId,
+                                                        "STARRED",
+                                                    ])
+                                                );
+                                            } else {
+                                                email.labelId =
+                                                    email.labelId.filter(
+                                                        (id) => id !== "STARRED"
+                                                    );
+                                            }
                                         }
                                     }
                                 }
@@ -159,28 +169,60 @@ const inboxApi = api.injectEndpoints({
                     );
                     patches.push(patch);
                 }
-                for (const entry of targetEmailEntries) {
-                    const patch = dispatch(
-                        inboxApi.util.updateQueryData(
-                            "getEmailById",
-                            entry,
-                            (draft) => {
-                                if (arg.flags.delete) {
-                                    // No action on single email cache for delete
-                                } else {
-                                    if (arg.flags.read !== undefined) {
-                                        draft.data.isRead = arg.flags.read;
+                const mailboxPatch = dispatch(
+                    inboxApi.util.updateQueryData(
+                        "getMailBoxes",
+                        undefined,
+                        (draft) => {
+                            if (arg.flags.delete) {
+                                const mailBox = draft.data.filter((mb) =>
+                                    mailboxList.includes(mb.id)
+                                );
+                                mailBox.forEach((mb) => {
+                                    mb.unreadCount = Math.max(
+                                        0,
+                                        mb.unreadCount - 1
+                                    );
+                                });
+                            } else if (arg.flags.read !== undefined) {
+                                const mailBox = draft.data.filter((mb) =>
+                                    mailboxList.includes(mb.id)
+                                );
+                                mailBox.forEach((mb) => {
+                                    if (arg.flags.read) {
+                                        mb.unreadCount = Math.max(
+                                            0,
+                                            mb.unreadCount - 1
+                                        );
+                                    } else {
+                                        mb.unreadCount += 1;
                                     }
-                                    if (arg.flags.starred !== undefined) {
-                                        draft.data.isStarred =
-                                            arg.flags.starred;
+                                });
+                            } else if (arg.flags.starred !== undefined) {
+                                if (_email) {
+                                    const mailBox = draft.data.find(
+                                        (mb) => mb.id === "STARRED"
+                                    );
+                                    if (mailBox) {
+                                        if (arg.flags.starred) {
+                                            if (!_email.isRead) {
+                                                mailBox.unreadCount += 1;
+                                            }
+                                        } else {
+                                            if (!_email.isRead) {
+                                                mailBox.unreadCount = Math.max(
+                                                    0,
+                                                    mailBox.unreadCount - 1
+                                                );
+                                            }
+                                        }
                                     }
                                 }
                             }
-                        )
-                    );
-                    patches.push(patch);
-                }
+                        }
+                    )
+                );
+                patches.push(mailboxPatch);
 
                 try {
                     await queryFulfilled;
@@ -188,23 +230,74 @@ const inboxApi = api.injectEndpoints({
                     patches.forEach((p) => p.undo());
                 }
             },
-            invalidatesTags: (result, _, __) => {
+            invalidatesTags: (result, _, arg) => {
                 if (!result) return [];
-                return [{ type: "Emails", id: "MAILBOXES_LIST" }];
+                if (arg.flags.starred !== undefined) {
+                    return [
+                        { type: "Emails", id: "STARRED-1" },
+                        { type: "Emails", id: arg.emailId },
+                    ];
+                }
+                return [{ type: "Emails", id: arg.emailId }];
             },
         }),
 
         getEmailById: builder.query<SuccessResponse<Email>, EmailRequest>({
             query: (body) => ({
-                url: `${constant.URL_MAILBOXES}/${body.mailboxId}/emails/${body.id}`,
+                url: `/emails/${body.id}`,
                 method: HTTP_METHOD.GET,
             }),
-            providesTags: (_, __, arg) => [
-                { type: "Emails", id: arg.id, mailbox: arg.mailboxId },
-            ],
+            providesTags: (_, __, arg) => [{ type: "Emails", id: arg.id }],
+        }),
+
+        getAllKanBan: builder.query<SuccessResponse<KanbanBoardData>, void>({
+            query: () => ({
+                url: constant.URL_KANBAN,
+                method: HTTP_METHOD.GET,
+                params: {
+                    includeDoneAll: true,
+                },
+            }),
+        }),
+        updateKanBanStatus: builder.mutation<
+            SuccessResponse<KanbanItem>,
+            UpdateKanbanStatusRequest
+        >({
+            query: (body) => ({
+                url: constant.URL_UPDATE_KANBAN_STATUS(body.id),
+                method: HTTP_METHOD.PATCH,
+                body: {
+                    status: body.newStatus,
+                },
+            }),
+        }),
+        summarizeEmail: builder.query<
+            SuccessResponse<EmailSummaryData>,
+            { emailId: string }
+        >({
+            query: (body) => ({
+                url: constant.URL_SUMMARIZE_EMAIL(body.emailId),
+                method: HTTP_METHOD.GET,
+                params: {
+                    forceRegenerate: false,
+                },
+            }),
+        }),
+        updateFrozenStatus: builder.mutation<
+            SuccessResponse<KanbanItem>,
+            SetFrozenRequest
+        >({
+            query: (body) => ({
+                url: constant.URL_FROZEN_EMAILS(body.emailId),
+                method: HTTP_METHOD.POST,
+                body: {
+                    duration: body.duration,
+                    customDateTime: body.customDateTime,
+                },
+            }),
         }),
     }),
-    overrideExisting: false,
+    overrideExisting: true,
 });
 
 export const {
@@ -214,4 +307,8 @@ export const {
     useReplyEmailMutation,
     useModifyEmailMutation,
     useGetEmailByIdQuery,
+    useGetAllKanBanQuery,
+    useUpdateKanBanStatusMutation,
+    useSummarizeEmailQuery,
+    useUpdateFrozenStatusMutation,
 } = inboxApi;

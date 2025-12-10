@@ -1,14 +1,14 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import FolderList from "./FolderList";
 import EmailList from "./EmailList";
 import EmailDetail from "./EmailDetail";
-import { PreviewEmail } from "../_types";
+import { PreviewEmail } from "../../_types";
 import HeaderInbox from "@/components/common/HeaderInbox";
 import { ArrowLeft } from "lucide-react";
 import ComposeModal from "./ComposeModal";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
-import { useModifyEmailMutation } from "../_services";
+import { useModifyEmailMutation } from "../../_services";
 
 type ViewType = "folders" | "list" | "detail";
 
@@ -17,11 +17,6 @@ export default function InboxLayout() {
     const [selectedFolder, setSelectedFolder] = useState<string>("");
     const [selectedPreviewEmail, setSelectedPreviewEmail] =
         useState<PreviewEmail | null>(null);
-
-    const modifyEmail = useMutationHandler(
-        useModifyEmailMutation,
-        "ModifyEmail"
-    );
 
     const handleFolderSelect = (folderId: string) => {
         setSelectedFolder(folderId);
@@ -51,7 +46,6 @@ export default function InboxLayout() {
                 isOpen={isComposeOpen}
                 onClose={() => setIsComposeOpen(false)}
             />
-            <HeaderInbox />
 
             {/* Desktop Layout (≥768px) - 3 columns always visible */}
             <div className="hidden md:flex relative z-10 flex-1 w-full overflow-hidden">

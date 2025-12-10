@@ -47,9 +47,13 @@ export function useForwardEmail(originalEmail: Email | null) {
 
     const buildForwardedContent = (email: Email): string => {
         const from = email.from || "Unknown";
-        const date = email.date ? formatEmailDate(new Date(email.date)) : "Unknown date";
+        const date = email.date
+            ? formatEmailDate(new Date(email.date))
+            : "Unknown date";
         const subject = email.subject || "(No subject)";
-        const to = Array.isArray(email.to) ? email.to.join(", ") : email.to || "";
+        const to = Array.isArray(email.to)
+            ? email.to.join(", ")
+            : email.to || "";
 
         return `
 
@@ -64,7 +68,7 @@ ${email.body || ""}`;
     };
 
     const isValidEmail = (email: string) =>
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}$/.test(email);
     const validateEmails = (emails: string[]) =>
         emails.every((e) => e.trim() === "" || isValidEmail(e.trim()));
 
