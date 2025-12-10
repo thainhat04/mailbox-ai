@@ -4,8 +4,8 @@ Smart email management system with AI-powered summarization and Kanban board wor
 
 ## Deployed URLs
 
-- **Frontend**: [Your deployed frontend URL]
-- **Backend**: [Your deployed backend URL]
+- **Frontend**: [Frontend URL](https://mailbox-ai-pv3e.vercel.app)
+- **Backend**: [Backend URL](https://mailbox-ai-tawny.vercel.app)
 
 ## Prerequisites
 
