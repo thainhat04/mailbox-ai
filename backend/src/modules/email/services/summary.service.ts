@@ -2,13 +2,24 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { EmailMessageRepository } from '../repositories/email-message.repository';
 import { PrismaService } from '../../../database/prisma.service';
 import { EmailSummaryDto } from '../dto';
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 
 @Injectable()
 export class SummaryService {
+  private readonly aiServiceUrl: string;
+
   constructor(
     private readonly emailMessageRepository: EmailMessageRepository,
     private readonly prisma: PrismaService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    // Get AI service URL from environment or use default
+    this.aiServiceUrl = this.configService.get<string>(
+      'AI_SERVICE_URL',
+      'http://localhost:8000',
+    );
+  }
 
   /**
    * Generate or retrieve cached summary
@@ -41,8 +52,8 @@ export class SummaryService {
       };
     }
 
-    // Generate new summary
-    const summary = await this.generateMockSummary(
+    // Generate new summary using AI service
+    const summary = await this.generateAISummary(
       email.subject || '',
       email.body?.bodyText || email.body?.bodyHtml || '',
     );
@@ -57,13 +68,46 @@ export class SummaryService {
   }
 
   /**
-   * Mock AI summarization (extractive approach)
+   * Generate AI summary using LangChain + Gemini service
+   * Format: ✨ AI Summary: [AI generated content]
+   */
+  private async generateAISummary(
+    subject: string,
+    body: string,
+  ): Promise<string> {
+    try {
+      // Call AI service endpoint
+      const response = await axios.post<{ summary: string; model_used: string }>(
+        `${this.aiServiceUrl}/api/v1/summarize`,
+        {
+          subject,
+          body,
+          max_length: 200,
+        },
+        {
+          timeout: 30000, // 30 second timeout
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      return response.data.summary;
+    } catch (error) {
+      // Fallback to extractive summary if AI service fails
+      console.error('AI service error, falling back to extractive summary:', error);
+      return this.generateFallbackSummary(subject, body);
+    }
+  }
+
+  /**
+   * Fallback extractive summary if AI service is unavailable
    * Format: ✨ AI Summary: [extracted content]
    */
-  private async generateMockSummary(
+  private generateFallbackSummary(
     subject: string,
     bodyText: string,
-  ): Promise<string> {
+  ): string {
     // Strategy: Extract first 2-3 sentences or first 150 characters
     const cleanText = bodyText
       .replace(/<[^>]*>/g, '') // Remove HTML tags
@@ -92,11 +136,4 @@ export class SummaryService {
 
     return `✨ AI Summary: ${extractedText}`;
   }
-
-  // Future: Real AI integration endpoint
-  // private async generateAISummary(emailContent: string): Promise<string> {
-  //   // POST to ai-service: http://ai-service:8000/api/v1/summarize
-  //   // Body: { content: emailContent, maxLength: 200 }
-  //   // Response: { summary: string }
-  // }
 }
