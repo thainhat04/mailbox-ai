@@ -12,7 +12,11 @@ import { useModifyEmailMutation } from "../../_services";
 
 type ViewType = "folders" | "list" | "detail";
 
-export default function InboxLayout() {
+export default function InboxLayout({
+    isCommondMode,
+}: {
+    isCommondMode: boolean;
+}) {
     const [view, setView] = useState<ViewType>("folders");
     const [selectedFolder, setSelectedFolder] = useState<string>("");
     const [selectedPreviewEmail, setSelectedPreviewEmail] =
@@ -39,7 +43,10 @@ export default function InboxLayout() {
     const [isComposeOpen, setIsComposeOpen] = useState(false);
 
     return (
-        <div className="relative h-screen w-full flex flex-col overflow-hidden text-white">
+        <div
+            style={{ display: isCommondMode ? "flex" : "none" }}
+            className="relative h-screen w-full flex flex-col overflow-hidden text-white"
+        >
             {/* Gradient background */}
             <div className="absolute inset-0 bg-linear-to-br from-[#0f111a] via-[#1a1b2b] to-[#2c1e4f] backdrop-blur-sm" />
             <ComposeModal
