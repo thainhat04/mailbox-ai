@@ -14,9 +14,9 @@ function InboxLayout() {
                 isCommondMode={isCommondMode}
                 setIsCommandMode={setIsCommandMode}
             />
-            <div style={{ display: isCommondMode ? "block" : "none" }}>
-                <CommondLayout />
-            </div>
+
+            <CommondLayout isCommondMode={isCommondMode} />
+
             <div style={{ display: isCommondMode ? "none" : "block" }}>
                 <KanbanLayout />
             </div>
