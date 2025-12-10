@@ -23,7 +23,7 @@ export class EmailSyncService {
     private readonly prisma: PrismaService,
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
-  ) {}
+  ) { }
 
   // @Cron(CronExpression.EVERY_30_SECONDS)
   // async syncAllEmails(): Promise<void> {
@@ -141,9 +141,9 @@ export class EmailSyncService {
       // Convert SyncStateData to SyncState
       const syncState = syncStateData
         ? {
-            historyId: syncStateData.lastSyncedHistoryId,
-            deltaLink: syncStateData.lastDeltaLink,
-          }
+          historyId: syncStateData.lastSyncedHistoryId,
+          deltaLink: syncStateData.lastDeltaLink,
+        }
         : {};
 
       // Perform sync with retry logic
