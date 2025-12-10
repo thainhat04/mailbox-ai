@@ -129,6 +129,12 @@
             "2": "Người nhận",
             "3": "Chủ đề",
             "4": "Gửi trả lời"
-        }
+        },
+        "emailDeleteError": "Xóa một số email không thành công. Vui lòng thử lại.",
+        "emailMarkError": "Cập nhật một số email không thành công. Vui lòng thử lại.",
+        "emailStarError": "Cập nhật trạng thái đánh dấu không thành công. Vui lòng thử lại.",
+        "prev": "Trước",
+        "next": "Tiếp",
+        "page": "Trang"
     }
 }

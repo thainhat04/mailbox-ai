@@ -144,6 +144,13 @@ model EmailMessage {
   inReplyTo         String?
   references        String[]
 
+  // Kanban workflow fields
+  kanbanStatus      String?       @default("INBOX")   // INBOX, TODO, PROCESSING, DONE, FROZEN
+  statusChangedAt   DateTime      @default(now())     // For sorting within columns
+  snoozedUntil      DateTime?                         // When to auto-unsnooze (null = not frozen)
+  summary           String?       @db.Text            // Cached AI summary
+  summaryGeneratedAt DateTime?                        // Track when summary was created
+
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -154,6 +161,7 @@ model EmailMessage {
   @@index([emailAccountId, threadId])
   @@index([emailAccountId, date])
   @@index([emailAccountId, isRead])
+  @@index([kanbanStatus, statusChangedAt])
   @@map("email_messages")
 }
 

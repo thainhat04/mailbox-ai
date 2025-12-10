@@ -9,14 +9,13 @@ import {
   Post,
   Body,
   Res,
+  Put,
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-} from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from "@nestjs/swagger";
 import { EmailService } from "./email.service";
+import { KanbanService } from "./services/kanban.service";
+import { SummaryService } from "./services/summary.service";
 import {
   EmailDto,
   EmailListQueryDto,
@@ -31,13 +30,18 @@ import { SendEmailDto } from "./dto/send-email.dto";
 import { ReplyEmailDto } from "./dto/reply-emai.dto";
 import { ModifyEmailDto } from "./dto/modify.dto";
 import { SendEmailResponse } from "./dto/send-email-response";
+import { UpdateKanbanStatusDto, SnoozeEmailDto } from "./dto/kanban.dto";
 
 @ApiTags("Email")
 @Controller()
 @ApiBearerAuth("JWT-auth")
 @UseGuards(JwtAuthGuard)
 export class EmailController {
-  constructor(private readonly emailService: EmailService) {}
+  constructor(
+    private readonly emailService: EmailService,
+    private readonly kanbanService: KanbanService,
+    private readonly summaryService: SummaryService,
+  ) {}
 
   @Get("labels")
   async getAllLabels(
@@ -102,10 +106,9 @@ export class EmailController {
   @ApiOperation({ summary: "Get email by ID" })
   async getEmailById(
     @Param("id") id: string,
-    @Query("mailbox") mailbox: string | undefined,
     @CurrentUser() user: JwtPayload,
   ): Promise<ResponseDto<EmailDto>> {
-    const email = await this.emailService.findEmailById(id, user.sub, mailbox);
+    const email = await this.emailService.findEmailById(id, user.sub);
     return ResponseDto.success(email, "Email retrieved successfully");
   }
 
@@ -127,6 +130,52 @@ export class EmailController {
   ): Promise<ResponseDto<EmailDto>> {
     const email = await this.emailService.toggleStar(id, user.sub);
     return ResponseDto.success(email, "Email star status toggled");
+  }
+
+  @Put("emails/:id/modify")
+  @ApiOperation({ summary: "Modify email flags (read, starred, delete)" })
+  async modifyEmail(
+    @Param("id") id: string,
+    @Body() dto: ModifyEmailDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<EmailDto | null>> {
+    let email: EmailDto | undefined;
+
+    // Handle read flag
+    if (dto.flags.read !== undefined) {
+      if (dto.flags.read) {
+        email = await this.emailService.markAsRead(id, user.sub);
+      } else {
+        email = await this.emailService.markAsUnread(id, user.sub);
+      }
+    }
+
+    // Handle starred flag
+    if (dto.flags.starred !== undefined) {
+      // Get current email to check star status
+      const currentEmail =
+        email || (await this.emailService.findEmailById(id, user.sub));
+      const isCurrentlyStarred = currentEmail.isStarred;
+
+      // Only toggle if the desired state is different from current state
+      if (dto.flags.starred !== isCurrentlyStarred) {
+        email = await this.emailService.toggleStar(id, user.sub);
+      } else {
+        email = currentEmail;
+      }
+    }
+
+    // Handle delete flag
+    if (dto.flags.delete) {
+      await this.emailService.deleteEmail(id, user.sub);
+      return ResponseDto.success(null, "Email deleted successfully");
+    }
+
+    // If no email was modified or we need to fetch it
+    const finalEmail =
+      email || (await this.emailService.findEmailById(id, user.sub));
+
+    return ResponseDto.success(finalEmail, "Email modified successfully");
   }
 
   @Delete("emails/:id")
@@ -174,13 +223,102 @@ export class EmailController {
     );
 
     // Set headers for file download with proper filename and content type
-    reply.header("Content-Type", metadata.mimeType || "application/octet-stream");
+    reply.header(
+      "Content-Type",
+      metadata.mimeType || "application/octet-stream",
+    );
     reply.header(
       "Content-Disposition",
       `attachment; filename="${metadata.filename || attachmentId}"`,
     );
-    reply.header("Content-Length", metadata.size?.toString() || data.length.toString());
+    reply.header(
+      "Content-Length",
+      metadata.size?.toString() || data.length.toString(),
+    );
 
     reply.send(data);
+  }
+
+  // ============ KANBAN ENDPOINTS ============
+
+  @Get("kanban/board")
+  @ApiOperation({ summary: "Get Kanban board view (all columns)" })
+  async getKanbanBoard(
+    @CurrentUser() user: JwtPayload,
+    @Query("includeDoneAll") includeDoneAll?: boolean,
+  ) {
+    const result = await this.kanbanService.getKanbanBoard(
+      user.sub,
+      includeDoneAll,
+    );
+    return ResponseDto.success(result, "Kanban board retrieved successfully");
+  }
+
+  @Patch(":id/kanban/status")
+  @ApiOperation({ summary: "Update email kanban status (drag-and-drop)" })
+  @ApiBody({ type: UpdateKanbanStatusDto })
+  async updateKanbanStatus(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") emailId: string,
+    @Body() updateDto: UpdateKanbanStatusDto,
+  ) {
+    const result = await this.kanbanService.updateKanbanStatus(
+      user.sub,
+      emailId,
+      updateDto.status,
+    );
+    return ResponseDto.success(result, "Kanban status updated successfully");
+  }
+
+  // ============ SNOOZE ENDPOINTS ============
+
+  @Post(":id/freeze")
+  @ApiOperation({ summary: "Freeze email" })
+  @ApiBody({ type: SnoozeEmailDto })
+  async freezeEmail(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") emailId: string,
+    @Body() snoozeDto: SnoozeEmailDto,
+  ) {
+    const result = await this.kanbanService.snoozeEmail(
+      user.sub,
+      emailId,
+      snoozeDto,
+    );
+    return ResponseDto.success(result, "Email frozen successfully");
+  }
+
+  @Post(":id/unfreeze")
+  @ApiOperation({ summary: "Unfreeze email manually" })
+  async unfreezeEmail(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") emailId: string,
+  ) {
+    const result = await this.kanbanService.unsnoozeEmail(user.sub, emailId);
+    return ResponseDto.success(result, "Email unfrozen successfully");
+  }
+
+  @Get("frozen")
+  @ApiOperation({ summary: "Get all frozen emails" })
+  async getFrozenEmails(@CurrentUser() user: JwtPayload) {
+    const result = await this.kanbanService.getFrozenEmails(user.sub);
+    return ResponseDto.success(result, "Frozen emails retrieved successfully");
+  }
+
+  // ============ SUMMARY ENDPOINTS ============
+
+  @Get(":id/summary")
+  @ApiOperation({ summary: "Get email summary (cached or generate)" })
+  async getEmailSummary(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") emailId: string,
+    @Query("forceRegenerate") forceRegenerate?: boolean,
+  ) {
+    const result = await this.summaryService.getEmailSummary(
+      user.sub,
+      emailId,
+      forceRegenerate,
+    );
+    return ResponseDto.success(result, "Email summary retrieved successfully");
   }
 }

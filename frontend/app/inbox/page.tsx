@@ -1,4 +1,5 @@
-import InboxLayout from "./_components/InboxLayout";
+import InboxLayout from "./_components/Layout";
+
 import ProtectRoute from "@/components/routes/ProtectRoute";
 
 export default function InboxPage() {

@@ -331,4 +331,119 @@ export class EmailMessageRepository {
 
     return count > 0;
   }
+
+  /**
+   * Find emails by kanban status with optional DONE filtering
+   */
+  async findByKanbanStatus(
+    userId: string,
+    status: string,
+    includeDoneAll?: boolean,
+  ): Promise<PrismaEmailMessage[]> {
+    const whereClause: any = {
+      emailAccount: { userId },
+      kanbanStatus: status,
+    };
+
+    // Special filtering for DONE status - only last 7 days unless includeDoneAll is true
+    if (status === 'DONE' && !includeDoneAll) {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      whereClause.statusChangedAt = {
+        gte: sevenDaysAgo,
+      };
+    }
+
+    return this.prisma.emailMessage.findMany({
+      where: whereClause,
+      orderBy: {
+        statusChangedAt: 'desc', // Most recently updated first
+      },
+      include: {
+        attachments: true,
+        body: true,
+      },
+    });
+  }
+
+  /**
+   * Find frozen emails that are ready to be unfrozen
+   */
+  async findExpiredFrozenEmails(): Promise<PrismaEmailMessage[]> {
+    const now = new Date();
+
+    return this.prisma.emailMessage.findMany({
+      where: {
+        kanbanStatus: 'FROZEN',
+        snoozedUntil: {
+          lte: now,
+        },
+      },
+    });
+  }
+
+  /**
+   * Update kanban status for a single email
+   */
+  async updateKanbanStatus(
+    emailId: string,
+    status: string,
+    snoozedUntil?: Date | null,
+  ): Promise<PrismaEmailMessage> {
+    const updateData: any = {
+      kanbanStatus: status,
+      statusChangedAt: new Date(),
+    };
+
+    // Clear snoozedUntil if moving away from FROZEN status
+    if (status !== 'FROZEN') {
+      updateData.snoozedUntil = null;
+    } else if (snoozedUntil) {
+      updateData.snoozedUntil = snoozedUntil;
+    }
+
+    return this.prisma.emailMessage.update({
+      where: { id: emailId },
+      data: updateData,
+      include: {
+        attachments: true,
+        body: true,
+      },
+    });
+  }
+
+  /**
+   * Batch update snoozed emails to INBOX
+   */
+  async unsnoozeExpiredEmails(emailIds: string[]): Promise<number> {
+    const result = await this.prisma.emailMessage.updateMany({
+      where: {
+        id: { in: emailIds },
+      },
+      data: {
+        kanbanStatus: 'INBOX',
+        snoozedUntil: null,
+        statusChangedAt: new Date(),
+      },
+    });
+
+    return result.count;
+  }
+
+  /**
+   * Update email summary
+   */
+  async updateSummary(
+    emailId: string,
+    summary: string,
+  ): Promise<PrismaEmailMessage> {
+    return this.prisma.emailMessage.update({
+      where: { id: emailId },
+      data: {
+        summary,
+        summaryGeneratedAt: new Date(),
+      },
+    });
+  }
 }
