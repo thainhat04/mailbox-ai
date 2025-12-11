@@ -154,8 +154,7 @@ export class EmailController {
     if (dto.flags.starred !== undefined) {
       // Get current email to check star status
       const currentEmail =
-        email ||
-        (await this.emailService.findEmailById(id, user.sub));
+        email || (await this.emailService.findEmailById(id, user.sub));
       const isCurrentlyStarred = currentEmail.isStarred;
 
       // Only toggle if the desired state is different from current state
@@ -174,8 +173,7 @@ export class EmailController {
 
     // If no email was modified or we need to fetch it
     const finalEmail =
-      email ||
-      (await this.emailService.findEmailById(id, user.sub));
+      email || (await this.emailService.findEmailById(id, user.sub));
 
     return ResponseDto.success(finalEmail, "Email modified successfully");
   }
@@ -249,10 +247,11 @@ export class EmailController {
     @CurrentUser() user: JwtPayload,
     @Query("includeDoneAll") includeDoneAll?: boolean,
   ) {
-    return this.kanbanService.getKanbanBoard(
+    const result = await this.kanbanService.getKanbanBoard(
       user.sub,
       includeDoneAll,
     );
+    return ResponseDto.success(result, "Kanban board retrieved successfully");
   }
 
   @Patch(":id/kanban/status")
@@ -263,41 +262,47 @@ export class EmailController {
     @Param("id") emailId: string,
     @Body() updateDto: UpdateKanbanStatusDto,
   ) {
-    return this.kanbanService.updateKanbanStatus(
+    const result = await this.kanbanService.updateKanbanStatus(
       user.sub,
       emailId,
       updateDto.status,
     );
+    return ResponseDto.success(result, "Kanban status updated successfully");
   }
 
   // ============ SNOOZE ENDPOINTS ============
 
-  @Post(":id/snooze")
-  @ApiOperation({ summary: "Snooze email" })
+  @Post(":id/freeze")
+  @ApiOperation({ summary: "Freeze email" })
   @ApiBody({ type: SnoozeEmailDto })
-  async snoozeEmail(
+  async freezeEmail(
     @CurrentUser() user: JwtPayload,
     @Param("id") emailId: string,
     @Body() snoozeDto: SnoozeEmailDto,
   ) {
-    return this.kanbanService.snoozeEmail(user.sub, emailId, snoozeDto);
+    const result = await this.kanbanService.snoozeEmail(
+      user.sub,
+      emailId,
+      snoozeDto,
+    );
+    return ResponseDto.success(result, "Email frozen successfully");
   }
 
-  @Post(":id/unsnooze")
-  @ApiOperation({ summary: "Unsnooze email manually" })
-  async unsnoozeEmail(
+  @Post(":id/unfreeze")
+  @ApiOperation({ summary: "Unfreeze email manually" })
+  async unfreezeEmail(
     @CurrentUser() user: JwtPayload,
     @Param("id") emailId: string,
   ) {
-    return this.kanbanService.unsnoozeEmail(user.sub, emailId);
+    const result = await this.kanbanService.unsnoozeEmail(user.sub, emailId);
+    return ResponseDto.success(result, "Email unfrozen successfully");
   }
 
-  @Get("snoozed")
-  @ApiOperation({ summary: "Get all snoozed emails" })
-  async getSnoozedEmails(
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.kanbanService.getSnoozedEmails(user.sub);
+  @Get("frozen")
+  @ApiOperation({ summary: "Get all frozen emails" })
+  async getFrozenEmails(@CurrentUser() user: JwtPayload) {
+    const result = await this.kanbanService.getFrozenEmails(user.sub);
+    return ResponseDto.success(result, "Frozen emails retrieved successfully");
   }
 
   // ============ SUMMARY ENDPOINTS ============
@@ -309,10 +314,11 @@ export class EmailController {
     @Param("id") emailId: string,
     @Query("forceRegenerate") forceRegenerate?: boolean,
   ) {
-    return this.summaryService.getEmailSummary(
+    const result = await this.summaryService.getEmailSummary(
       user.sub,
       emailId,
       forceRegenerate,
     );
+    return ResponseDto.success(result, "Email summary retrieved successfully");
   }
 }

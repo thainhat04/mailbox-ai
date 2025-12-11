@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../../database/prisma.service';
-import { EmailMessage as PrismaEmailMessage } from '@prisma/client';
+import { Injectable, Logger } from "@nestjs/common";
+import { PrismaService } from "../../../database/prisma.service";
+import { EmailMessage as PrismaEmailMessage } from "@prisma/client";
 
 /**
  * Email message data for upserting
@@ -346,7 +346,7 @@ export class EmailMessageRepository {
     };
 
     // Special filtering for DONE status - only last 7 days unless includeDoneAll is true
-    if (status === 'DONE' && !includeDoneAll) {
+    if (status === "DONE" && !includeDoneAll) {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -358,7 +358,7 @@ export class EmailMessageRepository {
     return this.prisma.emailMessage.findMany({
       where: whereClause,
       orderBy: {
-        statusChangedAt: 'desc', // Most recently updated first
+        statusChangedAt: "desc", // Most recently updated first
       },
       include: {
         attachments: true,
@@ -368,14 +368,14 @@ export class EmailMessageRepository {
   }
 
   /**
-   * Find snoozed emails that are ready to be unsnoozed
+   * Find frozen emails that are ready to be unfrozen
    */
-  async findExpiredSnoozedEmails(): Promise<PrismaEmailMessage[]> {
+  async findExpiredFrozenEmails(): Promise<PrismaEmailMessage[]> {
     const now = new Date();
 
     return this.prisma.emailMessage.findMany({
       where: {
-        kanbanStatus: 'SNOOZED',
+        kanbanStatus: "FROZEN",
         snoozedUntil: {
           lte: now,
         },
@@ -391,14 +391,26 @@ export class EmailMessageRepository {
     status: string,
     snoozedUntil?: Date | null,
   ): Promise<PrismaEmailMessage> {
+    // Get current status before updating (for FROZEN status)
+    const currentEmail = await this.prisma.emailMessage.findUnique({
+      where: { id: emailId },
+      select: { kanbanStatus: true },
+    });
+
     const updateData: any = {
       kanbanStatus: status,
       statusChangedAt: new Date(),
     };
 
-    // Clear snoozedUntil if moving away from SNOOZED status
-    if (status !== 'SNOOZED') {
+    // When freezing, save the current status as previousKanbanStatus
+    if (status === "FROZEN" && currentEmail) {
+      updateData.previousKanbanStatus = currentEmail.kanbanStatus;
+    }
+
+    // Clear snoozedUntil and previousKanbanStatus if moving away from FROZEN status
+    if (status !== "FROZEN") {
       updateData.snoozedUntil = null;
+      updateData.previousKanbanStatus = null;
     } else if (snoozedUntil) {
       updateData.snoozedUntil = snoozedUntil;
     }
@@ -414,21 +426,66 @@ export class EmailMessageRepository {
   }
 
   /**
-   * Batch update snoozed emails to INBOX
+   * Batch update snoozed emails back to their previous status (or INBOX if none)
    */
   async unsnoozeExpiredEmails(emailIds: string[]): Promise<number> {
-    const result = await this.prisma.emailMessage.updateMany({
+    // Get emails with their previous status
+    const emails = await this.prisma.emailMessage.findMany({
       where: {
         id: { in: emailIds },
       },
-      data: {
-        kanbanStatus: 'INBOX',
-        snoozedUntil: null,
-        statusChangedAt: new Date(),
+      select: {
+        id: true,
+        previousKanbanStatus: true,
       },
     });
 
-    return result.count;
+    // Update each email individually to restore previous status
+    let count = 0;
+    for (const email of emails) {
+      try {
+        await this.prisma.emailMessage.update({
+          where: { id: email.id },
+          data: {
+            kanbanStatus: email.previousKanbanStatus || "INBOX", // Default to INBOX if no previous status
+            previousKanbanStatus: null,
+            snoozedUntil: null,
+            statusChangedAt: new Date(),
+          },
+        });
+        count++;
+      } catch (error) {
+        this.logger.error(
+          `Failed to unsnooze email ${email.id}: ${error.message}`,
+        );
+      }
+    }
+
+    return count;
+  }
+
+  /**
+   * Manually unsnooze a single email (restore to previous status)
+   */
+  async unsnoozeEmail(emailId: string): Promise<PrismaEmailMessage> {
+    const email = await this.prisma.emailMessage.findUnique({
+      where: { id: emailId },
+      select: { previousKanbanStatus: true },
+    });
+
+    return this.prisma.emailMessage.update({
+      where: { id: emailId },
+      data: {
+        kanbanStatus: email?.previousKanbanStatus || "INBOX", // Default to INBOX if no previous status
+        previousKanbanStatus: null,
+        snoozedUntil: null,
+        statusChangedAt: new Date(),
+      },
+      include: {
+        attachments: true,
+        body: true,
+      },
+    });
   }
 
   /**

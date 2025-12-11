@@ -146,7 +146,33 @@ export class GmailProvider extends BaseMailProvider {
       `Sending email to: ${request.to.map((t) => t.email).join(", ")}`,
     );
 
-    // Create RFC 2822 formatted message
+    let message: string;
+
+    // Check if we have attachments - use MIME multipart
+    if (request.attachments && request.attachments.length > 0) {
+      message = this.createMultipartMessage(request);
+    } else {
+      // Simple message without attachments
+      message = this.createSimpleMessage(request);
+    }
+
+    // Encode to base64url
+    const encodedMessage = Buffer.from(message)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    const response = await this.apiClient.sendMessage({ raw: encodedMessage });
+
+    // Fetch the sent message details
+    return this.getMessage(response.id);
+  }
+
+  /**
+   * Create a simple email message without attachments
+   */
+  private createSimpleMessage(request: SendEmailRequest): string {
     const messageParts: string[] = [];
 
     // Headers
@@ -175,19 +201,75 @@ export class GmailProvider extends BaseMailProvider {
     messageParts.push(""); // Empty line between headers and body
     messageParts.push(request.bodyHtml || request.bodyText || "");
 
-    const message = messageParts.join("\r\n");
+    return messageParts.join("\r\n");
+  }
 
-    // Encode to base64url
-    const encodedMessage = Buffer.from(message)
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
+  /**
+   * Create a multipart email message with attachments
+   */
+  private createMultipartMessage(request: SendEmailRequest): string {
+    const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const messageParts: string[] = [];
 
-    const response = await this.apiClient.sendMessage({ raw: encodedMessage });
+    // Headers
+    messageParts.push(`To: ${request.to.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
 
-    // Fetch the sent message details
-    return this.getMessage(response.id);
+    if (request.cc && request.cc.length > 0) {
+      messageParts.push(`Cc: ${request.cc.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+    }
+
+    if (request.bcc && request.bcc.length > 0) {
+      messageParts.push(`Bcc: ${request.bcc.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+    }
+
+    messageParts.push(`Subject: ${request.subject || "(no subject)"}`);
+
+    if (request.inReplyTo) {
+      messageParts.push(`In-Reply-To: ${request.inReplyTo}`);
+    }
+
+    if (request.references && request.references.length > 0) {
+      messageParts.push(`References: ${request.references.join(" ")}`);
+    }
+
+    messageParts.push("MIME-Version: 1.0");
+    messageParts.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+    messageParts.push(""); // Empty line between headers and body
+
+    // Body part (HTML or Text)
+    messageParts.push(`--${boundary}`);
+    if (request.bodyHtml) {
+      messageParts.push("Content-Type: text/html; charset=UTF-8");
+      messageParts.push("Content-Transfer-Encoding: quoted-printable");
+      messageParts.push("");
+      messageParts.push(request.bodyHtml);
+    } else {
+      messageParts.push("Content-Type: text/plain; charset=UTF-8");
+      messageParts.push("Content-Transfer-Encoding: quoted-printable");
+      messageParts.push("");
+      messageParts.push(request.bodyText || "");
+    }
+    messageParts.push("");
+
+    // Attachment parts
+    for (const attachment of request.attachments!) {
+      messageParts.push(`--${boundary}`);
+      messageParts.push(`Content-Type: ${attachment.mimeType}; name="${attachment.filename}"`);
+      messageParts.push("Content-Transfer-Encoding: base64");
+      messageParts.push(`Content-Disposition: attachment; filename="${attachment.filename}"`);
+      messageParts.push("");
+
+      // Convert Buffer to base64 and split into 76-character lines (RFC 2045)
+      const base64Content = attachment.content.toString("base64");
+      const lines = base64Content.match(/.{1,76}/g) || [];
+      messageParts.push(lines.join("\r\n"));
+      messageParts.push("");
+    }
+
+    // Closing boundary
+    messageParts.push(`--${boundary}--`);
+
+    return messageParts.join("\r\n");
   }
 
   async modifyMessage(
@@ -661,5 +743,15 @@ export class GmailProvider extends BaseMailProvider {
       this.logger.error("Failed to decode base64url data", error);
       return "";
     }
+  }
+
+  /**
+   * Format EmailAddress to RFC 2822 format
+   */
+  protected formatEmailAddress(address: EmailAddress): string {
+    if (address.name) {
+      return `${address.name} <${address.email}>`;
+    }
+    return address.email;
   }
 }

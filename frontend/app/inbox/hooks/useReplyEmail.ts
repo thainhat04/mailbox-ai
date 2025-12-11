@@ -83,7 +83,7 @@ export function useReplyEmail(email: Email | null): UseReplyEmailReturn {
             replyHtml: undefined,
             includeQuoted: true,
             attachments: attachments.length > 0 ? attachments : undefined,
-            mailBox: email.mailboxId || "",
+            mailBox: email.labelId[0] || "inbox",
         };
     };
 
