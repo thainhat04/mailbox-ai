@@ -3,7 +3,7 @@ import KanbanWrapper from "./KanbanWrapper";
 import useKanban from "../../hooks/useKanban";
 import RefreshButton from "./RefreshButton";
 function KanbanLayout() {
-    const { columns, onDragEnd, isLoading, refetch, moveToInboxFromFrozen } =
+    const { columns, onDragEnd, isLoading, refetch, moveToColumnFromFrozen } =
         useKanban();
     return (
         <div className="relative kanban__layout h-screen w-full flex flex-col overflow-hidden text-white">
@@ -20,7 +20,7 @@ function KanbanLayout() {
                     columns={columns}
                     onDragEnd={onDragEnd}
                     refetch={refetch}
-                    moveToInboxFromFrozen={moveToInboxFromFrozen}
+                    moveToColumnFromFrozen={moveToColumnFromFrozen}
                 ></KanbanWrapper>
             </div>
         </div>

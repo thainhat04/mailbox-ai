@@ -25,7 +25,6 @@ import constant from "../../_constants";
 import FreezeSelector from "./FreezeSelector";
 import { KanbanRefetchContext } from "../../hooks/KanbanRefetchContext";
 import { useToast } from "@/components/ui/toast-provider";
-import { env } from "process";
 
 interface KanbanWrapperProps {
     columns: KanbanBoardData;
@@ -37,14 +36,14 @@ interface KanbanWrapperProps {
         }
     ) => void;
     refetch: () => void;
-    moveToInboxFromFrozen: (id: string) => Promise<void>;
+    moveToColumnFromFrozen: (id: string) => Promise<void>;
 }
 
 export default function KanbanWrapper({
     columns,
     onDragEnd,
     refetch,
-    moveToInboxFromFrozen,
+    moveToColumnFromFrozen,
 }: KanbanWrapperProps) {
     const { showToast } = useToast();
     // 🔥 Overlay state — item đang được kéo
@@ -170,7 +169,7 @@ export default function KanbanWrapper({
     };
     return (
         <KanbanRefetchContext.Provider
-            value={{ refetch, moveToInboxFromFrozen }}
+            value={{ refetch, moveToColumnFromFrozen }}
         >
             <DndContext
                 sensors={sensors}

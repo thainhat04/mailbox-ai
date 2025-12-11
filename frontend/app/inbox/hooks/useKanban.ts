@@ -140,27 +140,27 @@ export default function useKanban() {
 
         // Frozen logic
         const prevColumns = { ...columns };
-        let timeoutId: NodeJS.Timeout;
-        if (timeoutDuration) {
-        }
+        //let timeoutId: NodeJS.Timeout;
         if (toCol.toUpperCase() === InBoxConstant.nameFrozenColumn) {
             const ms = getTimeoutMs(timeoutDuration);
             updatedItem.snoozedUntil = ms
                 ? new Date(Date.now() + ms).toISOString()
                 : undefined;
-            timeoutId = setTimeout(() => {
-                updatedItem.kanbanStatus =
-                    fromCol!.toUpperCase() as KanbanStatus;
-                updatedItem.snoozedUntil = undefined;
-                console.log("Auto-moving item from frozen:", updatedItem);
-                setColumns((prev) => ({
-                    ...prev,
-                    [fromCol!]: [...prev[fromCol!], updatedItem], //bỏ sort
-                    [toCol!]: prev[toCol!].filter(
-                        (i) => i.id !== updatedItem.id
-                    ),
-                }));
-            }, ms);
+            updatedItem.previousKanbanStatus =
+                fromCol.toUpperCase() as KanbanStatus;
+            // timeoutId = setTimeout(() => {
+            //     updatedItem.kanbanStatus =
+            //         fromCol!.toUpperCase() as KanbanStatus;
+            //     updatedItem.snoozedUntil = undefined;
+            //     console.log("Auto-moving item from frozen:", updatedItem);
+            //     setColumns((prev) => ({
+            //         ...prev,
+            //         [fromCol!]: [...prev[fromCol!], updatedItem], //bỏ sort
+            //         [toCol!]: prev[toCol!].filter(
+            //             (i) => i.id !== updatedItem.id
+            //         ),
+            //     }));
+            // }, ms);
         }
 
         toItems.splice(finalIndex, 0, updatedItem);
@@ -182,28 +182,29 @@ export default function useKanban() {
                 "error"
             );
             setColumns(prevColumns);
-            if (toCol!.toUpperCase() === InBoxConstant.nameFrozenColumn) {
-                clearTimeout(timeoutId);
-            }
+            // if (toCol!.toUpperCase() === InBoxConstant.nameFrozenColumn) {
+            //     clearTimeout(timeoutId);
+            // }
         });
     };
-    const moveToInboxFromFrozen = async (id: string) => {
+    const moveToColumnFromFrozen = async (id: string) => {
         let item = columns.frozen.find((i) => i.id === id);
         if (!item) return;
         item = {
             ...item,
-            kanbanStatus: "INBOX" as KanbanStatus,
+            kanbanStatus: item.previousKanbanStatus || "INBOX",
             snoozedUntil: undefined,
         };
-        const inbox = [...columns.inbox, item];
         // inbox.sort(
         //     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
         // );
         //xóa trong fronzen
+        const key =
+            item.previousKanbanStatus!.toLowerCase() as keyof KanbanBoardData;
         setColumns((prev) => ({
             ...prev,
             frozen: prev.frozen.filter((i) => i.id !== id),
-            inbox: inbox,
+            [key]: [item, ...prev[key]],
         }));
     };
 
@@ -212,6 +213,6 @@ export default function useKanban() {
         onDragEnd,
         isLoading: isLoading || isFetching,
         refetch,
-        moveToInboxFromFrozen,
+        moveToColumnFromFrozen,
     };
 }

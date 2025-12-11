@@ -21,7 +21,7 @@ export interface KanbanItem {
     statusChangedAt: string;
 
     snoozedUntil?: string;
-
+    previousKanbanStatus?: KanbanStatus;
     // Optional but useful
     messageId?: string;
     threadId?: string;

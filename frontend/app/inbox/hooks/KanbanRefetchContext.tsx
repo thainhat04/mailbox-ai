@@ -3,7 +3,7 @@ import { createContext, useContext } from "react";
 export const KanbanRefetchContext = createContext<
     | {
           refetch: () => void;
-          moveToInboxFromFrozen: (id: string) => Promise<void>;
+          moveToColumnFromFrozen: (id: string) => Promise<void>;
       }
     | undefined
 >(undefined);

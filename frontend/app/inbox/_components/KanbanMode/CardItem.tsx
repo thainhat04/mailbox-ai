@@ -6,7 +6,7 @@ import inboxConstant from "../../_constants";
 import { KanbanItem } from "../../_types";
 import { useCountdown } from "../../hooks/useCountdown";
 import { useKanbanRefetch } from "../../hooks/KanbanRefetchContext";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import SummaryModal from "./SummaryModal";
 
 interface CardItemProps {
@@ -16,7 +16,7 @@ interface CardItemProps {
 
 export default function CardItem({ item, isOverlay }: CardItemProps) {
     const countdown = useCountdown(item.snoozedUntil);
-    const { moveToInboxFromFrozen } = useKanbanRefetch();
+    const { moveToColumnFromFrozen } = useKanbanRefetch();
     const isFrozen = item.kanbanStatus === inboxConstant.nameFrozenColumn;
     const [isSummaryOpen, setIsSummaryOpen] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
@@ -25,12 +25,18 @@ export default function CardItem({ item, isOverlay }: CardItemProps) {
     if (!isOverlay && !isFrozen) sortable = useSortable({ id: item.id });
 
     useEffect(() => {
-        if (countdown === "Đã hết hạn") {
-            setTimeout(() => {
-                moveToInboxFromFrozen(item.id);
-            }, 2000);
-        }
-    }, [countdown, moveToInboxFromFrozen]);
+        if (!item.snoozedUntil) return;
+
+        const delay = new Date(item.snoozedUntil).getTime() - Date.now();
+
+        const timeoutId = setTimeout(() => {
+            moveToColumnFromFrozen(item.id);
+        }, delay);
+
+        return () => {
+            clearTimeout(timeoutId);
+        };
+    }, [item.snoozedUntil]);
 
     const style =
         isOverlay || isFrozen
