@@ -126,7 +126,7 @@ export class KanbanService {
   }
 
   /**
-   * Manually unsnooze email
+   * Manually unsnooze email (restore to previous status)
    */
   async unsnoozeEmail(userId: string, emailId: string) {
     // Verify user owns the email
@@ -141,8 +141,8 @@ export class KanbanService {
       throw new NotFoundException('Email not found');
     }
 
-    // Update to INBOX status and clear snoozedUntil
-    return this.emailMessageRepository.updateKanbanStatus(emailId, 'INBOX');
+    // Restore to previous status (or INBOX if no previous status)
+    return this.emailMessageRepository.unsnoozeEmail(emailId);
   }
 
   /**

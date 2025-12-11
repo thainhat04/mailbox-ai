@@ -146,6 +146,7 @@ model EmailMessage {
 
   // Kanban workflow fields
   kanbanStatus      String?       @default("INBOX")   // INBOX, TODO, PROCESSING, DONE, FROZEN
+  previousKanbanStatus String?                        // Status before freezing
   statusChangedAt   DateTime      @default(now())     // For sorting within columns
   snoozedUntil      DateTime?                         // When to auto-unsnooze (null = not frozen)
   summary           String?       @db.Text            // Cached AI summary
