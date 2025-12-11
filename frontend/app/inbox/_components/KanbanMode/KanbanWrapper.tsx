@@ -24,6 +24,8 @@ import CardItem from "./CardItem";
 import constant from "../../_constants";
 import FreezeSelector from "./FreezeSelector";
 import { KanbanRefetchContext } from "../../hooks/KanbanRefetchContext";
+import { useToast } from "@/components/ui/toast-provider";
+import { env } from "process";
 
 interface KanbanWrapperProps {
     columns: KanbanBoardData;
@@ -44,6 +46,7 @@ export default function KanbanWrapper({
     refetch,
     moveToInboxFromFrozen,
 }: KanbanWrapperProps) {
+    const { showToast } = useToast();
     // 🔥 Overlay state — item đang được kéo
     const [activeItem, setActiveItem] = useState<KanbanItem | null>(null);
     const [activeColumn, setActiveColumn] = useState<string | null>(null);
@@ -64,6 +67,20 @@ export default function KanbanWrapper({
 
     useEffect(() => {
         if (timeoutDuration && eventRef.current) {
+            //check thời gian có lớn hơn hiện tại không
+            const now = new Date();
+            if (
+                timeoutDuration.duration === "CUSTOM" &&
+                timeoutDuration.customDateTime
+            ) {
+                const selectedDate = new Date(timeoutDuration.customDateTime);
+                if (selectedDate <= now) {
+                    showToast("Please select a future date and time.", "error");
+                    setTimeoutDuration(null);
+                    eventRef.current = null;
+                    return;
+                }
+            }
             onDragEnd(eventRef.current, timeoutDuration);
             eventRef.current = null;
             setTimeoutDuration(null);
