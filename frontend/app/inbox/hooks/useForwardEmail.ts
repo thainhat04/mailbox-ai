@@ -46,14 +46,12 @@ export function useForwardEmail(originalEmail: Email | null) {
     }, [originalEmail]);
 
     const buildForwardedContent = (email: Email): string => {
-        const from = email.from || "Unknown";
-        const date = email.date
-            ? formatEmailDate(new Date(email.date))
-            : "Unknown date";
+        const from = email.from?.email || email.from?.name || "Unknown";
+        const date = email.timestamp ? formatEmailDate(email.timestamp) : "Unknown date";
         const subject = email.subject || "(No subject)";
         const to = Array.isArray(email.to)
-            ? email.to.join(", ")
-            : email.to || "";
+            ? email.to.map(addr => addr.email || addr.name || "").filter(Boolean).join(", ")
+            : "";
 
         return `
 
