@@ -6,10 +6,10 @@ import { EmailDto } from './email.dto';
 export class UpdateKanbanStatusDto {
   @ApiProperty({
     description: 'Email kanban status',
-    enum: ['INBOX', 'TO_DO', 'IN_PROGRESS', 'DONE', 'SNOOZED'],
-    example: 'TO_DO'
+    enum: ['INBOX', 'TODO', 'PROCESSING', 'DONE', 'FROZEN'],
+    example: 'TODO'
   })
-  @IsEnum(['INBOX', 'TO_DO', 'IN_PROGRESS', 'DONE', 'SNOOZED'])
+  @IsEnum(['INBOX', 'TODO', 'PROCESSING', 'DONE', 'FROZEN'])
   status: string;
 }
 
@@ -36,10 +36,10 @@ export class SnoozeEmailDto {
 // Kanban Board Response DTO
 export class KanbanBoardDto {
   inbox: EmailDto[];
-  toDo: EmailDto[];
-  inProgress: EmailDto[];
+  todo: EmailDto[];
+  processing: EmailDto[];
   done: EmailDto[];
-  snoozed: EmailDto[];
+  frozen: EmailDto[];
 }
 
 // Summary Response DTO

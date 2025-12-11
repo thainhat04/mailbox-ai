@@ -66,7 +66,7 @@ ${email.body || ""}`;
     };
 
     const isValidEmail = (email: string) =>
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}$/.test(email);
     const validateEmails = (emails: string[]) =>
         emails.every((e) => e.trim() === "" || isValidEmail(e.trim()));
 
