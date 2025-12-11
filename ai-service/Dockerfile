@@ -1,20 +1,21 @@
 # Stage 1: Builder
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
 # Install uv package manager
 RUN pip install --no-cache-dir uv
 
-# Copy pyproject.toml only to install dependencies
-COPY pyproject.toml ./
-RUN uv install
+# Copy dependency files for installation
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen
 
 # Copy source code
-COPY ./ai_service ./ai_service
+COPY main.py ./
+COPY app ./app
 
 # Stage 2: Production image
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -28,4 +29,4 @@ COPY --from=builder /app /app
 EXPOSE 8000
 
 # Run FastAPI using uv
-CMD ["uv", "run", "start"]
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
