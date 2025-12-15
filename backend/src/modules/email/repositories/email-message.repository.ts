@@ -521,7 +521,7 @@ export class EmailMessageRepository {
   }> {
     const limit = options?.limit || 50;
     const offset = options?.offset || 0;
-    const similarityThreshold = 0.1;
+    const similarityThreshold = 0.3;
 
     this.logger.debug(
       `Fuzzy searching emails for user ${userId} with query: "${query}"`,
