@@ -261,6 +261,57 @@ export class EmailService {
     return messages.map((msg) => this.convertToEmail(msg));
   }
 
+  /**
+   * Fuzzy search emails using PostgreSQL pg_trgm for typo tolerance and partial matching
+   * Supports Vietnamese characters and ranks results by relevance
+   */
+  async fuzzySearchEmails(
+    query: string,
+    userId: string,
+    options?: {
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<{
+    emails: Array<Email & { relevanceScore: number }>;
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  }> {
+    const page = options?.page || 1;
+    const limit = options?.limit || 50;
+    const offset = (page - 1) * limit;
+
+    this.logger.log(
+      `Fuzzy search request: query="${query}", userId=${userId}, page=${page}, limit=${limit}`,
+    );
+
+    // Call repository fuzzy search method
+    const { results, total } = await this.messageRepository.fuzzySearchEmails(
+      userId,
+      query,
+      {
+        limit,
+        offset,
+      },
+    );
+
+    // Convert database messages to Email entities with relevance score
+    const emails = results.map((msg) => ({
+      ...this.convertToEmail(msg),
+      relevanceScore: msg.relevanceScore,
+    }));
+
+    return {
+      emails,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async sendEmail(userId: string, dto: SendEmailDto) {
     // Get provider for user
     const provider = await this.providerRegistry.getProviderForUser(userId);

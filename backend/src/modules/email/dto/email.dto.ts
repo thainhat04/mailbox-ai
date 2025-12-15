@@ -199,3 +199,45 @@ export class EmailListResponseDto {
   totalPages: number;
 }
 
+export class FuzzySearchQueryDto {
+  @ApiProperty({
+    example: "marketing",
+    description: "Search query - supports typos and partial matches"
+  })
+  @IsString()
+  q: string;
+
+  @ApiProperty({ required: false, default: 1, description: "Page number for pagination" })
+  @IsOptional()
+  page?: number;
+
+  @ApiProperty({ required: false, default: 50, description: "Number of results per page" })
+  @IsOptional()
+  limit?: number;
+}
+
+export class EmailWithScoreDto extends EmailDto {
+  @ApiProperty({
+    example: 0.85,
+    description: "Relevance score (0-1) based on match quality, recency, and read status"
+  })
+  relevanceScore: number;
+}
+
+export class FuzzySearchResponseDto {
+  @ApiProperty({ type: [EmailWithScoreDto] })
+  emails: EmailWithScoreDto[];
+
+  @ApiProperty({ example: 1 })
+  page: number;
+
+  @ApiProperty({ example: 50 })
+  limit: number;
+
+  @ApiProperty({ example: 25, description: "Total number of matching results" })
+  total: number;
+
+  @ApiProperty({ example: 1 })
+  totalPages: number;
+}
+
