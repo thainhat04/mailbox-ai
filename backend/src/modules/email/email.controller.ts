@@ -21,6 +21,8 @@ import {
   EmailListQueryDto,
   EmailListResponseDto,
   LabelDto,
+  FuzzySearchQueryDto,
+  FuzzySearchResponseDto,
 } from "./dto";
 import { ResponseDto } from "../../common/dtos/response.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
@@ -99,6 +101,31 @@ export class EmailController {
     return ResponseDto.success(
       emails,
       `Found ${emails.length} matching emails`,
+    );
+  }
+
+  @Get("emails/fuzzy-search")
+  @ApiOperation({
+    summary: "Fuzzy search emails with typo tolerance and partial matching",
+    description:
+      "Search emails using PostgreSQL pg_trgm extension. Supports typos, partial matches, and Vietnamese characters. " +
+      "Results are ranked by match quality (best matches first).",
+  })
+  async fuzzySearchEmails(
+    @Query() query: FuzzySearchQueryDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<FuzzySearchResponseDto>> {
+    const result = await this.emailService.fuzzySearchEmails(
+      query.q,
+      user.sub,
+      {
+        page: query.page,
+        limit: query.limit,
+      },
+    );
+    return ResponseDto.success(
+      result,
+      `Found ${result.total} matching emails with fuzzy search`,
     );
   }
 
