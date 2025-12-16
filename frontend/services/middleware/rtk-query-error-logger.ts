@@ -16,9 +16,11 @@ export const rtkQueryErrorLogger: Middleware =
             }
 
             if (error.status === serviceConstants.STATUS_UNAUTHORIZED) {
-                toastManager.show(error.data as string, "error");
-                storeAPI.dispatch(logout());
-                error.status = serviceConstants.STATUS_NOT_CLIENT_ERROR;
+                if (localStorage.getItem(serviceConstants.refreshToken)) {
+                    toastManager.show(error.data as string, "error");
+                    storeAPI.dispatch(logout());
+                    error.status = serviceConstants.STATUS_NOT_CLIENT_ERROR;
+                }
             }
         }
 

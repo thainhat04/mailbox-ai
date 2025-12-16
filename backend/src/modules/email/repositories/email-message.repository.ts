@@ -49,7 +49,7 @@ export interface SyncStateData {
 export class EmailMessageRepository {
   private readonly logger = new Logger(EmailMessageRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Upsert a single email message
@@ -91,17 +91,17 @@ export class EmailMessageRepository {
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-                upsert: {
-                  create: {
-                    bodyText: messageData.bodyText,
-                    bodyHtml: messageData.bodyHtml,
-                  },
-                  update: {
-                    bodyText: messageData.bodyText,
-                    bodyHtml: messageData.bodyHtml,
-                  },
+              upsert: {
+                create: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
                 },
-              }
+                update: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
+                },
+              },
+            }
             : undefined,
       },
       create: {
@@ -127,11 +127,11 @@ export class EmailMessageRepository {
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-                create: {
-                  bodyText: messageData.bodyText,
-                  bodyHtml: messageData.bodyHtml,
-                },
-              }
+              create: {
+                bodyText: messageData.bodyText,
+                bodyHtml: messageData.bodyHtml,
+              },
+            }
             : undefined,
       },
     });
@@ -339,6 +339,12 @@ export class EmailMessageRepository {
     userId: string,
     status: string,
     includeDoneAll?: boolean,
+    filters?: {
+      unreadOnly?: boolean;
+      hasAttachmentsOnly?: boolean;
+      fromEmail?: string;
+    },
+    sortBy?: 'date_desc' | 'date_asc' | 'sender',
   ): Promise<PrismaEmailMessage[]> {
     const whereClause: any = {
       emailAccount: { userId },
@@ -355,11 +361,36 @@ export class EmailMessageRepository {
       };
     }
 
+    // Apply filters
+    if (filters?.unreadOnly) {
+      whereClause.isRead = false;
+    }
+
+    if (filters?.hasAttachmentsOnly) {
+      whereClause.hasAttachments = true;
+    }
+
+    if (filters?.fromEmail) {
+      whereClause.from = {
+        contains: filters.fromEmail,
+        mode: 'insensitive',
+      };
+    }
+
+    // Determine sort order
+    let orderBy: any = { statusChangedAt: "desc" }; // Default
+
+    if (sortBy === 'date_desc') {
+      orderBy = { date: 'desc' };
+    } else if (sortBy === 'date_asc') {
+      orderBy = { date: 'asc' };
+    } else if (sortBy === 'sender') {
+      orderBy = { fromName: 'asc' };
+    }
+
     return this.prisma.emailMessage.findMany({
       where: whereClause,
-      orderBy: {
-        statusChangedAt: "desc", // Most recently updated first
-      },
+      orderBy,
       include: {
         attachments: true,
         body: true,
@@ -502,5 +533,125 @@ export class EmailMessageRepository {
         summaryGeneratedAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Fuzzy search emails using PostgreSQL pg_trgm extension
+   * Returns emails ranked by match quality (best matches first)
+   */
+  async fuzzySearchEmails(
+    userId: string,
+    query: string,
+    options?: {
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{
+    results: Array<PrismaEmailMessage & { relevanceScore: number }>;
+    total: number;
+  }> {
+    const limit = options?.limit || 50;
+    const offset = options?.offset || 0;
+    const similarityThreshold = 0.3;
+
+    this.logger.debug(
+      `Fuzzy searching emails for user ${userId} with query: "${query}"`,
+    );
+
+    // First, get all email account IDs for the user
+    const emailAccounts = await this.prisma.emailAccount.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (emailAccounts.length === 0) {
+      return { results: [], total: 0 };
+    }
+
+    const accountIds = emailAccounts.map((acc) => acc.id);
+
+    // Use raw SQL for fuzzy search with pg_trgm
+    // Rank by match quality only (similarity score)
+    const searchQuery = `
+      SELECT
+        em.*,
+        -- Calculate max similarity across all searchable fields as relevance score
+        GREATEST(
+          COALESCE(similarity(em.subject, $1), 0),
+          COALESCE(similarity(em."from", $1), 0),
+          COALESCE(similarity(em."fromName", $1), 0),
+          COALESCE(similarity(em.snippet, $1), 0)
+        ) AS relevance_score
+      FROM email_messages em
+      WHERE
+        em."emailAccountId" = ANY($2::text[])
+        AND (
+          similarity(em.subject, $1) > $3
+          OR similarity(em."from", $1) > $3
+          OR similarity(em."fromName", $1) > $3
+          OR similarity(em.snippet, $1) > $3
+        )
+      ORDER BY relevance_score DESC, em.date DESC
+      LIMIT $4 OFFSET $5
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM email_messages em
+      WHERE
+        em."emailAccountId" = ANY($1::text[])
+        AND (
+          similarity(em.subject, $2) > $3
+          OR similarity(em."from", $2) > $3
+          OR similarity(em."fromName", $2) > $3
+          OR similarity(em.snippet, $2) > $3
+        )
+    `;
+
+    // Execute both queries in parallel
+    const [results, countResult] = await Promise.all([
+      this.prisma.$queryRawUnsafe<
+        Array<PrismaEmailMessage & { relevance_score: number }>
+      >(searchQuery, query, accountIds, similarityThreshold, limit, offset),
+      this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+        countQuery,
+        accountIds,
+        query,
+        similarityThreshold,
+      ),
+    ]);
+
+    // Fetch full message details with relations for each result
+    const messagesWithDetails = await Promise.all(
+      results.map(async (result) => {
+        const fullMessage = await this.prisma.emailMessage.findUnique({
+          where: { id: result.id },
+          include: {
+            body: true,
+            attachments: true,
+          },
+        });
+
+        if (!fullMessage) {
+          throw new Error(`Email message ${result.id} not found`);
+        }
+
+        return {
+          ...fullMessage,
+          relevanceScore: Number(result.relevance_score),
+        } as PrismaEmailMessage & { relevanceScore: number };
+      }),
+    );
+
+    const total = Number(countResult[0]?.total || 0);
+
+    this.logger.log(
+      `Fuzzy search found ${total} results, returning ${results.length} with limit ${limit}`,
+    );
+
+    return {
+      results: messagesWithDetails,
+      total,
+    };
   }
 }

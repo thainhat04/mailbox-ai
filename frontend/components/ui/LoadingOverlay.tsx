@@ -14,7 +14,7 @@ export default function LoadingOverlay({
     if (!isVisible) return null;
 
     return (
-        <div className="fixed inset-0 z-9999 flex items-center justify-center">
+        <div className="fixed inset-0 z-999999999 flex items-center justify-center">
             {/* Overlay Background */}
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 

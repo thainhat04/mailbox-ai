@@ -2,9 +2,21 @@
 import KanbanWrapper from "./KanbanWrapper";
 import useKanban from "../../hooks/useKanban";
 import RefreshButton from "./RefreshButton";
+import FilterSortControls from "./FilterSortControls";
+
 function KanbanLayout() {
-    const { columns, onDragEnd, isLoading, refetch, moveToInboxFromFrozen } =
-        useKanban();
+    const {
+        columns,
+        onDragEnd,
+        isLoading,
+        refetch,
+        moveToColumnFromFrozen,
+        filters,
+        setFilters,
+        sortBy,
+        setSortBy,
+    } = useKanban();
+
     return (
         <div className="relative kanban__layout h-screen w-full flex flex-col overflow-hidden text-white">
             {/* Gradient background */}
@@ -15,13 +27,24 @@ function KanbanLayout() {
                         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
                     </div>
                 )}
-                <RefreshButton onClick={refetch} />
+                <div className="p-2 sm:p-3 md:p-4 pb-0">
+                    <div className="flex items-center justify-between mb-2">
+                        <h1 className="text-lg sm:text-xl md:text-2xl font-bold">Kanban Board</h1>
+                        <RefreshButton onClick={refetch} />
+                    </div>
+                    <FilterSortControls
+                        onFilterChange={setFilters}
+                        onSortChange={setSortBy}
+                        currentFilters={filters}
+                        currentSort={sortBy}
+                    />
+                </div>
                 <KanbanWrapper
                     columns={columns}
                     onDragEnd={onDragEnd}
                     refetch={refetch}
-                    moveToInboxFromFrozen={moveToInboxFromFrozen}
-                ></KanbanWrapper>
+                    moveToColumnFromFrozen={moveToColumnFromFrozen}
+                />
             </div>
         </div>
     );

@@ -16,12 +16,13 @@ export interface KanbanItem {
     summary?: string;
     date: string;
     isRead: boolean;
+    hasAttachments?: boolean;
 
     kanbanStatus: KanbanStatus;
     statusChangedAt: string;
 
     snoozedUntil?: string;
-
+    previousKanbanStatus?: KanbanStatus;
     // Optional but useful
     messageId?: string;
     threadId?: string;
@@ -62,4 +63,21 @@ export interface SetFrozenRequest {
     emailId: string;
     duration: FrozenTimeouts;
     customDateTime?: string;
+}
+
+// Filter and Sort types
+export type SortOption = 'date_desc' | 'date_asc' | 'sender';
+
+export interface KanbanFilters {
+    unreadOnly: boolean;
+    hasAttachmentsOnly: boolean;
+    fromEmail: string;
+}
+
+export interface KanbanBoardParams {
+    includeDoneAll?: boolean;
+    unreadOnly?: boolean;
+    hasAttachmentsOnly?: boolean;
+    fromEmail?: string;
+    sortBy?: SortOption;
 }

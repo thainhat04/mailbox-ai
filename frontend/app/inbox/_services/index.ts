@@ -3,16 +3,19 @@ import {
     type ComposeEmailResponse,
     ReplyEmailWithId,
 } from "../_types/compose";
-import type {
-    Folder,
-    PreviewEmailResponse,
-    PreviewEmailRequest,
-    Email,
-    EmailRequest,
-    PreviewEmail,
-    KanbanBoardData,
-    KanbanItem,
-    SetFrozenRequest,
+import {
+    type Folder,
+    type PreviewEmailResponse,
+    type PreviewEmailRequest,
+    type Email,
+    type EmailRequest,
+    type PreviewEmail,
+    type KanbanBoardData,
+    type KanbanItem,
+    type SetFrozenRequest,
+    type PuzzleEmail,
+    type PuzzleEmailResponse,
+    PuzzleEmailRequest,
 } from "../_types";
 import type { SuccessResponse } from "@/types/success-response";
 import { api } from "@/services/index";
@@ -222,8 +225,36 @@ const inboxApi = api.injectEndpoints({
                         }
                     )
                 );
-                patches.push(mailboxPatch);
+                const mailDetailPatch = dispatch(
+                    inboxApi.util.updateQueryData(
+                        "getEmailById",
+                        { id: arg.emailId },
+                        (draft) => {
+                            if (arg.flags.read !== undefined) {
+                                draft.data.isRead = arg.flags.read;
+                            }
+                            if (arg.flags.starred !== undefined) {
+                                draft.data.isStarred = arg.flags.starred;
+                                if (arg.flags.starred) {
+                                    draft.data.labelId = Array.from(
+                                        new Set([
+                                            ...draft.data.labelId,
+                                            "STARRED",
+                                        ])
+                                    );
+                                } else {
+                                    draft.data.labelId =
+                                        draft.data.labelId.filter(
+                                            (id) => id !== "STARRED"
+                                        );
+                                }
+                            }
+                        }
+                    )
+                );
 
+                patches.push(mailboxPatch);
+                patches.push(mailDetailPatch);
                 try {
                     await queryFulfilled;
                 } catch {
@@ -232,12 +263,21 @@ const inboxApi = api.injectEndpoints({
             },
             invalidatesTags: (result, _, arg) => {
                 if (!result) return [];
-                if (arg.flags.starred !== undefined) {
-                    return [
-                        { type: "Emails", id: "STARRED-1" },
-                        { type: "Emails", id: arg.emailId },
-                    ];
+
+                const hasDelete = arg.flags.delete !== undefined;
+                const hasStarred = arg.flags.starred !== undefined;
+
+                // Nếu update STARRED
+                if (hasStarred) {
+                    return [{ type: "Emails", id: "STARRED-1" }];
                 }
+
+                // Nếu DELETE hoặc STARRED thì KHÔNG invalidate theo emailId
+                if (hasDelete || hasStarred) {
+                    return [];
+                }
+
+                // Mặc định
                 return [{ type: "Emails", id: arg.emailId }];
             },
         }),
@@ -250,12 +290,25 @@ const inboxApi = api.injectEndpoints({
             providesTags: (_, __, arg) => [{ type: "Emails", id: arg.id }],
         }),
 
-        getAllKanBan: builder.query<SuccessResponse<KanbanBoardData>, void>({
-            query: () => ({
+        getAllKanBan: builder.query<
+            SuccessResponse<KanbanBoardData>,
+            {
+                includeDoneAll?: boolean;
+                unreadOnly?: boolean;
+                hasAttachmentsOnly?: boolean;
+                fromEmail?: string;
+                sortBy?: string;
+            } | void
+        >({
+            query: (params) => ({
                 url: constant.URL_KANBAN,
                 method: HTTP_METHOD.GET,
                 params: {
-                    includeDoneAll: true,
+                    includeDoneAll: params?.includeDoneAll ?? true,
+                    unreadOnly: params?.unreadOnly,
+                    hasAttachmentsOnly: params?.hasAttachmentsOnly,
+                    fromEmail: params?.fromEmail,
+                    sortBy: params?.sortBy,
                 },
             }),
         }),
@@ -296,6 +349,26 @@ const inboxApi = api.injectEndpoints({
                 },
             }),
         }),
+        searchPuzzleEmails: builder.query<
+            SuccessResponse<PuzzleEmailResponse>,
+            PuzzleEmailRequest
+        >({
+            query: (body) => ({
+                url: constant.URL_PUZZLE_SEARCH,
+                method: HTTP_METHOD.GET,
+                params: {
+                    q: body.q,
+                    page: body.page || 1,
+                    limit: body.limit || 20,
+                },
+            }),
+            providesTags: (_, __, arg) => [
+                {
+                    type: "Emails",
+                    id: `PUZZLE-${arg.q}-${arg.page}`,
+                },
+            ],
+        }),
     }),
     overrideExisting: true,
 });
@@ -311,4 +384,5 @@ export const {
     useUpdateKanBanStatusMutation,
     useSummarizeEmailQuery,
     useUpdateFrozenStatusMutation,
+    useSearchPuzzleEmailsQuery,
 } = inboxApi;
