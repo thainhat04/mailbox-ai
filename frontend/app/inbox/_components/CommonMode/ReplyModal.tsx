@@ -17,8 +17,6 @@ interface Props {
 }
 
 export default function ReplyModal({ isOpen, onClose, email }: Props) {
-    if (!isOpen || !email) return null;
-
     const { ReplyEmail, isLoading, error, result } = useMutationHandler(
         useReplyEmailMutation,
         "ReplyEmail"
@@ -49,7 +47,7 @@ export default function ReplyModal({ isOpen, onClose, email }: Props) {
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
         const replyData = buildBody();
-        if (!replyData || !email.id) return;
+        if (!replyData || !email?.id) return;
 
         // Build the complete request body with emailId
         const requestBody = {
@@ -78,7 +76,7 @@ export default function ReplyModal({ isOpen, onClose, email }: Props) {
             onClose();
         }
     }, [result]);
-
+    if (!isOpen || !email) return null;
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center"

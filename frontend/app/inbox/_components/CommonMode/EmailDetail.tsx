@@ -179,10 +179,16 @@ export default function EmailDetail({
         <div className="flex-1 h-full flex flex-col text-white relative w-full md:w-auto">
             {!email ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-white/50 gap-4">
-                    <div className="rounded-full bg-white/10 p-4">
-                        <Forward className="text-white/50" />
-                    </div>
-                    <p className="text-sm">{t("inbox.9")}</p>
+                    {!isFetching ? (
+                        <>
+                            <div className="rounded-full bg-white/10 p-4">
+                                <Forward className="text-white/50" />
+                            </div>
+                            <p className="text-sm">{t("inbox.9")}</p>
+                        </>
+                    ) : (
+                        <LoadingOverlay isVisible={isFetching} />
+                    )}
                 </div>
             ) : (
                 <div className="flex flex-col h-full">

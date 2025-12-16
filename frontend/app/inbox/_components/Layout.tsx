@@ -3,9 +3,24 @@ import { useState } from "react";
 import HeaderInbox from "@/components/common/HeaderInbox";
 import CommondLayout from "./CommonMode/CommonLayout";
 import KanbanLayout from "./KanbanMode/KanbanLayout";
+import SearchModal from "./SearchModal";
 
 function InboxLayout() {
     const [isCommondMode, setIsCommandMode] = useState(false);
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
+
+    const handleSearch = (query: string) => {
+        if (query.trim()) {
+            setSearchQuery(query);
+            setIsSearchOpen(true);
+        }
+    };
+
+    const handleCloseSearch = () => {
+        setIsSearchOpen(false);
+    };
+
     return (
         <div className="relative h-screen w-full flex flex-col overflow-hidden text-white">
             {/* Gradient background */}
@@ -13,6 +28,7 @@ function InboxLayout() {
             <HeaderInbox
                 isCommondMode={isCommondMode}
                 setIsCommandMode={setIsCommandMode}
+                onSearch={handleSearch}
             />
 
             <CommondLayout isCommondMode={isCommondMode} />
@@ -20,6 +36,13 @@ function InboxLayout() {
             <div style={{ display: isCommondMode ? "none" : "block" }}>
                 <KanbanLayout />
             </div>
+
+            {/* Search Modal */}
+            <SearchModal
+                isOpen={isSearchOpen}
+                onClose={handleCloseSearch}
+                searchQuery={searchQuery}
+            />
         </div>
     );
 }
