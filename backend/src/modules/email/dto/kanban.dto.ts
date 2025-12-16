@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsDateString } from 'class-validator';
+import { IsEnum, IsOptional, IsDateString, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { EmailDto } from './email.dto';
 
@@ -46,4 +46,51 @@ export class KanbanBoardDto {
 export class EmailSummaryDto {
   summary: string;
   generatedAt: Date;
+}
+
+// Kanban Filter Options
+export class KanbanFilterDto {
+  @ApiProperty({
+    description: 'Show only unread emails',
+    required: false,
+    example: false
+  })
+  @IsOptional()
+  unreadOnly?: boolean;
+
+  @ApiProperty({
+    description: 'Show only emails with attachments',
+    required: false,
+    example: false
+  })
+  @IsOptional()
+  hasAttachmentsOnly?: boolean;
+
+  @ApiProperty({
+    description: 'Filter by sender email',
+    required: false,
+    example: 'sender@example.com'
+  })
+  @IsOptional()
+  @IsString()
+  fromEmail?: string;
+}
+
+// Kanban Sort Options
+export enum SortBy {
+  DATE_DESC = 'date_desc', // Newest first
+  DATE_ASC = 'date_asc', // Oldest first
+  SENDER = 'sender', // By sender name alphabetically
+}
+
+export class KanbanSortDto {
+  @ApiProperty({
+    description: 'Sort criteria',
+    enum: SortBy,
+    required: false,
+    example: SortBy.DATE_DESC
+  })
+  @IsOptional()
+  @IsEnum(SortBy)
+  sortBy?: SortBy;
 }

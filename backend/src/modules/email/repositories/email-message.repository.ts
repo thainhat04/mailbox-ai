@@ -49,7 +49,7 @@ export interface SyncStateData {
 export class EmailMessageRepository {
   private readonly logger = new Logger(EmailMessageRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Upsert a single email message
@@ -91,17 +91,17 @@ export class EmailMessageRepository {
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-                upsert: {
-                  create: {
-                    bodyText: messageData.bodyText,
-                    bodyHtml: messageData.bodyHtml,
-                  },
-                  update: {
-                    bodyText: messageData.bodyText,
-                    bodyHtml: messageData.bodyHtml,
-                  },
+              upsert: {
+                create: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
                 },
-              }
+                update: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
+                },
+              },
+            }
             : undefined,
       },
       create: {
@@ -127,11 +127,11 @@ export class EmailMessageRepository {
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-                create: {
-                  bodyText: messageData.bodyText,
-                  bodyHtml: messageData.bodyHtml,
-                },
-              }
+              create: {
+                bodyText: messageData.bodyText,
+                bodyHtml: messageData.bodyHtml,
+              },
+            }
             : undefined,
       },
     });
@@ -339,6 +339,12 @@ export class EmailMessageRepository {
     userId: string,
     status: string,
     includeDoneAll?: boolean,
+    filters?: {
+      unreadOnly?: boolean;
+      hasAttachmentsOnly?: boolean;
+      fromEmail?: string;
+    },
+    sortBy?: 'date_desc' | 'date_asc' | 'sender',
   ): Promise<PrismaEmailMessage[]> {
     const whereClause: any = {
       emailAccount: { userId },
@@ -355,11 +361,36 @@ export class EmailMessageRepository {
       };
     }
 
+    // Apply filters
+    if (filters?.unreadOnly) {
+      whereClause.isRead = false;
+    }
+
+    if (filters?.hasAttachmentsOnly) {
+      whereClause.hasAttachments = true;
+    }
+
+    if (filters?.fromEmail) {
+      whereClause.from = {
+        contains: filters.fromEmail,
+        mode: 'insensitive',
+      };
+    }
+
+    // Determine sort order
+    let orderBy: any = { statusChangedAt: "desc" }; // Default
+
+    if (sortBy === 'date_desc') {
+      orderBy = { date: 'desc' };
+    } else if (sortBy === 'date_asc') {
+      orderBy = { date: 'asc' };
+    } else if (sortBy === 'sender') {
+      orderBy = { fromName: 'asc' };
+    }
+
     return this.prisma.emailMessage.findMany({
       where: whereClause,
-      orderBy: {
-        statusChangedAt: "desc", // Most recently updated first
-      },
+      orderBy,
       include: {
         attachments: true,
         body: true,
