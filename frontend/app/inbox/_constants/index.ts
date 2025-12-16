@@ -11,5 +11,6 @@ const constant = {
     URL_FROZEN_EMAILS: (id: string) => `/${id}/freeze`,
     URL_UNFREEZE_EMAILS: (id: string) => `/${id}/unfreeze`,
     URL_SUMMARIZE_EMAIL: (id: string) => `/${id}/summary`,
+    URL_PUZZLE_SEARCH: "/emails/fuzzy-search",
 };
 export default constant;

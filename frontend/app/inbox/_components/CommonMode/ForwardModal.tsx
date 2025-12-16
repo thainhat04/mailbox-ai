@@ -17,8 +17,6 @@ interface Props {
 }
 
 export default function ForwardModal({ isOpen, onClose, email }: Props) {
-    if (!isOpen || !email) return null;
-
     const sendEmailMutation = useMutationHandler(
         useSendEmailMutation,
         "SendEmail"
@@ -79,10 +77,11 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
             onClose();
         }
     }, [sendEmailMutation.result]);
+    if (!isOpen || !email) return null;
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center"
+            className="fixed inset-0 z-999999999 flex items-center justify-center"
             role="dialog"
             aria-modal="true"
             onClick={handleOverlayClick}

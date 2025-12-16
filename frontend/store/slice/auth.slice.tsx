@@ -81,13 +81,55 @@ export const initAuth = () => async (dispatch: AppDispatch) => {
                 );
                 if ("data" in result && result.data) {
                     dispatch(login(result.data.data));
-                } else {
-                    localStorage.removeItem(SERVICES.accessToken);
-                    localStorage.removeItem(SERVICES.refreshToken);
-                }
+                } else if (
+                    "error" in result &&
+                    result.error &&
+                    "status" in result.error
+                ) {
+                    const status = result.error.status;
+
+                    if (status === SERVICES.STATUS_UNAUTHORIZED) {
+                        localStorage.removeItem(SERVICES.accessToken);
+                        localStorage.removeItem(SERVICES.refreshToken);
+                    } else {
+                        throw new Error("retry");
+                    }
+                } else throw new Error("retry");
             } catch (err) {
-                localStorage.removeItem(SERVICES.accessToken);
-                localStorage.removeItem(SERVICES.refreshToken);
+                let retryCount = 0;
+                const maxRetry = SERVICES.MAX_RETRY_ATTEMPTS;
+                let success = false;
+
+                while (retryCount < maxRetry) {
+                    retryCount++;
+
+                    await sleep(SERVICES.RETRY_DELAY_MS);
+
+                    const retryResult = await dispatch(
+                        userApi.endpoints.getUser.initiate()
+                    );
+
+                    if ("data" in retryResult && retryResult.data) {
+                        dispatch(login(retryResult.data.data));
+                        success = true;
+                        break;
+                    } else if (
+                        "error" in retryResult &&
+                        retryResult.error &&
+                        "status" in retryResult.error
+                    ) {
+                        const status = retryResult.error.status;
+
+                        if (status === SERVICES.STATUS_UNAUTHORIZED) {
+                            localStorage.removeItem(SERVICES.accessToken);
+                            localStorage.removeItem(SERVICES.refreshToken);
+                            break;
+                        }
+                    }
+                }
+                if (!success) {
+                    dispatch(logout());
+                }
             }
         }
 
@@ -98,5 +140,6 @@ export const initAuth = () => async (dispatch: AppDispatch) => {
         dispatch(setAppLoading({ user: true }));
     }
 };
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default authSlice.reducer;
