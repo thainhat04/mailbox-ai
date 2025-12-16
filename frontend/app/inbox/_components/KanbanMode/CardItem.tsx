@@ -73,8 +73,8 @@ export default function CardItem({ item, isOverlay }: CardItemProps) {
                     : {})}
                 onClick={handleCardClick}
                 className={`
-        group relative mb-3 p-4 rounded-xl cursor-pointer 
-        bg-white/10 border 
+        group relative mb-2 sm:mb-3 p-3 sm:p-4 rounded-lg sm:rounded-xl cursor-pointer
+        bg-white/10 border
         ${
             sortable?.isOver
                 ? "border-cyan-400 ring-1 ring-cyan-400"
@@ -84,34 +84,34 @@ export default function CardItem({ item, isOverlay }: CardItemProps) {
         hover:shadow-md hover:border-white/40 hover:bg-white/12
     `}
             >
-                <div className="relative z-10 space-y-2">
+                <div className="relative z-10 space-y-1.5 sm:space-y-2">
                     {/* Subject */}
-                    <h4 className="font-semibold text-sm text-white/95 mb-1 line-clamp-2">
+                    <h4 className="font-semibold text-xs sm:text-sm text-white/95 mb-1 line-clamp-2">
                         {item.subject}
                     </h4>
 
                     {/* From */}
-                    <p className="text-xs text-white/60">
+                    <p className="text-[10px] sm:text-xs text-white/60 truncate">
                         From: <span className="text-white/75">{item.from}</span>
                     </p>
 
                     {/* AI Summary */}
                     {item.summary && (
-                        <p className="text-xs text-cyan-300 font-medium line-clamp-2 cursor-pointer hover:text-cyan-200 transition-colors">
+                        <p className="text-[10px] sm:text-xs text-cyan-300 font-medium line-clamp-2 cursor-pointer hover:text-cyan-200 transition-colors">
                             {item.summary}
                         </p>
                     )}
 
                     {/* Snippet */}
                     {item.snippet && (
-                        <p className="text-xs text-white/60 line-clamp-2">
+                        <p className="text-[10px] sm:text-xs text-white/60 line-clamp-2">
                             {item.snippet}
                         </p>
                     )}
 
                     {/* Snooze countdown */}
                     {item.snoozedUntil && countdown !== "Đã hết hạn" && (
-                        <p className="text-xs mt-1 text-cyan-300 font-medium">
+                        <p className="text-[10px] sm:text-xs mt-1 text-cyan-300 font-medium">
                             Snoozing: {countdown}
                         </p>
                     )}

@@ -10,7 +10,7 @@ interface BoardProps {
 
 export default function Board({ columns, activeColumn }: BoardProps) {
     return (
-        <div className="flex gap-4 p-4">
+        <div className="flex gap-2 sm:gap-3 md:gap-4 p-2 sm:p-3 md:p-4 overflow-x-auto">
             {Object.entries(columns).map(([colId, items]) => (
                 <Column
                     key={colId}

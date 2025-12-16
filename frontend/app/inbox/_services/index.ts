@@ -290,12 +290,25 @@ const inboxApi = api.injectEndpoints({
             providesTags: (_, __, arg) => [{ type: "Emails", id: arg.id }],
         }),
 
-        getAllKanBan: builder.query<SuccessResponse<KanbanBoardData>, void>({
-            query: () => ({
+        getAllKanBan: builder.query<
+            SuccessResponse<KanbanBoardData>,
+            {
+                includeDoneAll?: boolean;
+                unreadOnly?: boolean;
+                hasAttachmentsOnly?: boolean;
+                fromEmail?: string;
+                sortBy?: string;
+            } | void
+        >({
+            query: (params) => ({
                 url: constant.URL_KANBAN,
                 method: HTTP_METHOD.GET,
                 params: {
-                    includeDoneAll: true,
+                    includeDoneAll: params?.includeDoneAll ?? true,
+                    unreadOnly: params?.unreadOnly,
+                    hasAttachmentsOnly: params?.hasAttachmentsOnly,
+                    fromEmail: params?.fromEmail,
+                    sortBy: params?.sortBy,
                 },
             }),
         }),

@@ -8,6 +8,7 @@ import {
     KanbanColumnKey,
     KanbanStatus,
     FrozenTimeouts,
+    SortOption,
 } from "../_types";
 import {
     useGetAllKanBanQuery,
@@ -33,10 +34,24 @@ export default function useKanban() {
         frozen: [],
     });
 
+    // Filter and Sort state
+    const [filters, setFilters] = useState({
+        unreadOnly: false,
+        hasAttachmentsOnly: false,
+        fromEmail: "",
+    });
+    const [sortBy, setSortBy] = useState<SortOption>("date_desc");
+
     // Fetch
     const { result, isLoading, isFetching, refetch } = useQueryHandler(
         useGetAllKanBanQuery,
-        undefined
+        {
+            includeDoneAll: true,
+            unreadOnly: filters.unreadOnly,
+            hasAttachmentsOnly: filters.hasAttachmentsOnly,
+            fromEmail: filters.fromEmail || undefined,
+            sortBy,
+        }
     );
     const frozenStatusMutation = useMutationHandler(
         useUpdateFrozenStatusMutation,
@@ -214,5 +229,9 @@ export default function useKanban() {
         isLoading: isLoading || isFetching,
         refetch,
         moveToColumnFromFrozen,
+        filters,
+        setFilters,
+        sortBy,
+        setSortBy,
     };
 }

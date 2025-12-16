@@ -273,10 +273,22 @@ export class EmailController {
   async getKanbanBoard(
     @CurrentUser() user: JwtPayload,
     @Query("includeDoneAll") includeDoneAll?: boolean,
+    @Query("unreadOnly") unreadOnly?: boolean,
+    @Query("hasAttachmentsOnly") hasAttachmentsOnly?: boolean,
+    @Query("fromEmail") fromEmail?: string,
+    @Query("sortBy") sortBy?: "date_desc" | "date_asc" | "sender",
   ) {
+    const filters = {
+      unreadOnly: unreadOnly === true || unreadOnly === "true" as any,
+      hasAttachmentsOnly: hasAttachmentsOnly === true || hasAttachmentsOnly === "true" as any,
+      fromEmail,
+    };
+
     const result = await this.kanbanService.getKanbanBoard(
       user.sub,
       includeDoneAll,
+      filters,
+      sortBy,
     );
     return ResponseDto.success(result, "Kanban board retrieved successfully");
   }

@@ -48,6 +48,12 @@ export class KanbanService {
   async getKanbanBoard(
     userId: string,
     includeDoneAll?: boolean,
+    filters?: {
+      unreadOnly?: boolean;
+      hasAttachmentsOnly?: boolean;
+      fromEmail?: string;
+    },
+    sortBy?: 'date_desc' | 'date_asc' | 'sender',
   ): Promise<KanbanBoardDto> {
     // Fetch emails for each status in parallel
     const [inbox, todo, processing, done, frozen] = await Promise.all([
@@ -55,26 +61,36 @@ export class KanbanService {
         userId,
         'INBOX',
         false,
+        filters,
+        sortBy,
       ),
       this.emailMessageRepository.findByKanbanStatus(
         userId,
         'TODO',
         false,
+        filters,
+        sortBy,
       ),
       this.emailMessageRepository.findByKanbanStatus(
         userId,
         'PROCESSING',
         false,
+        filters,
+        sortBy,
       ),
       this.emailMessageRepository.findByKanbanStatus(
         userId,
         'DONE',
         includeDoneAll,
+        filters,
+        sortBy,
       ),
       this.emailMessageRepository.findByKanbanStatus(
         userId,
         'FROZEN',
         false,
+        filters,
+        sortBy,
       ),
     ]);
 
