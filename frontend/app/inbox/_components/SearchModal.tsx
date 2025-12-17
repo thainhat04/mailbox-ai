@@ -84,7 +84,7 @@ export default function SearchModal({
 
             {/* Modal Content */}
             <div
-                className="relative w-full max-w-7xl bg-linear-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95  rounded-2xl shadow-2xl border border-white/10 max-h-[85vh] flex flex-col overflow-hidden"
+                className="relative backdrop__need backdrop-blur-2xl w-full max-w-7xl bg-linear-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95  rounded-2xl shadow-2xl border border-white/10 h-[85vh] flex flex-col overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
@@ -93,11 +93,16 @@ export default function SearchModal({
                         <h2 className="text-2xl font-bold text-white">
                             Search Results
                         </h2>
-                        <p className="text-sm text-white/60 mt-1">
-                            Found {total} result{total !== 1 ? "s" : ""} for "
-                            <span className="text-cyan-400">{searchQuery}</span>
-                            "
-                        </p>
+                        {!isFetching && (
+                            <p className="text-sm text-white/60 mt-1">
+                                Found {total} result{total !== 1 ? "s" : ""} for
+                                "
+                                <span className="text-cyan-400">
+                                    {searchQuery}
+                                </span>
+                                "
+                            </p>
+                        )}
                     </div>
 
                     {/* Close Button */}

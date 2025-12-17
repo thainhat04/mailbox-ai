@@ -57,7 +57,7 @@ export default function EmailDetail({
     const [isForwardOpen, setIsForwardOpen] = useState(false);
     const [isStarred, setIsStarred] = useState(false);
     const [email, setEmail] = useState<Email | null>(null);
-    const { result, isFetching } = useQueryHandler(
+    const { result, isFetching, error } = useQueryHandler(
         useGetEmailByIdQuery,
         {
             id: previewEmail?.id || "",
@@ -78,6 +78,12 @@ export default function EmailDetail({
             setIsStarred(result.data.isStarred);
         }
     }, [result]);
+
+    useEffect(() => {
+        if (error) {
+            showToast(t("inbox.emailLoadError"), "error");
+        }
+    }, [error]);
 
     const handleDownloadAttachment = async (url: string, filename: string) => {
         try {

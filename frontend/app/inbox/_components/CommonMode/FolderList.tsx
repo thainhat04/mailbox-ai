@@ -16,7 +16,10 @@ export default function FolderList({ selected, onSelect }: FolderListProps) {
     const { t } = useTranslation();
     const { result, error, isLoading, isFetching, refetch } = useQueryHandler(
         useGetMailBoxesQuery,
-        undefined
+        undefined,
+        {
+            refetchOnMountOrArgChange: true,
+        }
     );
 
     const folders: Folder[] = result?.data || [];
