@@ -73,7 +73,7 @@ export default function Column({ columnId, items, isActive }: Props) {
     return (
         <div
             ref={setNodeRef}
-            className={`${baseClass} ${currentStyle} min-w-[280px] sm:min-w-[300px] md:min-w-[320px] w-full sm:w-[calc((100%-32px)/2)] md:w-[calc((100%-48px)/3)] lg:w-[calc((100%-64px)/4)] xl:w-[calc((100%-80px)/5)]`}
+            className={`${baseClass} ${currentStyle} w-[calc((100%-32px)/5)]`}
         >
             {/* Column Header */}
             <div className="top-0 z-10 mb-1 pb-2 sm:pb-3 border-b border-white/10">
@@ -102,7 +102,7 @@ export default function Column({ columnId, items, isActive }: Props) {
 
             {/* Empty State */}
             {items.length === 0 && (
-                <div className="text-white/40 h-[calc(100vh-340px)] text-sm italic py-8 text-center">
+                <div className="text-white/40 h-[calc(100vh-300px)] text-sm italic py-8 text-center">
                     ✨ Drop emails here
                 </div>
             )}
@@ -110,7 +110,7 @@ export default function Column({ columnId, items, isActive }: Props) {
             {/* Cards */}
             {items.length !== 0 && (
                 <div
-                    className="space-y-3 overflow-y-auto h-[calc(100vh-340px)]
+                    className="space-y-3 overflow-y-auto h-[calc(100vh-300px)]
                 custom-scroll overflow-x-hidden p-2 pt-1"
                 >
                     {items.map((item) => (

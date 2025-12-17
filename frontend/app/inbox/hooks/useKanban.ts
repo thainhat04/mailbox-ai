@@ -51,6 +51,9 @@ export default function useKanban() {
             hasAttachmentsOnly: filters.hasAttachmentsOnly,
             fromEmail: filters.fromEmail || undefined,
             sortBy,
+        },
+        {
+            refetchOnMountOrArgChange: true,
         }
     );
     const frozenStatusMutation = useMutationHandler(

@@ -76,6 +76,17 @@ export default function ReplyModal({ isOpen, onClose, email }: Props) {
             onClose();
         }
     }, [result]);
+    useEffect(() => {
+        if (isOpen) {
+            document
+                .querySelector(".backdrop__need")
+                ?.classList.remove("backdrop-blur-2xl");
+        } else {
+            document
+                .querySelector(".backdrop__need")
+                ?.classList.add("backdrop-blur-2xl");
+        }
+    }, [isOpen]);
     if (!isOpen || !email) return null;
     return (
         <div

@@ -138,6 +138,63 @@ npm run dev
   }
   ```
 
+### V. Fuzzy Search Engine
+- **Typo Tolerance**: Handles misspellings using PostgreSQL pg_trgm extension (e.g., "marketting" → "marketing")
+- **Partial Matches**: Supports incomplete queries (e.g., "Nguy" → finds "Nguyễn Văn A")
+- **Multi-field Search**: Searches across subject, sender name/email, and snippet
+- **Relevance Ranking**: Results scored 0-1 and sorted by best match first (uses similarity + word_similarity)
+- **Pagination**: Supports page and limit parameters (default: 50 per page)
+- **Search UI**: Integrated search bar with loading/empty/error states
+
+- **API**: `GET /api/v1/emails/fuzzy-search?q=query&page=1&limit=50`
+
+  **Example Response**:
+  ```json
+  {
+    "emails": [
+      {
+        "id": "email-id",
+        "subject": "Marketing Campaign",
+        "from": "sender@example.com",
+        "fromName": "Sender Name",
+        "snippet": "Email preview...",
+        "relevanceScore": 0.85
+      }
+    ],
+    "page": 1,
+    "limit": 50,
+    "total": 100,
+    "totalPages": 2
+  }
+  ```
+
+### VI. Filtering & Sorting
+- **Sorting Options**:
+  - `date_desc`: Newest first (default)
+  - `date_asc`: Oldest first
+  - `sender`: Sort by sender name alphabetically
+  - Applies within each Kanban column independently
+- **Filter Controls**:
+  - `unreadOnly`: Show only unread emails
+  - `hasAttachmentsOnly`: Show only emails with attachments
+  - `fromEmail`: Filter by specific sender email
+  - `includeDoneAll`: Include all DONE emails (default: last 7 days only)
+- **Real-time Update**: Changes apply instantly without page reload
+- **Persistent View**: Filters remain active until manually cleared
+
+- **API**: `GET /api/v1/kanban/board?sortBy=date_desc&unreadOnly=true&hasAttachmentsOnly=true&fromEmail=sender@example.com`
+
+  **Example Response**:
+  ```json
+  {
+    "inbox": [...],
+    "todo": [...],
+    "processing": [...],
+    "done": [...],
+    "frozen": [...]
+  }
+  ```
+
 ## Authentication
 
 All API requests require JWT token:

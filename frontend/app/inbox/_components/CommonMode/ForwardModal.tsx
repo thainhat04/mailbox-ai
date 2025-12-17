@@ -6,7 +6,7 @@ import { useForwardEmail } from "../../hooks/useForwardEmail";
 import EmailAttachmentItem from "./EmailAttachmentItem";
 import { useSendEmailMutation } from "../../_services";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
-import { useEffect } from "react";
+import { use, useEffect } from "react";
 import { useToast } from "@/components/ui/toast-provider";
 import { Email } from "../../_types";
 
@@ -77,6 +77,17 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
             onClose();
         }
     }, [sendEmailMutation.result]);
+    useEffect(() => {
+        if (isOpen) {
+            document
+                .querySelector(".backdrop__need")
+                ?.classList.remove("backdrop-blur-2xl");
+        } else {
+            document
+                .querySelector(".backdrop__need")
+                ?.classList.add("backdrop-blur-2xl");
+        }
+    }, [isOpen]);
     if (!isOpen || !email) return null;
 
     return (
