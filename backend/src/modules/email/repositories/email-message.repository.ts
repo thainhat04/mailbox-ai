@@ -49,7 +49,7 @@ export interface SyncStateData {
 export class EmailMessageRepository {
   private readonly logger = new Logger(EmailMessageRepository.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Upsert a single email message
@@ -91,17 +91,17 @@ export class EmailMessageRepository {
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-              upsert: {
-                create: {
-                  bodyText: messageData.bodyText,
-                  bodyHtml: messageData.bodyHtml,
+                upsert: {
+                  create: {
+                    bodyText: messageData.bodyText,
+                    bodyHtml: messageData.bodyHtml,
+                  },
+                  update: {
+                    bodyText: messageData.bodyText,
+                    bodyHtml: messageData.bodyHtml,
+                  },
                 },
-                update: {
-                  bodyText: messageData.bodyText,
-                  bodyHtml: messageData.bodyHtml,
-                },
-              },
-            }
+              }
             : undefined,
       },
       create: {
@@ -127,11 +127,11 @@ export class EmailMessageRepository {
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-              create: {
-                bodyText: messageData.bodyText,
-                bodyHtml: messageData.bodyHtml,
-              },
-            }
+                create: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
+                },
+              }
             : undefined,
       },
     });
@@ -344,7 +344,7 @@ export class EmailMessageRepository {
       hasAttachmentsOnly?: boolean;
       fromEmail?: string;
     },
-    sortBy?: 'date_desc' | 'date_asc' | 'sender',
+    sortBy?: "date_desc" | "date_asc" | "sender",
   ): Promise<PrismaEmailMessage[]> {
     const whereClause: any = {
       emailAccount: { userId },
@@ -373,19 +373,19 @@ export class EmailMessageRepository {
     if (filters?.fromEmail) {
       whereClause.from = {
         contains: filters.fromEmail,
-        mode: 'insensitive',
+        mode: "insensitive",
       };
     }
 
     // Determine sort order
     let orderBy: any = { statusChangedAt: "desc" }; // Default
 
-    if (sortBy === 'date_desc') {
-      orderBy = { date: 'desc' };
-    } else if (sortBy === 'date_asc') {
-      orderBy = { date: 'asc' };
-    } else if (sortBy === 'sender') {
-      orderBy = { fromName: 'asc' };
+    if (sortBy === "date_desc") {
+      orderBy = { date: "desc" };
+    } else if (sortBy === "date_asc") {
+      orderBy = { date: "asc" };
+    } else if (sortBy === "sender") {
+      orderBy = { fromName: "asc" };
     }
 
     return this.prisma.emailMessage.findMany({
@@ -552,7 +552,7 @@ export class EmailMessageRepository {
   }> {
     const limit = options?.limit || 50;
     const offset = options?.offset || 0;
-    const similarityThreshold = 0.3;
+    const similarityThreshold = 0.45;
 
     this.logger.debug(
       `Fuzzy searching emails for user ${userId} with query: "${query}"`,
@@ -570,17 +570,18 @@ export class EmailMessageRepository {
 
     const accountIds = emailAccounts.map((acc) => acc.id);
 
-    // Use raw SQL for fuzzy search with pg_trgm
-    // Rank by match quality only (similarity score)
     const searchQuery = `
       SELECT
         em.*,
-        -- Calculate max similarity across all searchable fields as relevance score
         GREATEST(
           COALESCE(similarity(em.subject, $1), 0),
+          COALESCE(word_similarity($1, em.subject), 0),
           COALESCE(similarity(em."from", $1), 0),
+          COALESCE(word_similarity($1, em."from"), 0),
           COALESCE(similarity(em."fromName", $1), 0),
-          COALESCE(similarity(em.snippet, $1), 0)
+          COALESCE(word_similarity($1, em."fromName"), 0),
+          COALESCE(similarity(em.snippet, $1), 0),
+          COALESCE(word_similarity($1, em.snippet), 0)
         ) AS relevance_score
       FROM email_messages em
       WHERE
@@ -590,6 +591,14 @@ export class EmailMessageRepository {
           OR similarity(em."from", $1) > $3
           OR similarity(em."fromName", $1) > $3
           OR similarity(em.snippet, $1) > $3
+          OR word_similarity($1, em.subject) > $3
+          OR word_similarity($1, em."from") > $3
+          OR word_similarity($1, em."fromName") > $3
+          OR word_similarity($1, em.snippet) > $3
+          OR em.subject ILIKE '%' || $1 || '%'
+          OR em."from" ILIKE '%' || $1 || '%'
+          OR em."fromName" ILIKE '%' || $1 || '%'
+          OR em.snippet ILIKE '%' || $1 || '%'
         )
       ORDER BY relevance_score DESC, em.date DESC
       LIMIT $4 OFFSET $5
@@ -601,10 +610,21 @@ export class EmailMessageRepository {
       WHERE
         em."emailAccountId" = ANY($1::text[])
         AND (
+          -- Fuzzy similarity matching
           similarity(em.subject, $2) > $3
           OR similarity(em."from", $2) > $3
           OR similarity(em."fromName", $2) > $3
           OR similarity(em.snippet, $2) > $3
+          -- Word-level similarity
+          OR word_similarity($2, em.subject) > $3
+          OR word_similarity($2, em."from") > $3
+          OR word_similarity($2, em."fromName") > $3
+          OR word_similarity($2, em.snippet) > $3
+          -- Substring matching
+          OR em.subject ILIKE '%' || $2 || '%'
+          OR em."from" ILIKE '%' || $2 || '%'
+          OR em."fromName" ILIKE '%' || $2 || '%'
+          OR em.snippet ILIKE '%' || $2 || '%'
         )
     `;
 
