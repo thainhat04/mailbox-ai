@@ -23,6 +23,10 @@ import {
   LabelDto,
   FuzzySearchQueryDto,
   FuzzySearchResponseDto,
+  SuggestionQueryDto,
+  SuggestionResponseDto,
+  SuggestionItemDto,
+  SuggestionType,
 } from "./dto";
 import { ResponseDto } from "../../common/dtos/response.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
@@ -126,6 +130,48 @@ export class EmailController {
     return ResponseDto.success(
       result,
       `Found ${result.total} matching emails with fuzzy search`,
+    );
+  }
+
+  @Get("emails/suggestions")
+  @ApiOperation({
+    summary: "Get search suggestions for auto-complete",
+    description:
+      "Returns sender names and subject keywords based on query. " +
+      "Used for type-ahead search functionality.",
+  })
+  async getSearchSuggestions(
+    @Query() query: SuggestionQueryDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<SuggestionResponseDto>> {
+    const result = await this.emailService.getSuggestions(
+      query.q,
+      user.sub,
+      query.limit,
+    );
+
+    // Transform to SuggestionItemDto format
+    const suggestions: SuggestionItemDto[] = [
+      ...result.senders.map((sender) => ({
+        type: SuggestionType.SENDER,
+        value: sender.email,
+        label: sender.name || sender.email,
+      })),
+      ...result.keywords.map((keyword) => ({
+        type: SuggestionType.SUBJECT_KEYWORD,
+        value: keyword.keyword,
+        label: keyword.keyword,
+      })),
+    ];
+
+    const response: SuggestionResponseDto = {
+      suggestions,
+      query: query.q,
+    };
+
+    return ResponseDto.success(
+      response,
+      `Found ${suggestions.length} suggestions`,
     );
   }
 
