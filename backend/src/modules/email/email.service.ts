@@ -22,7 +22,7 @@ export class EmailService {
     private readonly oauth2TokenService: OAuth2TokenService,
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
-  ) { }
+  ) {}
 
   async getLabelById(labelId: string, userId: string): Promise<any> {
     if (!userId) {
@@ -147,10 +147,7 @@ export class EmailService {
     };
   }
 
-  async findEmailById(
-    id: string,
-    userId: string,
-  ): Promise<Email> {
+  async findEmailById(id: string, userId: string): Promise<Email> {
     const message = await this.prisma.emailMessage.findFirst({
       where: {
         messageId: id,
@@ -320,7 +317,7 @@ export class EmailService {
     const attachments = dto.attachments?.map((att) => ({
       filename: att.filename,
       mimeType: att.mimeType,
-      content: Buffer.from(att.contentBase64 || '', 'base64'),
+      content: Buffer.from(att.contentBase64 || "", "base64"),
     }));
 
     // Send email via Gmail API
@@ -366,7 +363,6 @@ export class EmailService {
       labelId: sentMessage.labels,
     };
   }
-
 
   async streamAttachment(
     userId: string,
@@ -558,17 +554,99 @@ export class EmailService {
       isStarred: message.isStarred,
       isImportant: message.labels?.includes("IMPORTANT") || false,
       labelId: message.labels,
-      attachments: message.attachments?.map((att: any) => ({
-        id: `${message.messageId}-${att.providerId}`,
-        filename: att.filename,
-        size: att.size,
-        mimeType: att.mimeType,
-        url: `/api/v1/attachments/${message.messageId}-${att.providerId}`,
-      })) || [],
+      attachments:
+        message.attachments?.map((att: any) => ({
+          id: `${message.messageId}-${att.providerId}`,
+          filename: att.filename,
+          size: att.size,
+          mimeType: att.mimeType,
+          url: `/api/v1/attachments/${message.messageId}-${att.providerId}`,
+        })) || [],
       labels: message.labels || [],
       messageId: message.messageId,
       inReplyTo: message.inReplyTo,
       references: message.references || [],
+    };
+  }
+
+  /**
+   * Get search suggestions (sender names + subject keywords)
+   * Used for auto-suggestion dropdown
+   */
+  async getSuggestions(
+    query: string,
+    userId: string,
+    limit: number = 5,
+  ): Promise<{
+    senders: Array<{ email: string; name: string }>;
+    keywords: Array<{ keyword: string }>;
+  }> {
+    if (!query || query.trim().length < 2) {
+      return { senders: [], keywords: [] };
+    }
+
+    // Get all email accounts for the user
+    const emailAccounts = await this.prisma.emailAccount.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (emailAccounts.length === 0) {
+      return { senders: [], keywords: [] };
+    }
+
+    const accountIds = emailAccounts.map((acc) => acc.id);
+    const searchPattern = `%${query.toLowerCase()}%`;
+
+    // Get sender suggestions using ILIKE for case-insensitive search
+    const senderResults = await this.prisma.$queryRaw<
+      Array<{ from_email: string; from_name: string; email_count: bigint }>
+    >`
+      SELECT
+        "from" as from_email,
+        "fromName" as from_name,
+        COUNT(*) as email_count
+      FROM "email_messages"
+      WHERE "emailAccountId" = ANY(${accountIds})
+        AND (
+          LOWER("from") LIKE ${searchPattern}
+          OR LOWER("fromName") LIKE ${searchPattern}
+        )
+      GROUP BY "from", "fromName"
+      ORDER BY email_count DESC
+      LIMIT ${Math.ceil(limit / 2)}
+    `;
+
+    // Get subject keyword suggestions using pg_trgm similarity
+    const keywordResults = await this.prisma.$queryRaw<
+      Array<{ word: string; word_count: bigint }>
+    >`
+      SELECT
+        word,
+        COUNT(*) as word_count
+      FROM (
+        SELECT unnest(string_to_array(LOWER(subject), ' ')) as word
+        FROM "email_messages"
+        WHERE "emailAccountId" = ANY(${accountIds})
+          AND subject IS NOT NULL
+      ) words
+      WHERE
+        LENGTH(word) >= 3
+        AND word LIKE ${searchPattern}
+        AND word NOT IN ('the', 'and', 'for', 'with', 'from', 'this', 'that', 'have', 'your')
+      GROUP BY word
+      ORDER BY word_count DESC
+      LIMIT ${Math.ceil(limit / 2)}
+    `;
+
+    return {
+      senders: senderResults.map((r) => ({
+        email: r.from_email,
+        name: r.from_name || r.from_email,
+      })),
+      keywords: keywordResults.map((r) => ({
+        keyword: r.word,
+      })),
     };
   }
 }

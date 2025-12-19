@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import HeaderInbox from "@/components/common/HeaderInbox";
+import HeaderInbox from "@/components/common/HeaderInboxEnhanced";
 import CommondLayout from "./CommonMode/CommonLayout";
 import KanbanLayout from "./KanbanMode/KanbanLayout";
 import SearchModal from "./SearchModal";
