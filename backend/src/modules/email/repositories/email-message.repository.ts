@@ -25,6 +25,7 @@ export interface EmailMessageData {
   references?: string[];
   bodyText?: string;
   bodyHtml?: string;
+  kanbanColumnId?: string;
   attachments?: AttachmentData[];
 }
 
@@ -86,6 +87,7 @@ export class EmailMessageRepository {
         hasAttachments: messageData.hasAttachments,
         inReplyTo: messageData.inReplyTo,
         references: messageData.references || [],
+        kanbanColumnId: messageData.kanbanColumnId,
         updatedAt: new Date(),
         // Update body if provided
         body:
@@ -123,6 +125,7 @@ export class EmailMessageRepository {
         hasAttachments: messageData.hasAttachments,
         inReplyTo: messageData.inReplyTo,
         references: messageData.references || [],
+        kanbanColumnId: messageData.kanbanColumnId,
         // Create body if provided
         body:
           messageData.bodyText || messageData.bodyHtml
@@ -333,7 +336,64 @@ export class EmailMessageRepository {
   }
 
   /**
+   * Find emails by kanban column ID (NEW dynamic columns approach)
+   */
+  async findByColumnId(
+    userId: string,
+    columnId: string,
+    filters?: {
+      unreadOnly?: boolean;
+      hasAttachmentsOnly?: boolean;
+      fromEmail?: string;
+      includeDoneAll?: boolean;
+    },
+    sortBy?: "date_desc" | "date_asc" | "sender",
+  ): Promise<PrismaEmailMessage[]> {
+    const whereClause: any = {
+      emailAccount: { userId },
+      kanbanColumnId: columnId,
+    };
+
+    // Apply filters
+    if (filters?.unreadOnly) {
+      whereClause.isRead = false;
+    }
+
+    if (filters?.hasAttachmentsOnly) {
+      whereClause.hasAttachments = true;
+    }
+
+    if (filters?.fromEmail) {
+      whereClause.from = {
+        contains: filters.fromEmail,
+        mode: "insensitive",
+      };
+    }
+
+    // Determine sort order
+    let orderBy: any = { statusChangedAt: "desc" }; // Default
+
+    if (sortBy === "date_desc") {
+      orderBy = { date: "desc" };
+    } else if (sortBy === "date_asc") {
+      orderBy = { date: "asc" };
+    } else if (sortBy === "sender") {
+      orderBy = { fromName: "asc" };
+    }
+
+    return this.prisma.emailMessage.findMany({
+      where: whereClause,
+      orderBy,
+      include: {
+        attachments: true,
+        body: true,
+      },
+    });
+  }
+
+  /**
    * Find emails by kanban status with optional DONE filtering
+   * @deprecated Use findByColumnId instead for dynamic columns
    */
   async findByKanbanStatus(
     userId: string,
@@ -415,7 +475,28 @@ export class EmailMessageRepository {
   }
 
   /**
+   * Update email's kanban column (NEW dynamic columns approach)
+   */
+  async updateKanbanColumn(
+    emailId: string,
+    columnId: string,
+  ): Promise<PrismaEmailMessage> {
+    return this.prisma.emailMessage.update({
+      where: { id: emailId },
+      data: {
+        kanbanColumnId: columnId,
+        statusChangedAt: new Date(),
+      },
+      include: {
+        attachments: true,
+        body: true,
+      },
+    });
+  }
+
+  /**
    * Update kanban status for a single email
+   * @deprecated Use updateKanbanColumn instead for dynamic columns
    */
   async updateKanbanStatus(
     emailId: string,

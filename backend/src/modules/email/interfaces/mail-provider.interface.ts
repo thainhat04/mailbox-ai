@@ -227,6 +227,11 @@ export interface IMailProvider {
    */
   deleteLabel(labelId: string): Promise<void>;
 
+  /**
+   * Modify message labels (add/remove multiple labels at once)
+   */
+  modifyLabels(messageId: string, request: ModifyEmailRequest): Promise<EmailMessage>;
+
   // ----------------- Attachment Operations -----------------
 
   /**

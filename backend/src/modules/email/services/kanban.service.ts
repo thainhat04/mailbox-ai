@@ -1,12 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { EmailMessageRepository } from '../repositories/email-message.repository';
 import { PrismaService } from '../../../database/prisma.service';
 import { SummaryService } from './summary.service';
-import {
-  KanbanBoardDto,
-  SnoozeEmailDto,
-  EmailDto,
-} from '../dto';
+import { KanbanColumnService } from './kanban-column.service';
+import { MailProviderRegistry } from '../providers/provider.registry';
+import { SnoozeEmailDto } from '../dto';
 
 @Injectable()
 export class KanbanService {
@@ -16,10 +14,124 @@ export class KanbanService {
     private readonly emailMessageRepository: EmailMessageRepository,
     private readonly prisma: PrismaService,
     private readonly summaryService: SummaryService,
+    private readonly kanbanColumnService: KanbanColumnService,
+    private readonly providerRegistry: MailProviderRegistry,
   ) {}
 
   /**
+   * Update email kanban column (NEW dynamic columns)
+   * Syncs Gmail labels when moving emails between columns
+   */
+  async updateKanbanColumn(
+    userId: string,
+    emailId: string,
+    columnId: string,
+  ) {
+    // Verify user owns the email
+    const email = await this.prisma.emailMessage.findFirst({
+      where: {
+        id: emailId,
+        emailAccount: { userId },
+      },
+      include: {
+        emailAccount: {
+          include: {
+            account: true,
+          },
+        },
+      },
+    });
+
+    if (!email) {
+      throw new NotFoundException('Email not found');
+    }
+
+    // Verify column exists and belongs to user
+    const columns = await this.kanbanColumnService.getColumns(userId);
+    const newColumn = columns.find(c => c.id === columnId);
+
+    if (!newColumn) {
+      throw new NotFoundException('Column not found');
+    }
+
+    // Get old column information
+    const oldColumn = email.kanbanColumnId
+      ? columns.find(c => c.id === email.kanbanColumnId)
+      : null;
+
+    // Sync Gmail labels if account is Google
+    if (email.emailAccount.account?.provider === 'google') {
+      try {
+        await this.syncGmailLabels(
+          email.emailAccount.id,
+          email.messageId,
+          oldColumn,
+          newColumn,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to sync Gmail labels for email ${emailId}: ${error.message}`,
+        );
+        throw new BadRequestException(
+          `Failed to update Gmail labels: ${error.message}`,
+        );
+      }
+    }
+
+    // Update database only after Gmail sync succeeds
+    return this.emailMessageRepository.updateKanbanColumn(emailId, columnId);
+  }
+
+  /**
+   * Sync Gmail labels when moving email between columns
+   * - Removes old column's label
+   * - Adds new column's label
+   * - Removes INBOX label when moving out of INBOX column
+   */
+  private async syncGmailLabels(
+    emailAccountId: string,
+    messageId: string,
+    oldColumn: any,
+    newColumn: any,
+  ): Promise<void> {
+    const provider = await this.providerRegistry.getProvider(emailAccountId);
+
+    const labelsToRemove: string[] = [];
+    const labelsToAdd: string[] = [];
+
+    // Remove old column's Gmail label
+    if (oldColumn?.gmailLabelId) {
+      labelsToRemove.push(oldColumn.gmailLabelId);
+    }
+
+    // Remove INBOX label when moving out of INBOX column
+    if (oldColumn?.key === 'INBOX') {
+      labelsToRemove.push('INBOX');
+    }
+
+    // Add new column's Gmail label
+    if (newColumn?.gmailLabelId) {
+      labelsToAdd.push(newColumn.gmailLabelId);
+    }
+
+    // Call Gmail API to modify labels
+    if (labelsToRemove.length > 0 || labelsToAdd.length > 0) {
+      this.logger.log(
+        `Syncing Gmail labels for message ${messageId}: ` +
+        `removing [${labelsToRemove.join(', ')}], ` +
+        `adding [${labelsToAdd.join(', ')}]`,
+      );
+
+      await provider.modifyLabels(messageId, {
+        addLabelIds: labelsToAdd,
+        removeLabelIds: labelsToRemove,
+      });
+    }
+  }
+
+  /**
    * Update email kanban status
+   * @deprecated Use updateKanbanColumn instead
    */
   async updateKanbanStatus(
     userId: string,
@@ -43,7 +155,7 @@ export class KanbanService {
   }
 
   /**
-   * Get emails grouped by kanban status
+   * Get emails grouped by kanban columns (NEW dynamic approach)
    */
   async getKanbanBoard(
     userId: string,
@@ -54,56 +166,51 @@ export class KanbanService {
       fromEmail?: string;
     },
     sortBy?: 'date_desc' | 'date_asc' | 'sender',
-  ): Promise<KanbanBoardDto> {
-    // Fetch emails for each status in parallel
-    const [inbox, todo, processing, done, frozen] = await Promise.all([
-      this.emailMessageRepository.findByKanbanStatus(
+  ): Promise<any> {
+    // Get user's columns
+    const columns = await this.kanbanColumnService.getColumns(userId);
+
+    if (columns.length === 0) {
+      return { columns: [], emails: {} };
+    }
+
+    // Fetch emails for each column in parallel
+    const emailsPromises = columns.map(column =>
+      this.emailMessageRepository.findByColumnId(
         userId,
-        'INBOX',
-        false,
-        filters,
+        column.id,
+        { ...filters, includeDoneAll },
         sortBy,
-      ),
-      this.emailMessageRepository.findByKanbanStatus(
-        userId,
-        'TODO',
-        false,
-        filters,
-        sortBy,
-      ),
-      this.emailMessageRepository.findByKanbanStatus(
-        userId,
-        'PROCESSING',
-        false,
-        filters,
-        sortBy,
-      ),
-      this.emailMessageRepository.findByKanbanStatus(
-        userId,
-        'DONE',
-        includeDoneAll,
-        filters,
-        sortBy,
-      ),
-      this.emailMessageRepository.findByKanbanStatus(
-        userId,
-        'FROZEN',
-        false,
-        filters,
-        sortBy,
-      ),
-    ]);
+      )
+    );
+
+    const emailsArrays = await Promise.all(emailsPromises);
+
+    // Build response with column info and emails
+    const emailsByColumn: Record<string, any[]> = {};
+    const allEmails: any[] = [];
+
+    columns.forEach((column, index) => {
+      const emails = emailsArrays[index];
+      emailsByColumn[column.id] = emails;
+      allEmails.push(...emails);
+    });
 
     // Pre-generate summaries for emails that don't have one
-    const allEmails = [...inbox, ...todo, ...processing, ...done, ...frozen];
     await this.ensureSummaries(userId, allEmails);
 
     return {
-      inbox: inbox as any,
-      todo: todo as any,
-      processing: processing as any,
-      done: done as any,
-      frozen: frozen as any,
+      columns: columns.map(col => ({
+        id: col.id,
+        name: col.name,
+        key: col.key,
+        color: col.color,
+        icon: col.icon,
+        order: col.order,
+        isSystemProtected: col.isSystemProtected,
+        emailCount: emailsByColumn[col.id].length,
+      })),
+      emails: emailsByColumn,
     };
   }
 

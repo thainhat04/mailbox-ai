@@ -150,6 +150,13 @@ export class OutlookProvider extends BaseMailProvider {
     throw new Error('modifyMessage not implemented');
   }
 
+  async modifyLabels(
+    messageId: string,
+    request: ModifyEmailRequest,
+  ): Promise<EmailMessage> {
+    return this.modifyMessage(messageId, request);
+  }
+
   async trashMessage(messageId: string): Promise<void> {
     this.ensureInitialized();
     this.logger.debug(`Trashing message: ${messageId}`);
