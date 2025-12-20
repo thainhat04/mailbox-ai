@@ -12,11 +12,7 @@ import {
 } from "./dto";
 import { BaseException } from "../../common/exceptions";
 import { CODES } from "../../common/constants";
-import { OAuthProvider, OAuthSignInResponseDto } from "./dto/providers";
-import { OIDCService } from "../oidc/oidc.service";
-import { GoogleOIDCConfig } from "../oidc/providers/google.provider";
-import { MicrosoftOIDCConfig } from "../oidc/providers/microsoft.provider";
-import { GenerateUtil } from "../../common/utils";
+import { KanbanColumnService } from "../email/services/kanban-column.service";
 
 @Injectable()
 export class AuthService {
@@ -24,7 +20,8 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-  ) { }
+    private readonly kanbanColumnService: KanbanColumnService,
+  ) {}
 
   async register(registerDto: RegisterDto): Promise<TokenResponseDto> {
     const { email, password } = registerDto;
@@ -51,6 +48,8 @@ export class AuthService {
         hashPassword,
       },
     });
+    // Initialize default Kanban columns for new user
+    await this.kanbanColumnService.initializeDefaultColumns(user.id);
 
     // Generate tokens
     return await this.generateTokens(user);
@@ -153,7 +152,6 @@ export class AuthService {
 
     return this.mapUserToResponse(user);
   }
-
 
   async generateTokens(user: User): Promise<TokenResponseDto> {
     const payload = {

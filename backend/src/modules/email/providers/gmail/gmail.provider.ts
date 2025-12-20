@@ -176,14 +176,20 @@ export class GmailProvider extends BaseMailProvider {
     const messageParts: string[] = [];
 
     // Headers
-    messageParts.push(`To: ${request.to.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+    messageParts.push(
+      `To: ${request.to.map((addr) => this.formatEmailAddress(addr)).join(", ")}`,
+    );
 
     if (request.cc && request.cc.length > 0) {
-      messageParts.push(`Cc: ${request.cc.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+      messageParts.push(
+        `Cc: ${request.cc.map((addr) => this.formatEmailAddress(addr)).join(", ")}`,
+      );
     }
 
     if (request.bcc && request.bcc.length > 0) {
-      messageParts.push(`Bcc: ${request.bcc.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+      messageParts.push(
+        `Bcc: ${request.bcc.map((addr) => this.formatEmailAddress(addr)).join(", ")}`,
+      );
     }
 
     messageParts.push(`Subject: ${request.subject || "(no subject)"}`);
@@ -212,14 +218,20 @@ export class GmailProvider extends BaseMailProvider {
     const messageParts: string[] = [];
 
     // Headers
-    messageParts.push(`To: ${request.to.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+    messageParts.push(
+      `To: ${request.to.map((addr) => this.formatEmailAddress(addr)).join(", ")}`,
+    );
 
     if (request.cc && request.cc.length > 0) {
-      messageParts.push(`Cc: ${request.cc.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+      messageParts.push(
+        `Cc: ${request.cc.map((addr) => this.formatEmailAddress(addr)).join(", ")}`,
+      );
     }
 
     if (request.bcc && request.bcc.length > 0) {
-      messageParts.push(`Bcc: ${request.bcc.map(addr => this.formatEmailAddress(addr)).join(", ")}`);
+      messageParts.push(
+        `Bcc: ${request.bcc.map((addr) => this.formatEmailAddress(addr)).join(", ")}`,
+      );
     }
 
     messageParts.push(`Subject: ${request.subject || "(no subject)"}`);
@@ -254,9 +266,13 @@ export class GmailProvider extends BaseMailProvider {
     // Attachment parts
     for (const attachment of request.attachments!) {
       messageParts.push(`--${boundary}`);
-      messageParts.push(`Content-Type: ${attachment.mimeType}; name="${attachment.filename}"`);
+      messageParts.push(
+        `Content-Type: ${attachment.mimeType}; name="${attachment.filename}"`,
+      );
       messageParts.push("Content-Transfer-Encoding: base64");
-      messageParts.push(`Content-Disposition: attachment; filename="${attachment.filename}"`);
+      messageParts.push(
+        `Content-Disposition: attachment; filename="${attachment.filename}"`,
+      );
       messageParts.push("");
 
       // Convert Buffer to base64 and split into 76-character lines (RFC 2045)
@@ -286,6 +302,13 @@ export class GmailProvider extends BaseMailProvider {
 
     // Return updated message
     return this.getMessage(messageId);
+  }
+
+  async modifyLabels(
+    messageId: string,
+    request: ModifyEmailRequest,
+  ): Promise<EmailMessage> {
+    return this.modifyMessage(messageId, request);
   }
 
   async trashMessage(messageId: string): Promise<void> {
@@ -351,35 +374,63 @@ export class GmailProvider extends BaseMailProvider {
     }));
   }
 
-  async createLabel(name: string, color?: string): Promise<Label> {
+  async createLabel(name: string, _color?: string): Promise<Label> {
     await this.ensureValidToken();
     this.logger.debug(`Creating label: ${name}`);
 
-    // TODO: Implement Gmail API labels.create
-    // POST https://gmail.googleapis.com/gmail/v1/users/me/labels
-    throw new Error("createLabel not implemented");
+    const requestData: any = {
+      name,
+      messageListVisibility: "show",
+      labelListVisibility: "labelShow",
+    };
+
+    // Note: Gmail only allows predefined color palette, not custom hex colors
+    // Ignoring color parameter and using Gmail's default colors
+
+    const response = await this.apiClient.createLabel(requestData);
+
+    return {
+      id: response.id,
+      name: response.name,
+      type: this.getLabelType(response.type),
+      color: response.color?.backgroundColor,
+      labelListVisibility: response.labelListVisibility,
+      messageListVisibility: response.messageListVisibility,
+    };
   }
 
   async updateLabel(
     labelId: string,
     name: string,
-    color?: string,
+    _color?: string,
   ): Promise<Label> {
     await this.ensureValidToken();
     this.logger.debug(`Updating label: ${labelId}`);
 
-    // TODO: Implement Gmail API labels.update
-    // PUT https://gmail.googleapis.com/gmail/v1/users/me/labels/{id}
-    throw new Error("updateLabel not implemented");
+    const requestData: any = {
+      name,
+    };
+
+    // Note: Gmail only allows predefined color palette, not custom hex colors
+    // Ignoring color parameter
+
+    const response = await this.apiClient.updateLabel(labelId, requestData);
+
+    return {
+      id: response.id,
+      name: response.name,
+      type: this.getLabelType(response.type),
+      color: response.color?.backgroundColor,
+      labelListVisibility: response.labelListVisibility,
+      messageListVisibility: response.messageListVisibility,
+    };
   }
 
   async deleteLabel(labelId: string): Promise<void> {
     await this.ensureValidToken();
     this.logger.debug(`Deleting label: ${labelId}`);
 
-    // TODO: Implement Gmail API labels.delete
-    // DELETE https://gmail.googleapis.com/gmail/v1/users/me/labels/{id}
-    throw new Error("deleteLabel not implemented");
+    await this.apiClient.deleteLabel(labelId);
   }
 
   // ----------------- Attachment Operations -----------------
@@ -393,7 +444,10 @@ export class GmailProvider extends BaseMailProvider {
       `Getting attachment: ${attachmentId} from message: ${messageId}`,
     );
 
-    const response = await this.apiClient.getAttachment(messageId, attachmentId);
+    const response = await this.apiClient.getAttachment(
+      messageId,
+      attachmentId,
+    );
 
     // Decode base64url data
     const base64 = response.data.replace(/-/g, "+").replace(/_/g, "/");

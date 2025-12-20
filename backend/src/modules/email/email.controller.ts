@@ -36,7 +36,7 @@ import { SendEmailDto } from "./dto/send-email.dto";
 import { ReplyEmailDto } from "./dto/reply-emai.dto";
 import { ModifyEmailDto } from "./dto/modify.dto";
 import { SendEmailResponse } from "./dto/send-email-response";
-import { UpdateKanbanStatusDto, SnoozeEmailDto } from "./dto/kanban.dto";
+import { UpdateKanbanStatusDto, UpdateKanbanColDto, SnoozeEmailDto } from "./dto/kanban.dto";
 
 @ApiTags("Email")
 @Controller()
@@ -339,8 +339,27 @@ export class EmailController {
     return ResponseDto.success(result, "Kanban board retrieved successfully");
   }
 
+  @Patch(":id/kanban/column")
+  @ApiOperation({ summary: "Update email kanban column (drag-and-drop)" })
+  @ApiBody({ type: UpdateKanbanColDto })
+  async updateKanbanColumn(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") emailId: string,
+    @Body() updateDto: UpdateKanbanColDto,
+  ) {
+    const result = await this.kanbanService.updateKanbanColumn(
+      user.sub,
+      emailId,
+      updateDto.columnId,
+    );
+    return ResponseDto.success(result, "Kanban column updated successfully");
+  }
+
   @Patch(":id/kanban/status")
-  @ApiOperation({ summary: "Update email kanban status (drag-and-drop)" })
+  @ApiOperation({
+    summary: "Update email kanban status (DEPRECATED: use /kanban/column instead)",
+    deprecated: true
+  })
   @ApiBody({ type: UpdateKanbanStatusDto })
   async updateKanbanStatus(
     @CurrentUser() user: JwtPayload,

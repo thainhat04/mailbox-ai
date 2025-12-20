@@ -1,21 +1,19 @@
 import axios from "axios";
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { OIDCProviderConfig } from "./dto/oidc.dto";
 import { OAuthProvider, OAuthSignInResponseDto } from "../auth/dto/providers";
 import { GoogleOIDCConfig } from "./providers/google.provider";
 import { MicrosoftOIDCConfig } from "./providers/microsoft.provider";
 import * as jwt from "jsonwebtoken";
-import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../database/prisma.service";
-import { JwtService } from "@nestjs/jwt";
 import { UserRole } from "@prisma/client";
-import {
-  MailProvider,
-} from "../email/types/mail-provider.types";
+import { MailProvider } from "../email/types/mail-provider.types";
 import { AuthService } from "../auth/auth.service";
 import { BaseException } from "../../common/exceptions";
 import { CODES } from "../../common/constants";
 import { GenerateUtil } from "../../common/utils";
+import { GmailLabelInitializerService } from "../email/services/gmail-label-initializer.service";
+import { KanbanColumnService } from "../email/services/kanban-column.service";
 
 export interface OidcUserInfo {
   sub: string;
@@ -29,11 +27,12 @@ export interface OidcUserInfo {
 
 @Injectable()
 export class OIDCService {
+  private readonly logger = new Logger(OIDCService.name);
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
     private readonly authService: AuthService,
+    private readonly gmailLabelInitializer: GmailLabelInitializerService,
+    private readonly kanbanColumnService: KanbanColumnService,
   ) {}
 
   // STEP 1: Create Auth URL (Redirect User -> Provider)
@@ -181,16 +180,39 @@ export class OIDCService {
           isActive: true,
         },
       });
+
+      // Initialize default Kanban columns for new user
+      try {
+        await this.kanbanColumnService.initializeDefaultColumns(user.id);
+      } catch (error) {
+        this.logger.error(
+          `Failed to initialize default Kanban columns for user ${user.id}: ${error}`,
+        );
+        // Don't fail OAuth if column creation fails
+      }
     }
 
     // Save OAuth2 tokens for mail access
-    await this.saveOAuth2Tokens(
+    const emailAccountId = await this.saveOAuth2Tokens(
       user.id,
       provider,
       userInfo.email,
       userInfo.sub,
       tokens,
     );
+
+    // Initialize Gmail labels for Kanban columns (only for Google provider)
+    if (provider === OAuthProvider.GOOGLE && emailAccountId) {
+      try {
+        await this.gmailLabelInitializer.initializeLabelsForUser(
+          user.id,
+          emailAccountId,
+        );
+      } catch (error) {
+        this.logger.error(`Failed to initialize Gmail labels for user ${user.id}: ${error}`);
+        // Don't fail OAuth if label creation fails
+      }
+    }
 
     const tokenResponse = await this.authService.generateTokens(user);
 
@@ -229,7 +251,7 @@ export class OIDCService {
     email: string,
     providerAccountId: string,
     tokens: any,
-  ) {
+  ): Promise<string> {
     const mailProvider: string =
       provider === OAuthProvider.GOOGLE
         ? MailProvider.GOOGLE
@@ -284,6 +306,8 @@ export class OIDCService {
         emailAccountId: emailAccount.id,
       },
     });
+
+    return emailAccount.id;
   }
 
   async oauthSignIn(

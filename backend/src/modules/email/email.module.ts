@@ -1,10 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EmailController } from './email.controller';
+import { KanbanColumnController } from './controllers/kanban-column.controller';
 import { EmailService } from './email.service';
 import { OAuth2TokenService } from './services/oauth2-token.service';
 import { EmailSyncService } from './services/email-sync.service';
 import { KanbanService } from './services/kanban.service';
+import { KanbanColumnService } from './services/kanban-column.service';
+import { GmailLabelInitializerService } from './services/gmail-label-initializer.service';
 import { SummaryService } from './services/summary.service';
 import { SnoozeSchedulerService } from './services/snooze-scheduler.service';
 import { DatabaseModule } from '../../database/database.module';
@@ -23,7 +26,7 @@ import { EmailMessageRepository } from './repositories/email-message.repository'
     DatabaseModule,
     ScheduleModule.forRoot(), // Enable cron jobs
   ],
-  controllers: [EmailController],
+  controllers: [EmailController, KanbanColumnController],
   providers: [
     // Core services
     EmailService,
@@ -32,6 +35,8 @@ import { EmailMessageRepository } from './repositories/email-message.repository'
 
     // Kanban services
     KanbanService,
+    KanbanColumnService,
+    GmailLabelInitializerService,
     SummaryService,
     SnoozeSchedulerService,
 
@@ -51,6 +56,8 @@ import { EmailMessageRepository } from './repositories/email-message.repository'
     OAuth2TokenService,
     EmailSyncService,
     KanbanService,
+    KanbanColumnService,
+    GmailLabelInitializerService,
     SummaryService,
     EmailMessageRepository,
     MailProviderRegistry,

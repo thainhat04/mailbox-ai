@@ -162,10 +162,18 @@ export class EmailSyncService {
         this.logger,
       );
 
-      // Store synced messages in database
+      // Get user's columns to map emails to columnId based on Gmail labels
+      const userColumns = await this.prisma.kanbanColumn.findMany({
+        where: { userId: emailAccount.userId },
+        select: { id: true, gmailLabelId: true, key: true },
+      });
+
+      // Store synced messages in database with columnId mapping
       const messagesAdded = await this.messageRepository.upsertMessages(
         emailAccountId,
-        syncResult.messages.map((msg) => this.convertToMessageData(msg)),
+        syncResult.messages.map((msg) =>
+          this.convertToMessageData(msg, userColumns)
+        ),
       );
 
       // Delete removed messages
@@ -468,8 +476,32 @@ export class EmailSyncService {
 
   /**
    * Convert EmailMessage to MessageData for repository
+   * Maps Gmail labels to kanbanColumnId
    */
-  private convertToMessageData(message: any): any {
+  private convertToMessageData(
+    message: any,
+    userColumns: Array<{ id: string; gmailLabelId: string | null; key: string | null }>,
+  ): any {
+    // Map Gmail labels to kanbanColumnId
+    const emailLabels = message.labels || [];
+    let kanbanColumnId: string | null = null;
+
+    // Try to find matching column by Gmail label ID
+    for (const column of userColumns) {
+      if (column.gmailLabelId && emailLabels.includes(column.gmailLabelId)) {
+        kanbanColumnId = column.id;
+        break;
+      }
+    }
+
+    // If no match found, use INBOX column (system protected)
+    if (!kanbanColumnId) {
+      const inboxColumn = userColumns.find(col => col.key === 'INBOX');
+      if (inboxColumn) {
+        kanbanColumnId = inboxColumn.id;
+      }
+    }
+
     return {
       messageId: message.id,
       threadId: message.threadId,
@@ -490,6 +522,7 @@ export class EmailSyncService {
       references: message.references || [],
       bodyText: message.bodyText,
       bodyHtml: message.bodyHtml,
+      kanbanColumnId,
       attachments: message.attachments?.map((att: any) => ({
         providerId: att.id,
         filename: att.filename,

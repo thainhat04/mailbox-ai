@@ -202,6 +202,11 @@ export abstract class BaseMailProvider implements IMailProvider {
 
   abstract deleteLabel(labelId: string): Promise<void>;
 
+  abstract modifyLabels(
+    messageId: string,
+    request: ModifyEmailRequest,
+  ): Promise<EmailMessage>;
+
   abstract getAttachment(
     messageId: string,
     attachmentId: string,
