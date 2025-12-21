@@ -41,6 +41,20 @@ export default function ColumnManagerButton({
         setIsFetchingData(isFetching);
     }, [isFetching]);
 
+    useEffect(() => {
+        if (isFetchingData) {
+            const element = document.querySelector(".main__column-detail");
+            element?.scrollTo(0, 0);
+            if (element instanceof HTMLElement) {
+                element.style.overflow = "hidden";
+            }
+        } else {
+            const element = document.querySelector(".main__column-detail");
+            if (element instanceof HTMLElement) {
+                element.style.overflow = "auto";
+            }
+        }
+    }, [isFetchingData]);
     const [modalState, setModalState] = useState<{
         isOpen: boolean;
         mode: "create" | "update" | "delete";
@@ -120,7 +134,7 @@ export default function ColumnManagerButton({
                             </button>
 
                             {/* Column List */}
-                            <div className="max-h-96 overflow-y-auto custom-scroll relative">
+                            <div className="max-h-96 main__column-detail overflow-y-auto custom-scroll relative">
                                 {isFetchingData && (
                                     <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm">
                                         <div className="flex flex-col items-center gap-3">
