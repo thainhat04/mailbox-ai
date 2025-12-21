@@ -155,7 +155,44 @@ export class KanbanColumnService {
       );
     }
 
-    // 6. Create column with auto-generated KEY
+    // 6. Get label info if exists
+    let labelType: string | null = null;
+    let messageListVisibility: string | null = null;
+    let labelListVisibility: string | null = null;
+
+    if (gmailLabelId) {
+      try {
+        const emailAccount = await this.prisma.emailAccount.findFirst({
+          where: {
+            userId,
+            account: {
+              provider: "google",
+            },
+          },
+        });
+
+        if (emailAccount) {
+          const label = await this.prisma.label.findUnique({
+            where: {
+              emailAccountId_labelId: {
+                emailAccountId: emailAccount.id,
+                labelId: gmailLabelId,
+              },
+            },
+          });
+
+          if (label) {
+            labelType = label.type;
+            messageListVisibility = label.messageListVisibility;
+            labelListVisibility = label.labelListVisibility;
+          }
+        }
+      } catch (error) {
+        this.logger.warn(`Could not get label info: ${error.message}`);
+      }
+    }
+
+    // 7. Create column with auto-generated KEY
     const column = await this.prisma.kanbanColumn.create({
       data: {
         userId,
@@ -173,7 +210,20 @@ export class KanbanColumnService {
     this.logger.log(
       `Created column "${column.name}" with key "${generatedKey}" for user ${userId}`,
     );
-    return this.mapToDto(column);
+
+    // Add label info to column object for response
+    return this.mapToDto({
+      ...column,
+      labelInfo: gmailLabelId
+        ? {
+            type: labelType || "user",
+            messageListVisibility,
+            labelListVisibility,
+            unreadCount: 0,
+            totalCount: 0,
+          }
+        : null,
+    });
   }
 
   /**
@@ -517,6 +567,21 @@ export class KanbanColumnService {
    * Map Prisma model to DTO
    */
   private mapToDto(column: any): KanbanColumnDto {
+    // Build label object if label info exists
+    let label: any = null;
+    if (column.gmailLabelId && column.labelInfo) {
+      label = {
+        id: column.gmailLabelId,
+        name: column.gmailLabelName || column.name,
+        type: column.labelInfo.type || "user",
+        unreadCount: column.labelInfo.unreadCount || 0,
+        totalCount: column.labelInfo.totalCount || 0,
+        color: column.color || undefined,
+        messageListVisibility: column.labelInfo.messageListVisibility,
+        labelListVisibility: column.labelInfo.labelListVisibility,
+      };
+    }
+
     return {
       id: column.id,
       name: column.name,
@@ -526,6 +591,7 @@ export class KanbanColumnService {
       order: column.order,
       gmailLabelId: column.gmailLabelId,
       gmailLabelName: column.gmailLabelName,
+      label,
       isSystemProtected: column.isSystemProtected,
       createdAt: column.createdAt.toISOString(),
       updatedAt: column.updatedAt.toISOString(),

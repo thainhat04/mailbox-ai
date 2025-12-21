@@ -1,5 +1,5 @@
-import { Logger } from '@nestjs/common';
-import axios, { AxiosInstance } from 'axios';
+import { Logger } from "@nestjs/common";
+import axios, { AxiosInstance } from "axios";
 
 /**
  * Gmail API Client
@@ -8,14 +8,14 @@ import axios, { AxiosInstance } from 'axios';
 export class GmailApiClient {
   private readonly logger = new Logger(GmailApiClient.name);
   private readonly client: AxiosInstance;
-  private readonly baseUrl = 'https://gmail.googleapis.com/gmail/v1';
+  private readonly baseUrl = "https://gmail.googleapis.com/gmail/v1";
 
   constructor(private accessToken: string) {
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
 
@@ -27,7 +27,9 @@ export class GmailApiClient {
 
     this.client.interceptors.response.use(
       (response) => {
-        this.logger.debug(`Response: ${response.status} ${response.statusText}`);
+        this.logger.debug(
+          `Response: ${response.status} ${response.statusText}`,
+        );
         return response;
       },
       (error) => {
@@ -45,7 +47,7 @@ export class GmailApiClient {
    */
   updateAccessToken(accessToken: string): void {
     this.accessToken = accessToken;
-    this.client.defaults.headers.common['Authorization'] =
+    this.client.defaults.headers.common["Authorization"] =
       `Bearer ${accessToken}`;
   }
 
@@ -58,11 +60,14 @@ export class GmailApiClient {
     labelIds?: string[];
     includeSpamTrash?: boolean;
   }) {
-    const response = await this.client.get('/users/me/messages', { params });
+    const response = await this.client.get("/users/me/messages", { params });
     return response.data;
   }
 
-  async getMessage(messageId: string, format: 'minimal' | 'full' | 'raw' | 'metadata' = 'full') {
+  async getMessage(
+    messageId: string,
+    format: "minimal" | "full" | "raw" | "metadata" = "full",
+  ) {
     const response = await this.client.get(`/users/me/messages/${messageId}`, {
       params: { format },
     });
@@ -70,7 +75,7 @@ export class GmailApiClient {
   }
 
   async sendMessage(data: { raw: string }) {
-    const response = await this.client.post('/users/me/messages/send', data);
+    const response = await this.client.post("/users/me/messages/send", data);
     return response.data;
   }
 
@@ -98,7 +103,10 @@ export class GmailApiClient {
 
   // ----------------- Threads -----------------
 
-  async getThread(threadId: string, format: 'minimal' | 'full' | 'metadata' = 'full') {
+  async getThread(
+    threadId: string,
+    format: "minimal" | "full" | "metadata" = "full",
+  ) {
     const response = await this.client.get(`/users/me/threads/${threadId}`, {
       params: { format },
     });
@@ -126,20 +134,25 @@ export class GmailApiClient {
   // ----------------- Labels -----------------
 
   async listLabels() {
-    const response = await this.client.get('/users/me/labels');
+    const response = await this.client.get("/users/me/labels");
+    return response.data;
+  }
+
+  async getLabel(labelId: string) {
+    const response = await this.client.get(`/users/me/labels/${labelId}`);
     return response.data;
   }
 
   async createLabel(data: {
     name: string;
-    messageListVisibility?: 'show' | 'hide';
-    labelListVisibility?: 'labelShow' | 'labelShowIfUnread' | 'labelHide';
+    messageListVisibility?: "show" | "hide";
+    labelListVisibility?: "labelShow" | "labelShowIfUnread" | "labelHide";
     color?: {
       backgroundColor?: string;
       textColor?: string;
     };
   }) {
-    const response = await this.client.post('/users/me/labels', data);
+    const response = await this.client.post("/users/me/labels", data);
     return response.data;
   }
 
@@ -147,8 +160,8 @@ export class GmailApiClient {
     labelId: string,
     data: {
       name?: string;
-      messageListVisibility?: 'show' | 'hide';
-      labelListVisibility?: 'labelShow' | 'labelShowIfUnread' | 'labelHide';
+      messageListVisibility?: "show" | "hide";
+      labelListVisibility?: "labelShow" | "labelShowIfUnread" | "labelHide";
       color?: {
         backgroundColor?: string;
         textColor?: string;
@@ -181,7 +194,7 @@ export class GmailApiClient {
     labelId?: string;
     historyTypes?: string[];
   }) {
-    const response = await this.client.get('/users/me/history', { params });
+    const response = await this.client.get("/users/me/history", { params });
     return response.data;
   }
 
@@ -190,20 +203,20 @@ export class GmailApiClient {
   async watch(data: {
     topicName: string;
     labelIds?: string[];
-    labelFilterAction?: 'include' | 'exclude';
+    labelFilterAction?: "include" | "exclude";
   }) {
-    const response = await this.client.post('/users/me/watch', data);
+    const response = await this.client.post("/users/me/watch", data);
     return response.data;
   }
 
   async stopWatch() {
-    await this.client.post('/users/me/stop');
+    await this.client.post("/users/me/stop");
   }
 
   // ----------------- Profile -----------------
 
   async getProfile() {
-    const response = await this.client.get('/users/me/profile');
+    const response = await this.client.get("/users/me/profile");
     return response.data;
   }
 }
