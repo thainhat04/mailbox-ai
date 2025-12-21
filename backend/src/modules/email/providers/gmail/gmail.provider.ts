@@ -374,6 +374,29 @@ export class GmailProvider extends BaseMailProvider {
     }));
   }
 
+  /**
+   * Get single label with realtime stats from Gmail
+   */
+  async getLabel(
+    labelId: string,
+  ): Promise<Label & { messagesTotal?: number; messagesUnread?: number }> {
+    await this.ensureValidToken();
+    this.logger.debug(`Getting label: ${labelId}`);
+
+    const response = await this.apiClient.getLabel(labelId);
+
+    return {
+      id: response.id,
+      name: response.name,
+      type: this.getLabelType(response.type),
+      color: response.color?.backgroundColor,
+      labelListVisibility: response.labelListVisibility,
+      messageListVisibility: response.messageListVisibility,
+      messagesTotal: response.messagesTotal,
+      messagesUnread: response.messagesUnread,
+    };
+  }
+
   async createLabel(name: string, _color?: string): Promise<Label> {
     await this.ensureValidToken();
     this.logger.debug(`Creating label: ${name}`);

@@ -1,6 +1,7 @@
 import { IsEnum, IsOptional, IsDateString, IsString, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { EmailDto } from './email.dto';
+import { LabelDto } from './label.dto';
 
 // Update Kanban Column DTO (NEW)
 export class UpdateKanbanColDto {
@@ -11,6 +12,28 @@ export class UpdateKanbanColDto {
   @IsString()
   @IsUUID()
   columnId: string;
+}
+
+// Response DTO for drag-drop column operation
+export class DragDropColumnResponseDto {
+  @ApiProperty({ description: 'Updated email data' })
+  email: EmailDto;
+
+  @ApiProperty({
+    description: 'Source label information (before drag)',
+    required: false,
+    nullable: true,
+    type: () => LabelDto,
+  })
+  sourceLabel: LabelDto | null;
+
+  @ApiProperty({
+    description: 'Destination label information (after drop)',
+    required: false,
+    nullable: true,
+    type: () => LabelDto,
+  })
+  destinationLabel: LabelDto | null;
 }
 
 // Update Kanban Status DTO (DEPRECATED)

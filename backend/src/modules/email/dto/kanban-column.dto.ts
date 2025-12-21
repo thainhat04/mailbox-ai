@@ -7,6 +7,7 @@ import {
   IsArray,
   ArrayMinSize,
 } from "class-validator";
+import { LabelDto } from "./label.dto";
 
 // ============ RESPONSE DTOs ============
 
@@ -34,6 +35,14 @@ export class KanbanColumnDto {
 
   @ApiProperty({ example: "To Do", required: false, nullable: true })
   gmailLabelName: string | null;
+
+  @ApiProperty({
+    description: "Gmail label information",
+    required: false,
+    nullable: true,
+    type: () => LabelDto,
+  })
+  label: LabelDto | null;
 
   @ApiProperty({ example: false })
   isSystemProtected: boolean;

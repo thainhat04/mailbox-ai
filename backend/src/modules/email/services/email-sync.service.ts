@@ -25,42 +25,42 @@ export class EmailSyncService {
     private readonly messageRepository: EmailMessageRepository,
   ) {}
 
-  @Cron(CronExpression.EVERY_30_SECONDS)
-  async syncAllEmails(): Promise<void> {
-    this.logger.log("[EMAILS] Starting scheduled email sync");
+  // @Cron(CronExpression.EVERY_30_SECONDS)
+  // async syncAllEmails(): Promise<void> {
+  //   this.logger.log("[EMAILS] Starting scheduled email sync");
 
-    try {
-      const emailAccounts = await this.prisma.emailAccount.findMany({
-        select: { id: true },
-      });
+  //   try {
+  //     const emailAccounts = await this.prisma.emailAccount.findMany({
+  //       select: { id: true },
+  //     });
 
-      if (emailAccounts.length === 0) {
-        return;
-      }
+  //     if (emailAccounts.length === 0) {
+  //       return;
+  //     }
 
-      let synced = 0;
-      let failed = 0;
+  //     let synced = 0;
+  //     let failed = 0;
 
-      for (const account of emailAccounts) {
-        try {
-          const result = await this.syncAccount(account.id);
-          if (result.success) synced++;
-        } catch (error) {
-          this.logger.error(
-            `[EMAILS] Failed for ${account.id}:`,
-            error.message,
-          );
-          failed++;
-        }
-      }
+  //     for (const account of emailAccounts) {
+  //       try {
+  //         const result = await this.syncAccount(account.id);
+  //         if (result.success) synced++;
+  //       } catch (error) {
+  //         this.logger.error(
+  //           `[EMAILS] Failed for ${account.id}:`,
+  //           error.message,
+  //         );
+  //         failed++;
+  //       }
+  //     }
 
-      this.logger.log(
-        `[EMAILS] Sync completed: ${synced} success, ${failed} failed`,
-      );
-    } catch (error) {
-      this.logger.error("[EMAILS] Sync failed:", error);
-    }
-  }
+  //     this.logger.log(
+  //       `[EMAILS] Sync completed: ${synced} success, ${failed} failed`,
+  //     );
+  //   } catch (error) {
+  //     this.logger.error("[EMAILS] Sync failed:", error);
+  //   }
+  // }
 
   @Cron(CronExpression.EVERY_11_HOURS)
   async syncAllLabels(): Promise<void> {
