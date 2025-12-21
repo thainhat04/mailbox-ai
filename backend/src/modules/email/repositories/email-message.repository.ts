@@ -481,12 +481,47 @@ export class EmailMessageRepository {
     emailId: string,
     columnId: string,
   ): Promise<PrismaEmailMessage> {
+    // Get current email state
+    const currentEmail = await this.prisma.emailMessage.findUnique({
+      where: { id: emailId },
+      select: {
+        kanbanColumnId: true,
+        kanbanColumn: {
+          select: { key: true },
+        },
+      },
+    });
+
+    // Get the target column to sync kanbanStatus with its KEY
+    const targetColumn = await this.prisma.kanbanColumn.findUnique({
+      where: { id: columnId },
+      select: { key: true },
+    });
+
+    if (!targetColumn) {
+      throw new Error(`Column ${columnId} not found`);
+    }
+
+    const updateData: any = {
+      kanbanColumnId: columnId,
+      kanbanStatus: targetColumn.key || "INBOX", // Sync kanbanStatus with column KEY
+      statusChangedAt: new Date(),
+    };
+
+    // If moving TO FROZEN column, save current column's KEY
+    if (targetColumn.key === "FROZEN" && currentEmail?.kanbanColumn) {
+      updateData.previousKanbanStatus = currentEmail.kanbanColumn.key;
+    }
+
+    // If moving AWAY FROM FROZEN column, clear previousKanbanStatus
+    if (targetColumn.key !== "FROZEN") {
+      updateData.previousKanbanStatus = null;
+      updateData.snoozedUntil = null;
+    }
+
     return this.prisma.emailMessage.update({
       where: { id: emailId },
-      data: {
-        kanbanColumnId: columnId,
-        statusChangedAt: new Date(),
-      },
+      data: updateData,
       include: {
         attachments: true,
         body: true,
@@ -503,10 +538,15 @@ export class EmailMessageRepository {
     status: string,
     snoozedUntil?: Date | null,
   ): Promise<PrismaEmailMessage> {
-    // Get current status before updating (for FROZEN status)
+    // Get current column and status before updating (for FROZEN status)
     const currentEmail = await this.prisma.emailMessage.findUnique({
       where: { id: emailId },
-      select: { kanbanStatus: true },
+      select: {
+        kanbanStatus: true,
+        kanbanColumn: {
+          select: { key: true },
+        },
+      },
     });
 
     const updateData: any = {
@@ -514,9 +554,11 @@ export class EmailMessageRepository {
       statusChangedAt: new Date(),
     };
 
-    // When freezing, save the current status as previousKanbanStatus
+    // When freezing, save the current column KEY as previousKanbanStatus
     if (status === "FROZEN" && currentEmail) {
-      updateData.previousKanbanStatus = currentEmail.kanbanStatus;
+      // Prefer column KEY over kanbanStatus for better accuracy
+      updateData.previousKanbanStatus =
+        currentEmail.kanbanColumn?.key || currentEmail.kanbanStatus;
     }
 
     // Clear snoozedUntil and previousKanbanStatus if moving away from FROZEN status
@@ -541,7 +583,7 @@ export class EmailMessageRepository {
    * Batch update snoozed emails back to their previous status (or INBOX if none)
    */
   async unsnoozeExpiredEmails(emailIds: string[]): Promise<number> {
-    // Get emails with their previous status
+    // Get emails with their previous status and userId
     const emails = await this.prisma.emailMessage.findMany({
       where: {
         id: { in: emailIds },
@@ -549,6 +591,9 @@ export class EmailMessageRepository {
       select: {
         id: true,
         previousKanbanStatus: true,
+        emailAccount: {
+          select: { userId: true },
+        },
       },
     });
 
@@ -556,10 +601,36 @@ export class EmailMessageRepository {
     let count = 0;
     for (const email of emails) {
       try {
+        const targetKey = email.previousKanbanStatus || "INBOX";
+        const userId = email.emailAccount.userId;
+
+        // Find target column by KEY
+        let targetColumn = await this.prisma.kanbanColumn.findFirst({
+          where: { userId, key: targetKey },
+        });
+
+        // Fallback to INBOX if column was deleted
+        if (!targetColumn) {
+          this.logger.warn(
+            `Column with key "${targetKey}" not found for user ${userId}, falling back to INBOX`,
+          );
+          targetColumn = await this.prisma.kanbanColumn.findFirst({
+            where: { userId, key: "INBOX" },
+          });
+        }
+
+        if (!targetColumn) {
+          this.logger.error(
+            `INBOX column not found for user ${userId}, skipping email ${email.id}`,
+          );
+          continue;
+        }
+
         await this.prisma.emailMessage.update({
           where: { id: email.id },
           data: {
-            kanbanStatus: email.previousKanbanStatus || "INBOX", // Default to INBOX if no previous status
+            kanbanColumnId: targetColumn.id,
+            kanbanStatus: targetKey, // Backward compatible
             previousKanbanStatus: null,
             snoozedUntil: null,
             statusChangedAt: new Date(),
@@ -582,13 +653,45 @@ export class EmailMessageRepository {
   async unsnoozeEmail(emailId: string): Promise<PrismaEmailMessage> {
     const email = await this.prisma.emailMessage.findUnique({
       where: { id: emailId },
-      select: { previousKanbanStatus: true },
+      select: {
+        previousKanbanStatus: true,
+        emailAccount: {
+          select: { userId: true },
+        },
+      },
     });
+
+    if (!email) {
+      throw new Error(`Email ${emailId} not found`);
+    }
+
+    const targetKey = email.previousKanbanStatus || "INBOX";
+    const userId = email.emailAccount.userId;
+
+    // Find target column by KEY
+    let targetColumn = await this.prisma.kanbanColumn.findFirst({
+      where: { userId, key: targetKey },
+    });
+
+    // Fallback to INBOX if column was deleted
+    if (!targetColumn) {
+      this.logger.warn(
+        `Column with key "${targetKey}" not found for user ${userId}, falling back to INBOX`,
+      );
+      targetColumn = await this.prisma.kanbanColumn.findFirst({
+        where: { userId, key: "INBOX" },
+      });
+    }
+
+    if (!targetColumn) {
+      throw new Error(`INBOX column not found for user ${userId}`);
+    }
 
     return this.prisma.emailMessage.update({
       where: { id: emailId },
       data: {
-        kanbanStatus: email?.previousKanbanStatus || "INBOX", // Default to INBOX if no previous status
+        kanbanColumnId: targetColumn.id,
+        kanbanStatus: targetKey, // Backward compatible
         previousKanbanStatus: null,
         snoozedUntil: null,
         statusChangedAt: new Date(),
