@@ -268,30 +268,33 @@ export default function useKanban() {
                 },
             };
         });
+        try {
+            const result = await createColumnMutation.CreateUnWrap({
+                name,
+                color,
+                icon,
+                gmailLabelName,
+            });
 
-        const result = await createColumnMutation.Create({
-            name,
-            color,
-            icon,
-            gmailLabelName,
-        });
-
-        if (!result || !result.data) {
+            setColumns((prev) => ({
+                ...prev,
+                columns: prev.columns.map((col) =>
+                    col.id === tempId ? { ...result.data, emailCount: 0 } : col
+                ),
+                emails: {
+                    ...prev.emails,
+                    [result.data.id]: prev.emails[tempId] ?? [],
+                },
+            }));
+        } catch (error) {
             if (snapshot) setColumns(snapshot);
-            showToast("Create failed, reverting", "error");
+            showToast(
+                (error as any).data.message || "Create failed, reverting",
+                "error",
+                InBoxConstant.TOAST_TIME_MS
+            );
             return;
         }
-
-        setColumns((prev) => ({
-            ...prev,
-            columns: prev.columns.map((col) =>
-                col.id === tempId ? { ...result.data, emailCount: 0 } : col
-            ),
-            emails: {
-                ...prev.emails,
-                [result.data.id]: prev.emails[tempId] ?? [],
-            },
-        }));
     };
 
     const updateKanbanColumn = async (
@@ -329,26 +332,29 @@ export default function useKanban() {
                 ),
             };
         });
+        try {
+            const result = await updateColumnMutation.UpdateUnWrap({
+                id,
+                body: { name, color, icon, gmailLabelName },
+            });
 
-        const result = await updateColumnMutation.Update({
-            id,
-            body: { name, color, icon, gmailLabelName },
-        });
-
-        if (!result || !result.data) {
+            setColumns((prev) => ({
+                ...prev,
+                columns: prev.columns.map((col) =>
+                    col.id === id
+                        ? { ...result.data, emailCount: col.emailCount }
+                        : col
+                ),
+            }));
+        } catch (error) {
             if (snapshot) setColumns(snapshot);
-            showToast("Update failed, reverting", "error");
+            showToast(
+                (error as any).data.message || "Update failed, reverting",
+                "error",
+                InBoxConstant.TOAST_TIME_MS
+            );
             return;
         }
-
-        setColumns((prev) => ({
-            ...prev,
-            columns: prev.columns.map((col) =>
-                col.id === id
-                    ? { ...result.data, emailCount: col.emailCount }
-                    : col
-            ),
-        }));
     };
 
     const deleteKanbanColumn = async (id: string) => {

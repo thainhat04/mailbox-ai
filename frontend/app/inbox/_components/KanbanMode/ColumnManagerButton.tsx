@@ -95,7 +95,7 @@ export default function ColumnManagerButton({
         } else if (modalState.mode === "delete" && data.id) {
             await onDeleteColumn(data.id);
         }
-        setModalState({ ...modalState, isOpen: false });
+        //setModalState({ ...modalState, isOpen: false });
         setIsFetchingData(false);
     };
 

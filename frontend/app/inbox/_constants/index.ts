@@ -5,6 +5,7 @@ const constant = {
     URL_MODIFY_EMAIL: (id: string) => `/emails/${id}/modify`,
     URL_REPLY_EMAIL: (id: string) => `/emails/${id}/reply`,
     TIME_FREEZE_MS: 3000,
+    TOAST_TIME_MS: 4000,
     FROZEN_COLUMN_KEY: "FROZEN",
     KANBAN_INBOX_KEY: "INBOX",
     URL_KANBAN: "/kanban/board",
