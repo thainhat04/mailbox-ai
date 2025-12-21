@@ -481,12 +481,47 @@ export class EmailMessageRepository {
     emailId: string,
     columnId: string,
   ): Promise<PrismaEmailMessage> {
+    // Get current email state
+    const currentEmail = await this.prisma.emailMessage.findUnique({
+      where: { id: emailId },
+      select: {
+        kanbanColumnId: true,
+        kanbanColumn: {
+          select: { key: true },
+        },
+      },
+    });
+
+    // Get the target column to sync kanbanStatus with its KEY
+    const targetColumn = await this.prisma.kanbanColumn.findUnique({
+      where: { id: columnId },
+      select: { key: true },
+    });
+
+    if (!targetColumn) {
+      throw new Error(`Column ${columnId} not found`);
+    }
+
+    const updateData: any = {
+      kanbanColumnId: columnId,
+      kanbanStatus: targetColumn.key || "INBOX", // Sync kanbanStatus with column KEY
+      statusChangedAt: new Date(),
+    };
+
+    // If moving TO FROZEN column, save current column's KEY
+    if (targetColumn.key === "FROZEN" && currentEmail?.kanbanColumn) {
+      updateData.previousKanbanStatus = currentEmail.kanbanColumn.key;
+    }
+
+    // If moving AWAY FROM FROZEN column, clear previousKanbanStatus
+    if (targetColumn.key !== "FROZEN") {
+      updateData.previousKanbanStatus = null;
+      updateData.snoozedUntil = null;
+    }
+
     return this.prisma.emailMessage.update({
       where: { id: emailId },
-      data: {
-        kanbanColumnId: columnId,
-        statusChangedAt: new Date(),
-      },
+      data: updateData,
       include: {
         attachments: true,
         body: true,
