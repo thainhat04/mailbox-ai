@@ -171,7 +171,6 @@ export default function ColumnManagementModal({
                 icon: mode === "delete" ? column?.icon! : icon.trim(),
                 gmailLabelName: gmailLabelName.trim(),
             });
-            if (mode !== "delete") onClose();
         } finally {
             setIsSubmitting(false);
         }
