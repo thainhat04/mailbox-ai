@@ -4,7 +4,7 @@ import { baseQueryWithInterceptors } from "./baseQuery";
 
 export const api = createApi({
     baseQuery: baseQueryWithInterceptors,
-    tagTypes: ["User", "Auth", "Emails"],
+    tagTypes: ["User", "Auth", "Emails", "KanbanColumns"],
     keepUnusedDataFor: 60,
     endpoints: () => ({}),
 });

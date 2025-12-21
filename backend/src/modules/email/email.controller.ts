@@ -12,7 +12,13 @@ import {
   Put,
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from "@nestjs/swagger";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiBody,
+  ApiQuery,
+} from "@nestjs/swagger";
 import { EmailService } from "./email.service";
 import { KanbanService } from "./services/kanban.service";
 import { SummaryService } from "./services/summary.service";
@@ -36,7 +42,11 @@ import { SendEmailDto } from "./dto/send-email.dto";
 import { ReplyEmailDto } from "./dto/reply-emai.dto";
 import { ModifyEmailDto } from "./dto/modify.dto";
 import { SendEmailResponse } from "./dto/send-email-response";
-import { UpdateKanbanStatusDto, UpdateKanbanColDto, SnoozeEmailDto } from "./dto/kanban.dto";
+import {
+  UpdateKanbanStatusDto,
+  UpdateKanbanColDto,
+  SnoozeEmailDto,
+} from "./dto/kanban.dto";
 
 @ApiTags("Email")
 @Controller()
@@ -316,6 +326,15 @@ export class EmailController {
 
   @Get("kanban/board")
   @ApiOperation({ summary: "Get Kanban board view (all columns)" })
+  @ApiQuery({ name: "includeDoneAll", required: false, type: Boolean })
+  @ApiQuery({ name: "unreadOnly", required: false, type: Boolean })
+  @ApiQuery({ name: "hasAttachmentsOnly", required: false, type: Boolean })
+  @ApiQuery({ name: "fromEmail", required: false, type: String })
+  @ApiQuery({
+    name: "sortBy",
+    required: false,
+    enum: ["date_desc", "date_asc", "sender"],
+  })
   async getKanbanBoard(
     @CurrentUser() user: JwtPayload,
     @Query("includeDoneAll") includeDoneAll?: boolean,
@@ -325,8 +344,9 @@ export class EmailController {
     @Query("sortBy") sortBy?: "date_desc" | "date_asc" | "sender",
   ) {
     const filters = {
-      unreadOnly: unreadOnly === true || unreadOnly === "true" as any,
-      hasAttachmentsOnly: hasAttachmentsOnly === true || hasAttachmentsOnly === "true" as any,
+      unreadOnly: unreadOnly === true || unreadOnly === ("true" as any),
+      hasAttachmentsOnly:
+        hasAttachmentsOnly === true || hasAttachmentsOnly === ("true" as any),
       fromEmail,
     };
 
@@ -357,8 +377,9 @@ export class EmailController {
 
   @Patch(":id/kanban/status")
   @ApiOperation({
-    summary: "Update email kanban status (DEPRECATED: use /kanban/column instead)",
-    deprecated: true
+    summary:
+      "Update email kanban status (DEPRECATED: use /kanban/column instead)",
+    deprecated: true,
   })
   @ApiBody({ type: UpdateKanbanStatusDto })
   async updateKanbanStatus(

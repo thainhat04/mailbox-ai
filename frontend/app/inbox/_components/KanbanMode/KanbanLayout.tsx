@@ -3,6 +3,7 @@ import KanbanWrapper from "./KanbanWrapper";
 import useKanban from "../../hooks/useKanban";
 import RefreshButton from "./RefreshButton";
 import FilterSortControls from "./FilterSortControls";
+import ColumnManagerButton from "./ColumnManagerButton";
 
 function KanbanLayout() {
     const {
@@ -15,6 +16,9 @@ function KanbanLayout() {
         setFilters,
         sortBy,
         setSortBy,
+        createKanbanColumn,
+        updateKanbanColumn,
+        deleteKanbanColumn,
     } = useKanban();
 
     return (
@@ -29,10 +33,19 @@ function KanbanLayout() {
                 )}
                 <div className="p-2 sm:p-3 md:p-4 pb-0">
                     <div className="flex items-center justify-between mb-2">
-                        <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
-                            Kanban Board
-                        </h1>
-                        <RefreshButton onClick={refetch} />
+                        <div>
+                            <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
+                                Kanban Board
+                            </h1>
+                        </div>
+                        <div className="flex items-center gap-5">
+                            <RefreshButton onClick={refetch} />
+                            <ColumnManagerButton
+                                onCreateColumn={createKanbanColumn}
+                                onUpdateColumn={updateKanbanColumn}
+                                onDeleteColumn={deleteKanbanColumn}
+                            />
+                        </div>
                     </div>
                     <FilterSortControls
                         onFilterChange={setFilters}

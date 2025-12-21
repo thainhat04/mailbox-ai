@@ -23,43 +23,48 @@ export class EmailSyncService {
     private readonly prisma: PrismaService,
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
-  ) { }
+  ) {}
 
-  // @Cron(CronExpression.EVERY_30_SECONDS)
-  // async syncAllEmails(): Promise<void> {
-  //   this.logger.log('[EMAILS] Starting scheduled email sync');
+  @Cron(CronExpression.EVERY_30_SECONDS)
+  async syncAllEmails(): Promise<void> {
+    this.logger.log("[EMAILS] Starting scheduled email sync");
 
-  //   try {
-  //     const emailAccounts = await this.prisma.emailAccount.findMany({
-  //       select: { id: true },
-  //     });
+    try {
+      const emailAccounts = await this.prisma.emailAccount.findMany({
+        select: { id: true },
+      });
 
-  //     if (emailAccounts.length === 0) {
-  //       return;
-  //     }
+      if (emailAccounts.length === 0) {
+        return;
+      }
 
-  //     let synced = 0;
-  //     let failed = 0;
+      let synced = 0;
+      let failed = 0;
 
-  //     for (const account of emailAccounts) {
-  //       try {
-  //         const result = await this.syncAccount(account.id);
-  //         if (result.success) synced++;
-  //       } catch (error) {
-  //         this.logger.error(`[EMAILS] Failed for ${account.id}:`, error.message);
-  //         failed++;
-  //       }
-  //     }
+      for (const account of emailAccounts) {
+        try {
+          const result = await this.syncAccount(account.id);
+          if (result.success) synced++;
+        } catch (error) {
+          this.logger.error(
+            `[EMAILS] Failed for ${account.id}:`,
+            error.message,
+          );
+          failed++;
+        }
+      }
 
-  //     this.logger.log(`[EMAILS] Sync completed: ${synced} success, ${failed} failed`);
-  //   } catch (error) {
-  //     this.logger.error('[EMAILS] Sync failed:', error);
-  //   }
-  // }
+      this.logger.log(
+        `[EMAILS] Sync completed: ${synced} success, ${failed} failed`,
+      );
+    } catch (error) {
+      this.logger.error("[EMAILS] Sync failed:", error);
+    }
+  }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_11_HOURS)
   async syncAllLabels(): Promise<void> {
-    this.logger.log('[LABELS] Starting scheduled label sync');
+    this.logger.log("[LABELS] Starting scheduled label sync");
 
     try {
       const emailAccounts = await this.prisma.emailAccount.findMany({
@@ -78,14 +83,19 @@ export class EmailSyncService {
           const count = await this.syncLabels(account.id);
           totalSynced += count;
         } catch (error) {
-          this.logger.error(`[LABELS] Failed for ${account.id}:`, error.message);
+          this.logger.error(
+            `[LABELS] Failed for ${account.id}:`,
+            error.message,
+          );
           failed++;
         }
       }
 
-      this.logger.log(`[LABELS] Sync completed: ${totalSynced} labels synced, ${failed} failed`);
+      this.logger.log(
+        `[LABELS] Sync completed: ${totalSynced} labels synced, ${failed} failed`,
+      );
     } catch (error) {
-      this.logger.error('[LABELS] Sync failed:', error);
+      this.logger.error("[LABELS] Sync failed:", error);
     }
   }
 
@@ -141,9 +151,9 @@ export class EmailSyncService {
       // Convert SyncStateData to SyncState
       const syncState = syncStateData
         ? {
-          historyId: syncStateData.lastSyncedHistoryId,
-          deltaLink: syncStateData.lastDeltaLink,
-        }
+            historyId: syncStateData.lastSyncedHistoryId,
+            deltaLink: syncStateData.lastDeltaLink,
+          }
         : {};
 
       // Perform sync with retry logic
@@ -172,7 +182,7 @@ export class EmailSyncService {
       const messagesAdded = await this.messageRepository.upsertMessages(
         emailAccountId,
         syncResult.messages.map((msg) =>
-          this.convertToMessageData(msg, userColumns)
+          this.convertToMessageData(msg, userColumns),
         ),
       );
 
@@ -480,7 +490,11 @@ export class EmailSyncService {
    */
   private convertToMessageData(
     message: any,
-    userColumns: Array<{ id: string; gmailLabelId: string | null; key: string | null }>,
+    userColumns: Array<{
+      id: string;
+      gmailLabelId: string | null;
+      key: string | null;
+    }>,
   ): any {
     // Map Gmail labels to kanbanColumnId
     const emailLabels = message.labels || [];
@@ -496,7 +510,7 @@ export class EmailSyncService {
 
     // If no match found, use INBOX column (system protected)
     if (!kanbanColumnId) {
-      const inboxColumn = userColumns.find(col => col.key === 'INBOX');
+      const inboxColumn = userColumns.find((col) => col.key === "INBOX");
       if (inboxColumn) {
         kanbanColumnId = inboxColumn.id;
       }

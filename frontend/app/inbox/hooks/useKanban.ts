@@ -5,33 +5,39 @@ import { DragEndEvent } from "@dnd-kit/core";
 import InBoxConstant from "../_constants";
 import {
     KanbanBoardData,
-    KanbanColumnKey,
-    KanbanStatus,
     FrozenTimeouts,
     SortOption,
+    KanbanItem,
 } from "../_types";
 import {
     useGetAllKanBanQuery,
     useUpdateKanBanStatusMutation,
     useUpdateFrozenStatusMutation,
+    useCreateKanbanColumnMutation,
+    useUpdateKanBanColumnMutation,
+    useDeleteKanBanColumnMutation,
 } from "../_services";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
 import { useToast } from "@/components/ui/toast-provider";
 import { getTimeoutMs } from "@/helper/get-timeout-ms";
+import isFrozenColumn from "@/helper/is-fronzen";
 
-// Helper kiểm tra key hợp lệ
-const isCol = (key: string): key is KanbanColumnKey =>
-    ["inbox", "todo", "processing", "done", "frozen"].includes(key);
+function findColumnIdByItem(
+    board: KanbanBoardData,
+    itemId: string
+): string | null {
+    for (const [key, items] of Object.entries(board.emails)) {
+        if (items.some((i) => i.id === itemId)) return key;
+    }
+    return null;
+}
 
 export default function useKanban() {
     const { showToast } = useToast();
     const [columns, setColumns] = useState<KanbanBoardData>({
-        inbox: [],
-        todo: [],
-        processing: [],
-        done: [],
-        frozen: [],
+        columns: [],
+        emails: {},
     });
 
     // Filter and Sort state
@@ -60,30 +66,32 @@ export default function useKanban() {
         useUpdateFrozenStatusMutation,
         "Update"
     );
-    const updateStatusHandler = async (
-        id: string,
-        newStatus: KanbanStatus,
-        timeoutDuration?: { duration: FrozenTimeouts; customDateTime?: string }
-    ) => {
-        if (!id || !newStatus) return;
-        if (newStatus.toUpperCase() === InBoxConstant.nameFrozenColumn) {
-            return await frozenStatusMutation.UpdateUnWrap({
-                emailId: id,
-                duration: timeoutDuration?.duration!,
-                customDateTime: timeoutDuration?.customDateTime,
-            });
-        }
-        return await updateStatusMutation.UpdateUnWrap({ id, newStatus });
-    };
+
     const updateStatusMutation = useMutationHandler(
         useUpdateKanBanStatusMutation,
         "Update"
     );
+
+    const createColumnMutation = useMutationHandler(
+        useCreateKanbanColumnMutation,
+        "Create"
+    );
+
+    const updateColumnMutation = useMutationHandler(
+        useUpdateKanBanColumnMutation,
+        "Update"
+    );
+
+    const deleteColumnMutation = useMutationHandler(
+        useDeleteKanBanColumnMutation,
+        "Delete"
+    );
+
     useEffect(() => {
         if (result?.data) setColumns(result.data);
     }, [result]);
 
-    const onDragEnd = (
+    const onDragEnd = async (
         { active, over }: DragEndEvent,
         timeoutDuration?: { duration: FrozenTimeouts; customDateTime?: string }
     ) => {
@@ -92,138 +100,277 @@ export default function useKanban() {
         const activeId = String(active.id);
         const overId = String(over.id);
 
-        if (activeId === overId) return;
+        const fromColumnId = findColumnIdByItem(columns, activeId);
+        if (!fromColumnId) return;
 
-        let fromCol: KanbanColumnKey | null = null;
-        let toCol: KanbanColumnKey | null = null;
+        // 👉 Nếu drop trực tiếp vào column
+        const toColumnId = columns.emails[overId]
+            ? overId
+            : findColumnIdByItem(columns, overId);
 
-        // Find source column
-        for (const col in columns) {
-            if (
-                isCol(col) &&
-                columns[col].some((item) => item.id === activeId)
-            ) {
-                fromCol = col;
-                break;
-            }
-        }
-        if (!fromCol) return;
+        if (!toColumnId || fromColumnId === toColumnId) return;
 
-        // Determine target column
-        if (isCol(overId)) {
-            toCol = overId; // dragging onto column
-        } else {
-            for (const col in columns) {
-                if (
-                    isCol(col) &&
-                    columns[col].some((item) => item.id === overId)
-                ) {
-                    toCol = col;
-                    break;
-                }
-            }
-        }
-        if (!toCol) return;
-
-        const fromItems = [...columns[fromCol]];
-        const toItems = fromCol === toCol ? fromItems : [...columns[toCol]];
+        const fromItems = [...columns.emails[fromColumnId]];
+        const toItems = [...columns.emails[toColumnId]];
 
         const activeIndex = fromItems.findIndex((i) => i.id === activeId);
-        const overIndex = toItems.findIndex((i) => i.id === overId);
-
         if (activeIndex === -1) return;
 
         const [movedItem] = fromItems.splice(activeIndex, 1);
+        const toKey = columns.columns.find((c) => c.id === toColumnId)?.key!!;
+        const updatedItem: KanbanItem = {
+            ...movedItem,
+            kanbanColumnId: toColumnId,
+            kanbanStatus: toKey,
+        };
 
-        // Same column reorder
-        if (fromCol === toCol) {
-            const finalIndex = overIndex === -1 ? toItems.length : overIndex;
-            toItems.splice(finalIndex, 0, movedItem);
+        // 🧊 FROZEN nghiệp vụ
+        if (isFrozenColumn(columns, toColumnId)) {
+            const fromKey = columns.columns.find((c) => c.id === fromColumnId)
+                ?.key!!;
+            updatedItem.previousKanbanStatus = fromKey;
 
-            setColumns((prev) => ({
-                ...prev,
-                [fromCol!]: toItems,
-            }));
+            const ms = getTimeoutMs(timeoutDuration);
+            if (ms) {
+                updatedItem.snoozedUntil = new Date(
+                    Date.now() + ms
+                ).toISOString();
+            }
+        }
+
+        toItems.push(updatedItem);
+
+        const prevState = columns;
+        //điều chỉnh emailCount của các cột
+        const newColumns = columns.columns.map((col) => {
+            if (col.id === fromColumnId) {
+                return { ...col, emailCount: col.emailCount - 1 };
+            } else if (col.id === toColumnId) {
+                return { ...col, emailCount: col.emailCount + 1 };
+            }
+            return col;
+        });
+        setColumns((prev) => ({
+            columns: newColumns,
+            emails: {
+                ...prev.emails,
+                [fromColumnId]: fromItems,
+                [toColumnId]: toItems,
+            },
+        }));
+
+        try {
+            if (isFrozenColumn(columns, toColumnId)) {
+                await frozenStatusMutation.UpdateUnWrap({
+                    emailId: movedItem.id,
+                    duration: timeoutDuration!.duration,
+                    customDateTime: timeoutDuration?.customDateTime,
+                });
+            } else {
+                await updateStatusMutation.UpdateUnWrap({
+                    id: movedItem.id,
+                    newStatus: toColumnId, // ✅ dùng ID
+                });
+            }
+        } catch {
+            showToast("Update failed, reverting", "error");
+            setColumns(prevState);
+        }
+    };
+
+    const moveToColumnFromFrozen = async (id: string) => {
+        const frozenColumn = columns.columns.find((c) => c.key === "FROZEN");
+        if (!frozenColumn) return;
+
+        const item = columns.emails[frozenColumn.id]?.find((i) => i.id === id);
+        if (!item || !item.previousKanbanStatus) return;
+
+        const targetColumnId = columns.columns.find(
+            (c) => c.key === item.previousKanbanStatus
+        )?.id;
+        const stateBefore = item.previousKanbanStatus;
+        if (!targetColumnId) return;
+
+        setColumns((prev) => ({
+            ...prev,
+            emails: {
+                ...prev.emails,
+                [frozenColumn.id]: prev.emails[frozenColumn.id].filter(
+                    (i) => i.id !== id
+                ),
+                [targetColumnId]: [
+                    {
+                        ...item,
+                        snoozedUntil: undefined,
+                        previousKanbanStatus: undefined,
+                        kanbanStatus: stateBefore,
+                        kanbanColumnId: targetColumnId,
+                    },
+                    ...prev.emails[targetColumnId],
+                ],
+            },
+        }));
+    };
+
+    const createKanbanColumn = async (
+        name: string,
+        color: string,
+        icon: string,
+        gmailLabelName: string
+    ) => {
+        if (name.trim() === "") {
+            showToast("Column name cannot be empty", "error");
+            return;
+        }
+        if (
+            color.trim() === "" ||
+            !/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)
+        ) {
+            showToast("Column color cannot be empty", "error");
             return;
         }
 
-        // Different column
-        const finalIndex = overIndex === -1 ? toItems.length : overIndex;
-
-        // Update status
-        const updatedItem = {
-            ...movedItem,
-            kanbanStatus: toCol.toUpperCase() as KanbanStatus,
-        };
-
-        // Frozen logic
-        const prevColumns = { ...columns };
-        //let timeoutId: NodeJS.Timeout;
-        if (toCol.toUpperCase() === InBoxConstant.nameFrozenColumn) {
-            const ms = getTimeoutMs(timeoutDuration);
-            updatedItem.snoozedUntil = ms
-                ? new Date(Date.now() + ms).toISOString()
-                : undefined;
-            updatedItem.previousKanbanStatus =
-                fromCol.toUpperCase() as KanbanStatus;
-            // timeoutId = setTimeout(() => {
-            //     updatedItem.kanbanStatus =
-            //         fromCol!.toUpperCase() as KanbanStatus;
-            //     updatedItem.snoozedUntil = undefined;
-            //     console.log("Auto-moving item from frozen:", updatedItem);
-            //     setColumns((prev) => ({
-            //         ...prev,
-            //         [fromCol!]: [...prev[fromCol!], updatedItem], //bỏ sort
-            //         [toCol!]: prev[toCol!].filter(
-            //             (i) => i.id !== updatedItem.id
-            //         ),
-            //     }));
-            // }, ms);
+        if (icon.trim() === "") {
+            showToast("Column icon cannot be empty", "error");
+            return;
         }
 
-        toItems.splice(finalIndex, 0, updatedItem);
+        if (gmailLabelName.trim() === "") {
+            showToast("Gmail label name cannot be empty", "error");
+            return;
+        }
 
-        setColumns((prev) => ({
-            ...prev,
-            [fromCol!]: fromItems,
-            [toCol!]: toItems,
-        }));
-        // Call mutation
+        let snapshot: KanbanBoardData | null = null;
 
-        updateStatusHandler(
-            movedItem.id,
-            updatedItem.kanbanStatus,
-            timeoutDuration
-        ).catch(() => {
-            showToast(
-                "Failed to update item status. Reverting changes.",
-                "error"
-            );
-            setColumns(prevColumns);
-            // if (toCol!.toUpperCase() === InBoxConstant.nameFrozenColumn) {
-            //     clearTimeout(timeoutId);
-            // }
+        const tempId = `temp-${Date.now()}`;
+
+        setColumns((prev) => {
+            snapshot = prev;
+            return {
+                ...prev,
+                columns: [
+                    ...prev.columns,
+                    {
+                        id: tempId,
+                        name,
+                        color,
+                        icon,
+                        key: name.toUpperCase(),
+                        order: prev.columns.length,
+                        isSystemProtected: false,
+                        emailCount: 0,
+                    },
+                ],
+                emails: {
+                    ...prev.emails,
+                    [tempId]: [],
+                },
+            };
         });
-    };
-    const moveToColumnFromFrozen = async (id: string) => {
-        let item = columns.frozen.find((i) => i.id === id);
-        if (!item) return;
-        item = {
-            ...item,
-            kanbanStatus: item.previousKanbanStatus || "INBOX",
-            snoozedUntil: undefined,
-        };
-        // inbox.sort(
-        //     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        // );
-        //xóa trong fronzen
-        const key =
-            item.previousKanbanStatus!.toLowerCase() as keyof KanbanBoardData;
+
+        const result = await createColumnMutation.Create({
+            name,
+            color,
+            icon,
+            gmailLabelName,
+        });
+
+        if (!result || !result.data) {
+            if (snapshot) setColumns(snapshot);
+            showToast("Create failed, reverting", "error");
+            return;
+        }
+
         setColumns((prev) => ({
             ...prev,
-            frozen: prev.frozen.filter((i) => i.id !== id),
-            [key]: [item, ...prev[key]],
+            columns: prev.columns.map((col) =>
+                col.id === tempId ? { ...result.data, emailCount: 0 } : col
+            ),
+            emails: {
+                ...prev.emails,
+                [result.data.id]: prev.emails[tempId] ?? [],
+            },
         }));
+    };
+
+    const updateKanbanColumn = async (
+        id: string,
+        name: string,
+        color: string,
+        icon: string,
+        gmailLabelName: string
+    ) => {
+        if (name.trim() === "") {
+            showToast("Column name cannot be empty", "error");
+            return;
+        }
+        if (
+            color.trim() === "" ||
+            !/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)
+        ) {
+            showToast("Column color cannot be empty", "error");
+            return;
+        }
+
+        if (icon.trim() === "") {
+            showToast("Column icon cannot be empty", "error");
+            return;
+        }
+
+        let snapshot: KanbanBoardData | null = null;
+
+        setColumns((prev) => {
+            snapshot = prev;
+            return {
+                ...prev,
+                columns: prev.columns.map((col) =>
+                    col.id === id ? { ...col, name, color, icon } : col
+                ),
+            };
+        });
+
+        const result = await updateColumnMutation.Update({
+            id,
+            body: { name, color, icon, gmailLabelName },
+        });
+
+        if (!result || !result.data) {
+            if (snapshot) setColumns(snapshot);
+            showToast("Update failed, reverting", "error");
+            return;
+        }
+
+        setColumns((prev) => ({
+            ...prev,
+            columns: prev.columns.map((col) =>
+                col.id === id
+                    ? { ...result.data, emailCount: col.emailCount }
+                    : col
+            ),
+        }));
+    };
+
+    const deleteKanbanColumn = async (id: string) => {
+        let snapshot: KanbanBoardData | null = null;
+
+        setColumns((prev) => {
+            snapshot = prev;
+            return {
+                ...prev,
+                columns: prev.columns.filter((col) => col.id !== id),
+                emails: Object.fromEntries(
+                    Object.entries(prev.emails).filter(([key]) => key !== id)
+                ),
+            };
+        });
+
+        const result = await deleteColumnMutation.Delete({ id });
+
+        if (!result) {
+            if (snapshot) setColumns(snapshot);
+            showToast("Delete failed, reverting", "error");
+            return;
+        }
     };
 
     return {
@@ -236,5 +383,8 @@ export default function useKanban() {
         setFilters,
         sortBy,
         setSortBy,
+        createKanbanColumn,
+        updateKanbanColumn,
+        deleteKanbanColumn,
     };
 }

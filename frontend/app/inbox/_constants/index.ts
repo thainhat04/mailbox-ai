@@ -5,12 +5,13 @@ const constant = {
     URL_MODIFY_EMAIL: (id: string) => `/emails/${id}/modify`,
     URL_REPLY_EMAIL: (id: string) => `/emails/${id}/reply`,
     TIME_FREEZE_MS: 3000,
-    nameFrozenColumn: "FROZEN",
+    FROZEN_COLUMN_KEY: "FROZEN",
     URL_KANBAN: "/kanban/board",
-    URL_UPDATE_KANBAN_STATUS: (id: string) => `/${id}/kanban/status`,
+    URL_UPDATE_KANBAN_STATUS: (id: string) => `/${id}/kanban/column`,
     URL_FROZEN_EMAILS: (id: string) => `/${id}/freeze`,
     URL_UNFREEZE_EMAILS: (id: string) => `/${id}/unfreeze`,
     URL_SUMMARIZE_EMAIL: (id: string) => `/${id}/summary`,
     URL_PUZZLE_SEARCH: "/emails/fuzzy-search",
+    URL_CREATE_KANBAN_COLUMN: "/kanban/columns",
 };
 export default constant;

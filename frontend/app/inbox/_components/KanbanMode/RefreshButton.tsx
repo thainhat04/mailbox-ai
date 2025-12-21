@@ -5,7 +5,6 @@ export default function RefreshButton({ onClick }: { onClick: () => void }) {
         <button
             onClick={onClick}
             className="
-                mt-4 ml-5
                  rounded-lg 
                 flex items-center gap-2 
                cursor-pointer
