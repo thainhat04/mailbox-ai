@@ -81,8 +81,9 @@ export class KanbanColumnService {
 
       if (emailAccount) {
         // Get mail provider
-        const provider =
-          await this.providerRegistry.getProvider(emailAccount.id);
+        const provider = await this.providerRegistry.getProvider(
+          emailAccount.id,
+        );
 
         // Check if label already exists with the same name
         const existingLabels = await provider.listLabels();
@@ -99,7 +100,10 @@ export class KanbanColumnService {
           );
         } else {
           // Create new Gmail label with color
-          const newLabel = await provider.createLabel(dto.gmailLabelName || dto.name, dto.color);
+          const newLabel = await provider.createLabel(
+            dto.gmailLabelName || dto.name,
+            dto.color,
+          );
           gmailLabelId = newLabel.id;
           gmailLabelName = newLabel.name;
 
@@ -137,12 +141,26 @@ export class KanbanColumnService {
       );
     }
 
-    // 4. Create column (key is NULL for custom columns)
+    // 4. Generate KEY from name (uppercase, no spaces/special chars)
+    const generatedKey = this.generateKeyFromName(dto.name);
+
+    // 5. Check if KEY already exists for this user
+    const existingColumn = await this.prisma.kanbanColumn.findFirst({
+      where: { userId, key: generatedKey },
+    });
+
+    if (existingColumn) {
+      throw new BadRequestException(
+        `A column with similar name already exists: "${existingColumn.name}"`,
+      );
+    }
+
+    // 6. Create column with auto-generated KEY
     const column = await this.prisma.kanbanColumn.create({
       data: {
         userId,
         name: dto.name,
-        key: null, // Custom columns don't have key
+        key: generatedKey,
         color: dto.color,
         icon: dto.icon,
         order: nextOrder,
@@ -152,7 +170,9 @@ export class KanbanColumnService {
       },
     });
 
-    this.logger.log(`Created column "${column.name}" for user ${userId}`);
+    this.logger.log(
+      `Created column "${column.name}" with key "${generatedKey}" for user ${userId}`,
+    );
     return this.mapToDto(column);
   }
 
@@ -191,8 +211,9 @@ export class KanbanColumnService {
 
         if (emailAccount) {
           // Get mail provider
-          const provider =
-            await this.providerRegistry.getProvider(emailAccount.id);
+          const provider = await this.providerRegistry.getProvider(
+            emailAccount.id,
+          );
 
           // Update Gmail label (name and/or color)
           const updatedLabel = await provider.updateLabel(
@@ -224,15 +245,44 @@ export class KanbanColumnService {
       }
     }
 
-    // 3. Update column in database
+    // 3. Update KEY if name changed
+    const updateData: any = {
+      color: dto.color,
+      icon: dto.icon,
+      gmailLabelName: dto.gmailLabelName,
+    };
+
+    // If name is being updated, regenerate KEY
+    if (dto.name && dto.name !== column.name) {
+      const newKey = this.generateKeyFromName(dto.name);
+
+      // Check if new KEY conflicts with existing column
+      const existingColumn = await this.prisma.kanbanColumn.findFirst({
+        where: {
+          userId,
+          key: newKey,
+          id: { not: columnId }, // Exclude current column
+        },
+      });
+
+      if (existingColumn) {
+        throw new BadRequestException(
+          `Cannot rename: A column with similar name already exists: "${existingColumn.name}"`,
+        );
+      }
+
+      updateData.name = dto.name;
+      updateData.key = newKey;
+
+      this.logger.log(
+        `Updating column "${column.name}" → "${dto.name}" (KEY: ${column.key} → ${newKey})`,
+      );
+    }
+
+    // 4. Update column in database
     const updated = await this.prisma.kanbanColumn.update({
       where: { id: columnId },
-      data: {
-        name: dto.name,
-        color: dto.color,
-        icon: dto.icon,
-        gmailLabelName: dto.gmailLabelName,
-      },
+      data: updateData,
     });
 
     this.logger.log(`Updated column "${updated.name}" (${columnId})`);
@@ -252,10 +302,10 @@ export class KanbanColumnService {
       throw new NotFoundException("Column not found");
     }
 
-    // 2. Cannot delete INBOX (system protected)
+    // 2. Cannot delete system protected columns (INBOX, FROZEN)
     if (column.isSystemProtected) {
       throw new ForbiddenException(
-        "Cannot delete system protected column (INBOX)",
+        `Cannot delete system protected column: ${column.name}`,
       );
     }
 
@@ -277,8 +327,9 @@ export class KanbanColumnService {
 
         if (emailAccount) {
           // Get mail provider
-          const provider =
-            await this.providerRegistry.getProvider(emailAccount.id);
+          const provider = await this.providerRegistry.getProvider(
+            emailAccount.id,
+          );
 
           // Delete Gmail label
           await provider.deleteLabel(column.gmailLabelId);
@@ -435,7 +486,7 @@ export class KanbanColumnService {
         order: 4,
         gmailLabelId: null,
         gmailLabelName: null,
-        isSystemProtected: false,
+        isSystemProtected: true,
       },
     ];
 
@@ -449,6 +500,17 @@ export class KanbanColumnService {
     this.logger.log(
       `Initialized ${defaultColumns.length} default columns for user ${userId}`,
     );
+  }
+
+  private generateKeyFromName(name: string): string {
+    return name
+      .normalize("NFD") // Decompose Vietnamese characters
+      .replace(/[\u0300-\u036f]/g, "") // Remove diacritics (accents)
+      .replace(/đ/g, "d") // Replace đ → d
+      .replace(/Đ/g, "D") // Replace Đ → D
+      .toUpperCase() // Convert to uppercase
+      .replace(/[^A-Z0-9]/g, "") // Remove all non-alphanumeric characters (spaces, special chars)
+      .trim(); // Remove any leading/trailing whitespace (shouldn't be any)
   }
 
   /**
