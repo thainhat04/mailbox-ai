@@ -9,20 +9,23 @@ interface Props {
     isActive: boolean;
 }
 export default function Column({ column, items, isActive }: Props) {
+    const isTempColumn = column.id.startsWith("temp-");
     const { setNodeRef, isOver } = useDroppable({
         id: column.id,
+        disabled: isTempColumn,
     });
 
-    const isHighlight = isOver || isActive;
+    const isHighlight = !isTempColumn && (isOver || isActive);
 
     return (
         <div
             ref={setNodeRef}
-            className="
-                flex-1 rounded-2xl h-full
-                border-2 px-2 py-3
-                transition-all duration-200 ease-out
-            "
+            className={`
+        flex-1 rounded-2xl h-full
+        border-2 px-2 py-3
+        transition-all duration-200 ease-out
+        ${isTempColumn ? "opacity-50 grayscale cursor-not-allowed" : ""}
+            `}
             style={{
                 borderColor: column.color,
                 backgroundColor: isHighlight

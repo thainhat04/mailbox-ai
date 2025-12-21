@@ -13,6 +13,12 @@ export interface KanbanColumn {
     isSystemProtected: boolean;
     emailCount: number;
 }
+export interface KanbanColumnDetails extends KanbanColumn {
+    gmailLabelName: string;
+    gmailLabelId: string;
+    updatedAt: string;
+    createdAt: string;
+}
 export type KanbanStatus = string;
 
 // Item trong các cột Kanban
@@ -83,4 +89,11 @@ export interface KanbanBoardParams {
     hasAttachmentsOnly?: boolean;
     fromEmail?: string;
     sortBy?: SortOption;
+}
+
+export interface CreateKanbanColumnRequest {
+    name: string;
+    color: string;
+    icon: string;
+    gmailLabelName: string;
 }

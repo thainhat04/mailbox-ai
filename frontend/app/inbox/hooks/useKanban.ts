@@ -5,7 +5,6 @@ import { DragEndEvent } from "@dnd-kit/core";
 import InBoxConstant from "../_constants";
 import {
     KanbanBoardData,
-    KanbanStatus,
     FrozenTimeouts,
     SortOption,
     KanbanItem,
@@ -14,6 +13,9 @@ import {
     useGetAllKanBanQuery,
     useUpdateKanBanStatusMutation,
     useUpdateFrozenStatusMutation,
+    useCreateKanbanColumnMutation,
+    useUpdateKanBanColumnMutation,
+    useDeleteKanBanColumnMutation,
 } from "../_services";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
@@ -69,6 +71,22 @@ export default function useKanban() {
         useUpdateKanBanStatusMutation,
         "Update"
     );
+
+    const createColumnMutation = useMutationHandler(
+        useCreateKanbanColumnMutation,
+        "Create"
+    );
+
+    const updateColumnMutation = useMutationHandler(
+        useUpdateKanBanColumnMutation,
+        "Update"
+    );
+
+    const deleteColumnMutation = useMutationHandler(
+        useDeleteKanBanColumnMutation,
+        "Delete"
+    );
+
     useEffect(() => {
         if (result?.data) setColumns(result.data);
     }, [result]);
@@ -159,6 +177,7 @@ export default function useKanban() {
             setColumns(prevState);
         }
     };
+
     const moveToColumnFromFrozen = async (id: string) => {
         const frozenColumn = columns.columns.find((c) => c.key === "FROZEN");
         if (!frozenColumn) return;
@@ -193,6 +212,167 @@ export default function useKanban() {
         }));
     };
 
+    const createKanbanColumn = async (
+        name: string,
+        color: string,
+        icon: string,
+        gmailLabelName: string
+    ) => {
+        if (name.trim() === "") {
+            showToast("Column name cannot be empty", "error");
+            return;
+        }
+        if (
+            color.trim() === "" ||
+            !/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)
+        ) {
+            showToast("Column color cannot be empty", "error");
+            return;
+        }
+
+        if (icon.trim() === "") {
+            showToast("Column icon cannot be empty", "error");
+            return;
+        }
+
+        if (gmailLabelName.trim() === "") {
+            showToast("Gmail label name cannot be empty", "error");
+            return;
+        }
+
+        let snapshot: KanbanBoardData | null = null;
+
+        const tempId = `temp-${Date.now()}`;
+
+        setColumns((prev) => {
+            snapshot = prev;
+            return {
+                ...prev,
+                columns: [
+                    ...prev.columns,
+                    {
+                        id: tempId,
+                        name,
+                        color,
+                        icon,
+                        key: name.toUpperCase(),
+                        order: prev.columns.length,
+                        isSystemProtected: false,
+                        emailCount: 0,
+                    },
+                ],
+                emails: {
+                    ...prev.emails,
+                    [tempId]: [],
+                },
+            };
+        });
+
+        const result = await createColumnMutation.Create({
+            name,
+            color,
+            icon,
+            gmailLabelName,
+        });
+
+        if (!result || !result.data) {
+            if (snapshot) setColumns(snapshot);
+            showToast("Create failed, reverting", "error");
+            return;
+        }
+
+        setColumns((prev) => ({
+            ...prev,
+            columns: prev.columns.map((col) =>
+                col.id === tempId ? { ...result.data, emailCount: 0 } : col
+            ),
+            emails: {
+                ...prev.emails,
+                [result.data.id]: prev.emails[tempId] ?? [],
+            },
+        }));
+    };
+
+    const updateKanbanColumn = async (
+        id: string,
+        name: string,
+        color: string,
+        icon: string,
+        gmailLabelName: string
+    ) => {
+        if (name.trim() === "") {
+            showToast("Column name cannot be empty", "error");
+            return;
+        }
+        if (
+            color.trim() === "" ||
+            !/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)
+        ) {
+            showToast("Column color cannot be empty", "error");
+            return;
+        }
+
+        if (icon.trim() === "") {
+            showToast("Column icon cannot be empty", "error");
+            return;
+        }
+
+        let snapshot: KanbanBoardData | null = null;
+
+        setColumns((prev) => {
+            snapshot = prev;
+            return {
+                ...prev,
+                columns: prev.columns.map((col) =>
+                    col.id === id ? { ...col, name, color, icon } : col
+                ),
+            };
+        });
+
+        const result = await updateColumnMutation.Update({
+            id,
+            body: { name, color, icon, gmailLabelName },
+        });
+
+        if (!result || !result.data) {
+            if (snapshot) setColumns(snapshot);
+            showToast("Update failed, reverting", "error");
+            return;
+        }
+
+        setColumns((prev) => ({
+            ...prev,
+            columns: prev.columns.map((col) =>
+                col.id === id
+                    ? { ...result.data, emailCount: col.emailCount }
+                    : col
+            ),
+        }));
+    };
+
+    const deleteKanbanColumn = async (id: string) => {
+        let snapshot: KanbanBoardData | null = null;
+
+        setColumns((prev) => {
+            snapshot = prev;
+            return {
+                ...prev,
+                columns: prev.columns.filter((col) => col.id !== id),
+                emails: Object.fromEntries(
+                    Object.entries(prev.emails).filter(([key]) => key !== id)
+                ),
+            };
+        });
+
+        const result = await deleteColumnMutation.Delete({ id });
+
+        if (!result) {
+            if (snapshot) setColumns(snapshot);
+            showToast("Delete failed, reverting", "error");
+            return;
+        }
+    };
+
     return {
         columns,
         onDragEnd,
@@ -203,5 +383,8 @@ export default function useKanban() {
         setFilters,
         sortBy,
         setSortBy,
+        createKanbanColumn,
+        updateKanbanColumn,
+        deleteKanbanColumn,
     };
 }

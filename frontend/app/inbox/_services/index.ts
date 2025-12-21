@@ -23,7 +23,13 @@ import { HTTP_METHOD } from "@/constants/services";
 import constant from "../_constants";
 import { ModifyEmail } from "../_types/modify";
 import type { RootState } from "@/store";
-import { EmailSummaryData, UpdateKanbanStatusRequest } from "../_types/kanban";
+import {
+    CreateKanbanColumnRequest,
+    EmailSummaryData,
+    KanbanColumn,
+    KanbanColumnDetails,
+    UpdateKanbanStatusRequest,
+} from "../_types/kanban";
 
 const inboxApi = api.injectEndpoints({
     endpoints: (builder) => ({
@@ -369,6 +375,56 @@ const inboxApi = api.injectEndpoints({
                 },
             ],
         }),
+        createKanbanColumn: builder.mutation<
+            SuccessResponse<KanbanColumn>,
+            CreateKanbanColumnRequest
+        >({
+            query: (body) => ({
+                url: constant.URL_CREATE_KANBAN_COLUMN,
+                method: HTTP_METHOD.POST,
+                body,
+            }),
+            invalidatesTags: [
+                { type: "KanbanColumns", id: "KANBAN_COLUMNS_LIST" },
+            ],
+        }),
+        updateKanBanColumn: builder.mutation<
+            SuccessResponse<KanbanColumn>,
+            { id: string; body: CreateKanbanColumnRequest }
+        >({
+            query: ({ id, body }) => ({
+                url: `${constant.URL_CREATE_KANBAN_COLUMN}/${id}`,
+                method: HTTP_METHOD.PUT,
+                body,
+            }),
+            invalidatesTags: [
+                { type: "KanbanColumns", id: "KANBAN_COLUMNS_LIST" },
+            ],
+        }),
+        deleteKanBanColumn: builder.mutation<
+            SuccessResponse<null>,
+            { id: string }
+        >({
+            query: ({ id }) => ({
+                url: `${constant.URL_CREATE_KANBAN_COLUMN}/${id}`,
+                method: HTTP_METHOD.DELETE,
+            }),
+            invalidatesTags: [
+                { type: "KanbanColumns", id: "KANBAN_COLUMNS_LIST" },
+            ],
+        }),
+        getAllColumnDetails: builder.query<
+            SuccessResponse<KanbanColumnDetails[]>,
+            void
+        >({
+            query: () => ({
+                url: constant.URL_CREATE_KANBAN_COLUMN,
+                method: HTTP_METHOD.GET,
+            }),
+            providesTags: [
+                { type: "KanbanColumns", id: "KANBAN_COLUMNS_LIST" },
+            ],
+        }),
     }),
     overrideExisting: true,
 });
@@ -385,4 +441,8 @@ export const {
     useSummarizeEmailQuery,
     useUpdateFrozenStatusMutation,
     useSearchPuzzleEmailsQuery,
+    useCreateKanbanColumnMutation,
+    useUpdateKanBanColumnMutation,
+    useDeleteKanBanColumnMutation,
+    useGetAllColumnDetailsQuery,
 } = inboxApi;

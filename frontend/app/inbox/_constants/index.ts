@@ -12,5 +12,6 @@ const constant = {
     URL_UNFREEZE_EMAILS: (id: string) => `/${id}/unfreeze`,
     URL_SUMMARIZE_EMAIL: (id: string) => `/${id}/summary`,
     URL_PUZZLE_SEARCH: "/emails/fuzzy-search",
+    URL_CREATE_KANBAN_COLUMN: "/kanban/columns",
 };
 export default constant;
