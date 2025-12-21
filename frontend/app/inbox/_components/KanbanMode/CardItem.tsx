@@ -17,7 +17,7 @@ interface CardItemProps {
 export default function CardItem({ item, isOverlay }: CardItemProps) {
     const countdown = useCountdown(item.snoozedUntil);
     const { moveToColumnFromFrozen } = useKanbanRefetch();
-    const isFrozen = item.kanbanStatus === inboxConstant.nameFrozenColumn;
+    const isFrozen = item.kanbanStatus === inboxConstant.FROZEN_COLUMN_KEY;
     const [isSummaryOpen, setIsSummaryOpen] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
 

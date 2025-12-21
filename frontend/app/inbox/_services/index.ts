@@ -320,7 +320,7 @@ const inboxApi = api.injectEndpoints({
                 url: constant.URL_UPDATE_KANBAN_STATUS(body.id),
                 method: HTTP_METHOD.PATCH,
                 body: {
-                    status: body.newStatus,
+                    columnId: body.newStatus,
                 },
             }),
         }),

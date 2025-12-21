@@ -29,9 +29,11 @@ function KanbanLayout() {
                 )}
                 <div className="p-2 sm:p-3 md:p-4 pb-0">
                     <div className="flex items-center justify-between mb-2">
-                        <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
-                            Kanban Board
-                        </h1>
+                        <div>
+                            <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
+                                Kanban Board
+                            </h1>
+                        </div>
                         <RefreshButton onClick={refetch} />
                     </div>
                     <FilterSortControls

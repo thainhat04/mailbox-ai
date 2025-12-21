@@ -22,6 +22,7 @@ import type {
 
 import CardItem from "./CardItem";
 import constant from "../../_constants";
+import isFrozenColumnById from "@/helper/is-fronzen";
 import FreezeSelector from "./FreezeSelector";
 import { KanbanRefetchContext } from "../../hooks/KanbanRefetchContext";
 import { useToast } from "@/components/ui/toast-provider";
@@ -38,6 +39,25 @@ interface KanbanWrapperProps {
     refetch: () => void;
     moveToColumnFromFrozen: (id: string) => Promise<void>;
 }
+const findItemById = (
+    board: KanbanBoardData,
+    itemId: string
+): KanbanItem | null => {
+    for (const items of Object.values(board.emails)) {
+        const found = items.find((i) => i.id === itemId);
+        if (found) return found;
+    }
+    return null;
+};
+const findColumnIdByItemId = (
+    board: KanbanBoardData,
+    itemId: string
+): string | null => {
+    for (const [columnId, items] of Object.entries(board.emails)) {
+        if (items.some((i) => i.id === itemId)) return columnId;
+    }
+    return null;
+};
 
 export default function KanbanWrapper({
     columns,
@@ -94,50 +114,48 @@ export default function KanbanWrapper({
         })
     );
 
-    // Convert tất cả item thành danh sách ID
-    const allIds = Object.values(columns)
-        .flat()
-        .map((item) => item.id);
-
     // Khi bắt đầu kéo
     const handleDragStart = ({ active }: DragStartEvent) => {
         const id = String(active.id);
 
-        // Tìm item theo ID
-        for (const col in columns) {
-            const found = columns[col as keyof KanbanBoardData].find(
-                (i) => i.id === id
-            );
-            if (found) {
-                setActiveItem(found);
-                break;
-            }
-        }
+        const item = findItemById(columns, id);
+        if (!item) return;
+
+        setActiveItem(item);
+
+        const columnId = findColumnIdByItemId(columns, id);
+        if (columnId) setActiveColumn(columnId);
     };
 
     // Khi thả
     const handleDragEnd = (event: DragEndEvent) => {
-        setActiveItem(null); // remove overlay
-        setActiveColumn(null); // reset active column
+        setActiveItem(null);
+        setActiveColumn(null);
+
         if (!event.over) return;
-        const overId = String(event.over?.id);
-        let overColumnId: string | null = null;
-        for (const col in columns) {
-            const found = columns[col as keyof KanbanBoardData].find(
-                (i) => i.id === overId
-            );
-            if (found) {
-                overColumnId = col;
-                break;
-            }
-        }
-        if (!overColumnId) {
-            overColumnId = event.over?.id as string;
-        }
-        if (overColumnId.toUpperCase() === constant.nameFrozenColumn) {
+
+        const activeId = String(event.active.id);
+        const overId = String(event.over.id);
+
+        const fromColumnId = findColumnIdByItemId(columns, activeId);
+        if (!fromColumnId) return;
+
+        // Nếu drop trực tiếp lên column
+        const toColumnId = columns.emails[overId]
+            ? overId
+            : findColumnIdByItemId(columns, overId);
+
+        if (!toColumnId) return;
+
+        // 🧊 Frozen → mở modal
+        if (isFrozenColumnById(columns, toColumnId)) {
             setModalOpen(true);
             eventRef.current = event;
-        } else onDragEnd(event); // run your original logic
+            return;
+        }
+
+        // Bình thường
+        onDragEnd(event);
     };
 
     // Khi cancel (thả bên ngoài)
@@ -146,25 +164,21 @@ export default function KanbanWrapper({
     };
 
     const handleDragOver = (event: DragOverEvent) => {
-        //find id of item column
         const overId = event.over?.id;
         if (!overId) return;
-        let overColumnId: string | null = null;
-        for (const col in columns) {
-            const found = columns[col as keyof KanbanBoardData].find(
-                (i) => i.id === overId
-            );
-            if (found) {
-                overColumnId = col;
-                break;
-            }
-        }
-        if (overColumnId) {
-            setActiveColumn(overColumnId);
+
+        const overIdStr = String(overId);
+
+        // Hover lên item
+        const columnId = findColumnIdByItemId(columns, overIdStr);
+        if (columnId) {
+            setActiveColumn(columnId);
             return;
         }
-        if (!allIds.includes(String(overId))) {
-            setActiveColumn(overId as string);
+
+        // Hover trực tiếp lên column
+        if (columns.emails[overIdStr]) {
+            setActiveColumn(overIdStr);
         }
     };
     return (
@@ -180,7 +194,7 @@ export default function KanbanWrapper({
                 autoScroll={true}
             >
                 {" "}
-                <Board columns={columns} activeColumn={activeColumn} />
+                <Board board={columns} activeColumn={activeColumn} />
                 {/* 🔥 DragOverlay — Clone item bay theo chuột */}
                 <DragOverlay>
                     {activeItem ? (
