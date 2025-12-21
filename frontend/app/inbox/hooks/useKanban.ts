@@ -22,6 +22,7 @@ import { useMutationHandler } from "@/hooks/useMutationHandler";
 import { useToast } from "@/components/ui/toast-provider";
 import { getTimeoutMs } from "@/helper/get-timeout-ms";
 import isFrozenColumn from "@/helper/is-fronzen";
+import { it } from "node:test";
 
 function findColumnIdByItem(
     board: KanbanBoardData,
@@ -352,15 +353,26 @@ export default function useKanban() {
 
     const deleteKanbanColumn = async (id: string) => {
         let snapshot: KanbanBoardData | null = null;
+        const inboxColumn = columns.columns.find(
+            (c) => c.key === InBoxConstant.KANBAN_INBOX_KEY
+        );
+        if (!inboxColumn) {
+            showToast("Inbox column not found, cannot delete", "error");
+            return;
+        }
+        const inboxId = inboxColumn.id;
+        const itemsToMove = [...(columns.emails[id] ?? [])];
 
         setColumns((prev) => {
             snapshot = prev;
             return {
                 ...prev,
                 columns: prev.columns.filter((col) => col.id !== id),
-                emails: Object.fromEntries(
-                    Object.entries(prev.emails).filter(([key]) => key !== id)
-                ),
+                emails: {
+                    ...prev.emails,
+                    [inboxId]: [...prev.emails[inboxId], ...itemsToMove],
+                    [id]: undefined!,
+                },
             };
         });
 
