@@ -50,7 +50,7 @@ export interface SyncStateData {
 export class EmailMessageRepository {
   private readonly logger = new Logger(EmailMessageRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Upsert a single email message
@@ -93,17 +93,17 @@ export class EmailMessageRepository {
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-                upsert: {
-                  create: {
-                    bodyText: messageData.bodyText,
-                    bodyHtml: messageData.bodyHtml,
-                  },
-                  update: {
-                    bodyText: messageData.bodyText,
-                    bodyHtml: messageData.bodyHtml,
-                  },
+              upsert: {
+                create: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
                 },
-              }
+                update: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
+                },
+              },
+            }
             : undefined,
       },
       create: {
@@ -130,11 +130,11 @@ export class EmailMessageRepository {
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-                create: {
-                  bodyText: messageData.bodyText,
-                  bodyHtml: messageData.bodyHtml,
-                },
-              }
+              create: {
+                bodyText: messageData.bodyText,
+                bodyHtml: messageData.bodyHtml,
+              },
+            }
             : undefined,
       },
     });
