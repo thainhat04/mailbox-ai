@@ -538,19 +538,39 @@ export class EmailMessageRepository {
     status: string,
     snoozedUntil?: Date | null,
   ): Promise<PrismaEmailMessage> {
-    // Get current column and status before updating (for FROZEN status)
+    // Get current email with userId to find target column
     const currentEmail = await this.prisma.emailMessage.findUnique({
       where: { id: emailId },
       select: {
         kanbanStatus: true,
+        kanbanColumnId: true,
         kanbanColumn: {
           select: { key: true },
+        },
+        emailAccount: {
+          select: { userId: true },
         },
       },
     });
 
+    if (!currentEmail) {
+      throw new Error(`Email ${emailId} not found`);
+    }
+
+    const userId = currentEmail.emailAccount.userId;
+
+    // Find target column by status KEY
+    const targetColumn = await this.prisma.kanbanColumn.findFirst({
+      where: { userId, key: status },
+    });
+
+    if (!targetColumn) {
+      throw new Error(`Column with key "${status}" not found for user ${userId}`);
+    }
+
     const updateData: any = {
       kanbanStatus: status,
+      kanbanColumnId: targetColumn.id,
       statusChangedAt: new Date(),
     };
 
