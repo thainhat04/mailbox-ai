@@ -4,8 +4,8 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import inboxConstant from "../../_constants";
 import { KanbanItem } from "../../_types";
-import { useCountdown } from "../../hooks/useCountdown";
-import { useKanbanRefetch } from "../../hooks/KanbanRefetchContext";
+import { useCountdown } from "../../_hooks/useCountdown";
+import { useKanbanRefetch } from "../../_hooks/KanbanRefetchContext";
 import { use, useEffect, useState } from "react";
 import SummaryModal from "./SummaryModal";
 
@@ -28,14 +28,15 @@ export default function CardItem({ item, isOverlay }: CardItemProps) {
         if (!item.snoozedUntil) return;
 
         const delay = new Date(item.snoozedUntil).getTime() - Date.now();
+        if (delay > 0) {
+            const timeoutId = setTimeout(() => {
+                moveToColumnFromFrozen(item.id);
+            }, delay);
 
-        const timeoutId = setTimeout(() => {
-            moveToColumnFromFrozen(item.id);
-        }, delay);
-
-        return () => {
-            clearTimeout(timeoutId);
-        };
+            return () => {
+                clearTimeout(timeoutId);
+            };
+        } else moveToColumnFromFrozen(item.id);
     }, [item.snoozedUntil]);
 
     const style =

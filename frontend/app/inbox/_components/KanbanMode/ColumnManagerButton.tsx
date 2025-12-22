@@ -22,16 +22,20 @@ interface Props {
         gmailLabelName: string
     ) => Promise<void>;
     onDeleteColumn: (id: string) => Promise<void>;
+    isRefresh: boolean;
+    setIsRefresh: (value: boolean) => void;
 }
 
 export default function ColumnManagerButton({
     onCreateColumn,
     onUpdateColumn,
     onDeleteColumn,
+    isRefresh,
+    setIsRefresh,
 }: Props) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [columns, setColumn] = useState<KanbanColumnDetails[]>([]);
-    const { result, isFetching } = useQueryHandler(
+    const { result, isFetching, refetch } = useQueryHandler(
         useGetAllColumnDetailsQuery,
         undefined
     );
@@ -40,6 +44,13 @@ export default function ColumnManagerButton({
     useEffect(() => {
         setIsFetchingData(isFetching);
     }, [isFetching]);
+
+    useEffect(() => {
+        if (isRefresh) {
+            refetch();
+            setIsRefresh(false);
+        }
+    }, [isRefresh, refetch]);
 
     useEffect(() => {
         if (isFetchingData) {

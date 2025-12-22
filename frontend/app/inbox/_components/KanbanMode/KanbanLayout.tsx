@@ -1,9 +1,10 @@
 "use client";
 import KanbanWrapper from "./KanbanWrapper";
-import useKanban from "../../hooks/useKanban";
+import useKanban from "../../_hooks/useKanban";
 import RefreshButton from "./RefreshButton";
 import FilterSortControls from "./FilterSortControls";
 import ColumnManagerButton from "./ColumnManagerButton";
+import { useState } from "react";
 
 function KanbanLayout() {
     const {
@@ -20,6 +21,8 @@ function KanbanLayout() {
         updateKanbanColumn,
         deleteKanbanColumn,
     } = useKanban();
+
+    const [isRefresh, setIsRefresh] = useState(false);
 
     return (
         <div className="relative kanban__layout h-screen w-full flex flex-col overflow-hidden text-white">
@@ -39,11 +42,18 @@ function KanbanLayout() {
                             </h1>
                         </div>
                         <div className="flex items-center gap-5">
-                            <RefreshButton onClick={refetch} />
+                            <RefreshButton
+                                onClick={() => {
+                                    setIsRefresh(true);
+                                    refetch();
+                                }}
+                            />
                             <ColumnManagerButton
                                 onCreateColumn={createKanbanColumn}
                                 onUpdateColumn={updateKanbanColumn}
                                 onDeleteColumn={deleteKanbanColumn}
+                                isRefresh={isRefresh}
+                                setIsRefresh={setIsRefresh}
                             />
                         </div>
                     </div>

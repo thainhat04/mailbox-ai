@@ -1,4 +1,5 @@
 // Thông tin người gửi trong email
+import { Folder } from "../_types/folder";
 export interface EmailSender {
     name: string;
     email: string;
@@ -13,11 +14,13 @@ export interface KanbanColumn {
     isSystemProtected: boolean;
     emailCount: number;
 }
+
 export interface KanbanColumnDetails extends KanbanColumn {
     gmailLabelName: string;
     gmailLabelId: string;
     updatedAt: string;
     createdAt: string;
+    label: Folder;
 }
 export type KanbanStatus = string;
 
@@ -96,4 +99,10 @@ export interface CreateKanbanColumnRequest {
     color: string;
     icon: string;
     gmailLabelName: string;
+}
+
+export interface UpdateKanbanStatusResponse {
+    destinationLabel: Folder;
+    sourceLabel: Folder;
+    email: KanbanItem;
 }
