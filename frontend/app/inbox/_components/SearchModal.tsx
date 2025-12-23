@@ -43,6 +43,7 @@ export default function SearchModal({
     useEffect(() => {
         setCurrentPage(1);
         setSelectedEmail(null);
+        setTotalPages(0);
     }, [searchQuery]);
 
     useEffect(() => {
@@ -191,19 +192,24 @@ export default function SearchModal({
                 {/* Pagination Footer */}
                 {totalPages > 1 && !isLoading && !error && (
                     <div className="border-t border-white/10 p-6">
-                        <div className="flex items-center justify-between">
+                        <div
+                            style={{
+                                alignItems: "stretch",
+                            }}
+                            className="flex justify-between"
+                        >
                             {/* Page Info */}
                             <div className="text-sm text-white/60">
                                 Page {currentPage} of {totalPages}
                             </div>
 
                             {/* Pagination Controls */}
-                            <div className="flex items-center gap-2">
+                            <div className="flex gap-2">
                                 {/* First Page */}
                                 <button
                                     onClick={() => setCurrentPage(1)}
                                     disabled={currentPage === 1}
-                                    className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
+                                    className="px-3 cursor-pointer py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
                                 >
                                     <svg
                                         className="w-4 h-4"
@@ -228,7 +234,7 @@ export default function SearchModal({
                                         )
                                     }
                                     disabled={currentPage === 1}
-                                    className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
+                                    className="px-4 cursor-pointer py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
                                 >
                                     Previous
                                 </button>
@@ -270,7 +276,7 @@ export default function SearchModal({
                                                         className={`w-10 h-10 rounded-lg border transition-colors ${
                                                             currentPage === page
                                                                 ? "bg-cyan-500/20 border-cyan-400/50 text-cyan-400"
-                                                                : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
+                                                                : "bg-white/5 cursor-pointer border-white/10 text-white/80 hover:bg-white/10"
                                                         }`}
                                                     >
                                                         {page}
@@ -288,7 +294,7 @@ export default function SearchModal({
                                         )
                                     }
                                     disabled={currentPage === totalPages}
-                                    className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
+                                    className="px-4 cursor-pointer py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -297,7 +303,7 @@ export default function SearchModal({
                                 <button
                                     onClick={() => setCurrentPage(totalPages)}
                                     disabled={currentPage === totalPages}
-                                    className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
+                                    className="px-3 cursor-pointer py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
                                 >
                                     <svg
                                         className="w-4 h-4"
