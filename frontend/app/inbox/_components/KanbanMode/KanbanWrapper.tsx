@@ -22,6 +22,7 @@ import type {
 
 import CardItem from "./CardItem";
 import constant from "../../_constants";
+import { SummaryModalProvider } from "./SummaryModalContext";
 import isFrozenColumnById from "@/helper/is-fronzen";
 import FreezeSelector from "./FreezeSelector";
 import { KanbanRefetchContext } from "../../_hooks/KanbanRefetchContext";
@@ -172,28 +173,30 @@ export default function KanbanWrapper({
         <KanbanRefetchContext.Provider
             value={{ refetch, moveToColumnFromFrozen }}
         >
-            <DndContext
-                sensors={sensors}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onDragCancel={handleDragCancel}
-                onDragOver={handleDragOver}
-                autoScroll={true}
-            >
-                {" "}
-                <Board board={columns} activeColumn={activeColumn} />
-                {/* 🔥 DragOverlay — Clone item bay theo chuột */}
-                <DragOverlay>
-                    {activeItem ? (
-                        <CardItem item={activeItem} isOverlay />
-                    ) : null}
-                </DragOverlay>
-                <FreezeSelector
-                    isOpen={modalOpen}
-                    onClose={() => setModalOpen(false)}
-                    onConfirm={confirmTimeOutHandle}
-                />
-            </DndContext>
+            <SummaryModalProvider>
+                <DndContext
+                    sensors={sensors}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragCancel={handleDragCancel}
+                    onDragOver={handleDragOver}
+                    autoScroll={true}
+                >
+                    {" "}
+                    <Board board={columns} activeColumn={activeColumn} />
+                    {/* 🔥 DragOverlay — Clone item bay theo chuột */}
+                    <DragOverlay>
+                        {activeItem ? (
+                            <CardItem item={activeItem} isOverlay />
+                        ) : null}
+                    </DragOverlay>
+                    <FreezeSelector
+                        isOpen={modalOpen}
+                        onClose={() => setModalOpen(false)}
+                        onConfirm={confirmTimeOutHandle}
+                    />
+                </DndContext>
+            </SummaryModalProvider>
         </KanbanRefetchContext.Provider>
     );
 }
