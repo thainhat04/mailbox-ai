@@ -369,7 +369,7 @@ function HeaderInbox({
                                     <kbd className="text-[10px] font-semibold text-white/50">
                                         Ctrl
                                     </kbd>
-                                    <span className="text-white/30">+</span>
+
                                     <kbd className="text-[10px] font-semibold text-white/50">
                                         K
                                     </kbd>

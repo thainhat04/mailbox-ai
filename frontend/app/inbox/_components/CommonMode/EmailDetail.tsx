@@ -182,7 +182,7 @@ export default function EmailDetail({
     };
 
     return (
-        <div className="flex-1 h-full flex flex-col text-white relative w-full md:w-auto">
+        <div className="flex-1 h-full flex flex-col text-white relative w-auto">
             {!email ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-white/50 gap-4">
                     {!isFetching ? (
