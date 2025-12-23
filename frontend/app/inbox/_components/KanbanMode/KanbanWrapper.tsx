@@ -22,9 +22,10 @@ import type {
 
 import CardItem from "./CardItem";
 import constant from "../../_constants";
+import { SummaryModalProvider } from "./SummaryModalContext";
 import isFrozenColumnById from "@/helper/is-fronzen";
 import FreezeSelector from "./FreezeSelector";
-import { KanbanRefetchContext } from "../../hooks/KanbanRefetchContext";
+import { KanbanRefetchContext } from "../../_hooks/KanbanRefetchContext";
 import { useToast } from "@/components/ui/toast-provider";
 
 interface KanbanWrapperProps {
@@ -117,12 +118,9 @@ export default function KanbanWrapper({
     // Khi bắt đầu kéo
     const handleDragStart = ({ active }: DragStartEvent) => {
         const id = String(active.id);
-
         const item = findItemById(columns, id);
         if (!item) return;
-
         setActiveItem(item);
-
         const columnId = findColumnIdByItemId(columns, id);
         if (columnId) setActiveColumn(columnId);
     };
@@ -131,29 +129,22 @@ export default function KanbanWrapper({
     const handleDragEnd = (event: DragEndEvent) => {
         setActiveItem(null);
         setActiveColumn(null);
-
         if (!event.over) return;
-
         const activeId = String(event.active.id);
         const overId = String(event.over.id);
-
         const fromColumnId = findColumnIdByItemId(columns, activeId);
         if (!fromColumnId) return;
-
         // Nếu drop trực tiếp lên column
         const toColumnId = columns.emails[overId]
             ? overId
             : findColumnIdByItemId(columns, overId);
-
         if (!toColumnId) return;
-
         // 🧊 Frozen → mở modal
         if (isFrozenColumnById(columns, toColumnId)) {
             setModalOpen(true);
             eventRef.current = event;
             return;
         }
-
         // Bình thường
         onDragEnd(event);
     };
@@ -166,16 +157,13 @@ export default function KanbanWrapper({
     const handleDragOver = (event: DragOverEvent) => {
         const overId = event.over?.id;
         if (!overId) return;
-
         const overIdStr = String(overId);
-
         // Hover lên item
         const columnId = findColumnIdByItemId(columns, overIdStr);
         if (columnId) {
             setActiveColumn(columnId);
             return;
         }
-
         // Hover trực tiếp lên column
         if (columns.emails[overIdStr]) {
             setActiveColumn(overIdStr);
@@ -185,28 +173,30 @@ export default function KanbanWrapper({
         <KanbanRefetchContext.Provider
             value={{ refetch, moveToColumnFromFrozen }}
         >
-            <DndContext
-                sensors={sensors}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onDragCancel={handleDragCancel}
-                onDragOver={handleDragOver}
-                autoScroll={true}
-            >
-                {" "}
-                <Board board={columns} activeColumn={activeColumn} />
-                {/* 🔥 DragOverlay — Clone item bay theo chuột */}
-                <DragOverlay>
-                    {activeItem ? (
-                        <CardItem item={activeItem} isOverlay />
-                    ) : null}
-                </DragOverlay>
-                <FreezeSelector
-                    isOpen={modalOpen}
-                    onClose={() => setModalOpen(false)}
-                    onConfirm={confirmTimeOutHandle}
-                />
-            </DndContext>
+            <SummaryModalProvider>
+                <DndContext
+                    sensors={sensors}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragCancel={handleDragCancel}
+                    onDragOver={handleDragOver}
+                    autoScroll={true}
+                >
+                    {" "}
+                    <Board board={columns} activeColumn={activeColumn} />
+                    {/* 🔥 DragOverlay — Clone item bay theo chuột */}
+                    <DragOverlay>
+                        {activeItem ? (
+                            <CardItem item={activeItem} isOverlay />
+                        ) : null}
+                    </DragOverlay>
+                    <FreezeSelector
+                        isOpen={modalOpen}
+                        onClose={() => setModalOpen(false)}
+                        onConfirm={confirmTimeOutHandle}
+                    />
+                </DndContext>
+            </SummaryModalProvider>
         </KanbanRefetchContext.Provider>
     );
 }

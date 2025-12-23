@@ -173,6 +173,7 @@ export default function useKanban() {
                     newStatus: toColumnId, // ✅ dùng ID
                 });
             }
+            showToast("Moved successfully", "success");
         } catch {
             showToast("Update failed, reverting", "error");
             setColumns(prevState);
@@ -276,16 +277,22 @@ export default function useKanban() {
                 gmailLabelName,
             });
 
-            setColumns((prev) => ({
-                ...prev,
-                columns: prev.columns.map((col) =>
-                    col.id === tempId ? { ...result.data, emailCount: 0 } : col
-                ),
-                emails: {
-                    ...prev.emails,
-                    [result.data.id]: prev.emails[tempId] ?? [],
-                },
-            }));
+            setColumns((prev) => {
+                const { [tempId]: _, ...restEmails } = prev.emails;
+
+                return {
+                    ...prev,
+                    columns: prev.columns.map((col) =>
+                        col.id === tempId
+                            ? { ...result.data, emailCount: 0 }
+                            : col
+                    ),
+                    emails: {
+                        ...restEmails,
+                        [result.data.id]: [],
+                    },
+                };
+            });
         } catch (error) {
             if (snapshot) setColumns(snapshot);
             showToast(
@@ -359,6 +366,7 @@ export default function useKanban() {
 
     const deleteKanbanColumn = async (id: string) => {
         let snapshot: KanbanBoardData | null = null;
+
         const inboxColumn = columns.columns.find(
             (c) => c.key === InBoxConstant.KANBAN_INBOX_KEY
         );
@@ -366,18 +374,21 @@ export default function useKanban() {
             showToast("Inbox column not found, cannot delete", "error");
             return;
         }
+
         const inboxId = inboxColumn.id;
         const itemsToMove = [...(columns.emails[id] ?? [])];
 
         setColumns((prev) => {
             snapshot = prev;
+
+            const { [id]: _, ...restEmails } = prev.emails;
+
             return {
                 ...prev,
                 columns: prev.columns.filter((col) => col.id !== id),
                 emails: {
-                    ...prev.emails,
-                    [inboxId]: [...prev.emails[inboxId], ...itemsToMove],
-                    [id]: undefined!,
+                    ...restEmails,
+                    [inboxId]: [...(restEmails[inboxId] ?? []), ...itemsToMove],
                 },
             };
         });
@@ -387,7 +398,6 @@ export default function useKanban() {
         if (!result) {
             if (snapshot) setColumns(snapshot);
             showToast("Delete failed, reverting", "error");
-            return;
         }
     };
 

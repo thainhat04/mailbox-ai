@@ -4,10 +4,10 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import inboxConstant from "../../_constants";
 import { KanbanItem } from "../../_types";
-import { useCountdown } from "../../hooks/useCountdown";
-import { useKanbanRefetch } from "../../hooks/KanbanRefetchContext";
-import { use, useEffect, useState } from "react";
-import SummaryModal from "./SummaryModal";
+import { useCountdown } from "../../_hooks/useCountdown";
+import { useKanbanRefetch } from "../../_hooks/KanbanRefetchContext";
+import { useEffect, useState } from "react";
+import { useSummaryModal } from "./SummaryModalContext";
 
 interface CardItemProps {
     item: KanbanItem;
@@ -17,8 +17,8 @@ interface CardItemProps {
 export default function CardItem({ item, isOverlay }: CardItemProps) {
     const countdown = useCountdown(item.snoozedUntil);
     const { moveToColumnFromFrozen } = useKanbanRefetch();
+    const { openModal } = useSummaryModal();
     const isFrozen = item.kanbanStatus === inboxConstant.FROZEN_COLUMN_KEY;
-    const [isSummaryOpen, setIsSummaryOpen] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
 
     let sortable = null;
@@ -28,14 +28,15 @@ export default function CardItem({ item, isOverlay }: CardItemProps) {
         if (!item.snoozedUntil) return;
 
         const delay = new Date(item.snoozedUntil).getTime() - Date.now();
+        if (delay > 0) {
+            const timeoutId = setTimeout(() => {
+                moveToColumnFromFrozen(item.id);
+            }, delay);
 
-        const timeoutId = setTimeout(() => {
-            moveToColumnFromFrozen(item.id);
-        }, delay);
-
-        return () => {
-            clearTimeout(timeoutId);
-        };
+            return () => {
+                clearTimeout(timeoutId);
+            };
+        } else moveToColumnFromFrozen(item.id);
     }, [item.snoozedUntil]);
 
     const style =
@@ -54,7 +55,13 @@ export default function CardItem({ item, isOverlay }: CardItemProps) {
     // Handle card click - but don't open modal while dragging
     const handleCardClick = (e: React.MouseEvent) => {
         if (!isDragging && !isOverlay && !isFrozen) {
-            setIsSummaryOpen(true);
+            openModal({
+                emailId: item.id,
+                subject: item.subject,
+                from: item.from,
+                date: item.date,
+                currentSummary: item.summary,
+            });
         }
     };
 
@@ -121,17 +128,6 @@ export default function CardItem({ item, isOverlay }: CardItemProps) {
                     <div className="absolute inset-0 rounded-xl border-2 border-dashed border-cyan-400 animate-pulse" />
                 )}
             </div>
-
-            {/* Summary Modal */}
-            <SummaryModal
-                isOpen={isSummaryOpen}
-                onClose={() => setIsSummaryOpen(false)}
-                emailId={item.id}
-                subject={item.subject}
-                from={item.from}
-                date={item.date}
-                currentSummary={item.summary}
-            />
         </>
     );
 }

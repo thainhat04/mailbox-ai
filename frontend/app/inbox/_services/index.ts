@@ -13,9 +13,10 @@ import {
     type KanbanBoardData,
     type KanbanItem,
     type SetFrozenRequest,
-    type PuzzleEmail,
-    type PuzzleEmailResponse,
-    PuzzleEmailRequest,
+    type SearchEmail,
+    type SearchEmailResponse,
+    type SearchEmailRequest,
+    type UpdateKanbanStatusResponse,
 } from "../_types";
 import type { SuccessResponse } from "@/types/success-response";
 import { api } from "@/services/index";
@@ -26,7 +27,6 @@ import type { RootState } from "@/store";
 import {
     CreateKanbanColumnRequest,
     EmailSummaryData,
-    KanbanColumn,
     KanbanColumnDetails,
     UpdateKanbanStatusRequest,
 } from "../_types/kanban";
@@ -319,7 +319,7 @@ const inboxApi = api.injectEndpoints({
             }),
         }),
         updateKanBanStatus: builder.mutation<
-            SuccessResponse<KanbanItem>,
+            SuccessResponse<UpdateKanbanStatusResponse>,
             UpdateKanbanStatusRequest
         >({
             query: (body) => ({
@@ -329,6 +329,38 @@ const inboxApi = api.injectEndpoints({
                     columnId: body.newStatus,
                 },
             }),
+            async onQueryStarted(arg, { dispatch, getState, queryFulfilled }) {
+                try {
+                    const result = await queryFulfilled;
+                    const data = result.data.data;
+
+                    // Cập nhật lại mailboxes
+                    dispatch(
+                        inboxApi.util.updateQueryData(
+                            "getMailBoxes",
+                            undefined,
+                            (draft) => {
+                                // Nguồn
+                                const sourceLabel = draft.data.find(
+                                    (mb) => mb.id === data.sourceLabel.id
+                                );
+                                if (sourceLabel) {
+                                    sourceLabel.unreadCount =
+                                        data.sourceLabel.unreadCount;
+                                }
+                                // Đích
+                                const destLabel = draft.data.find(
+                                    (mb) => mb.id === data.destinationLabel.id
+                                );
+                                if (destLabel) {
+                                    destLabel.unreadCount =
+                                        data.destinationLabel.unreadCount;
+                                }
+                            }
+                        )
+                    );
+                } catch (err) {}
+            },
         }),
         summarizeEmail: builder.query<
             SuccessResponse<EmailSummaryData>,
@@ -355,19 +387,27 @@ const inboxApi = api.injectEndpoints({
                 },
             }),
         }),
-        searchPuzzleEmails: builder.query<
-            SuccessResponse<PuzzleEmailResponse>,
-            PuzzleEmailRequest
+        searchEmails: builder.query<
+            SuccessResponse<SearchEmailResponse>,
+            SearchEmailRequest
         >({
-            query: (body) => ({
-                url: constant.URL_PUZZLE_SEARCH,
-                method: HTTP_METHOD.GET,
-                params: {
-                    q: body.q,
+            query: (body) => {
+                const params: any = {
                     page: body.page || 1,
                     limit: body.limit || 20,
-                },
-            }),
+                };
+
+                if (body.mode === "puzzy") {
+                    params.q = body.q;
+                } else if (body.mode === "semantic") {
+                    params.query = body.q;
+                }
+                return {
+                    url: constant.URL_SEARCH(body.mode),
+                    method: HTTP_METHOD.GET,
+                    params: params,
+                };
+            },
             providesTags: (_, __, arg) => [
                 {
                     type: "Emails",
@@ -375,8 +415,21 @@ const inboxApi = api.injectEndpoints({
                 },
             ],
         }),
+
+        getAllColumnDetails: builder.query<
+            SuccessResponse<KanbanColumnDetails[]>,
+            void
+        >({
+            query: () => ({
+                url: constant.URL_CREATE_KANBAN_COLUMN,
+                method: HTTP_METHOD.GET,
+            }),
+            providesTags: [
+                { type: "KanbanColumns", id: "KANBAN_COLUMNS_LIST" },
+            ],
+        }),
         createKanbanColumn: builder.mutation<
-            SuccessResponse<KanbanColumn>,
+            SuccessResponse<KanbanColumnDetails>,
             CreateKanbanColumnRequest
         >({
             query: (body) => ({
@@ -384,12 +437,26 @@ const inboxApi = api.injectEndpoints({
                 method: HTTP_METHOD.POST,
                 body,
             }),
+            async onQueryStarted(arg, { dispatch, getState, queryFulfilled }) {
+                try {
+                    const result = await queryFulfilled;
+                    dispatch(
+                        inboxApi.util.updateQueryData(
+                            "getMailBoxes",
+                            undefined,
+                            (draft) => {
+                                draft.data.push(result.data.data.label);
+                            }
+                        )
+                    );
+                } catch (error) {}
+            },
             invalidatesTags: [
                 { type: "KanbanColumns", id: "KANBAN_COLUMNS_LIST" },
             ],
         }),
         updateKanBanColumn: builder.mutation<
-            SuccessResponse<KanbanColumn>,
+            SuccessResponse<KanbanColumnDetails>,
             { id: string; body: CreateKanbanColumnRequest }
         >({
             query: ({ id, body }) => ({
@@ -397,6 +464,45 @@ const inboxApi = api.injectEndpoints({
                 method: HTTP_METHOD.PUT,
                 body,
             }),
+            async onQueryStarted(arg, { dispatch, getState, queryFulfilled }) {
+                try {
+                    // Lấy kết quả của getAllColumnDetails từ cache
+                    const cachedResult =
+                        inboxApi.endpoints.getAllColumnDetails.select(
+                            undefined
+                        )(getState() as RootState);
+
+                    let oldName = "";
+                    if (cachedResult?.data?.data) {
+                        const column = cachedResult.data.data.find(
+                            (c) => c.id === arg.id
+                        );
+                        if (column) {
+                            oldName = column.gmailLabelName;
+                        }
+                    }
+
+                    await queryFulfilled;
+
+                    // Update mailboxes if name changed
+                    if (oldName && oldName !== arg.body.gmailLabelName) {
+                        dispatch(
+                            inboxApi.util.updateQueryData(
+                                "getMailBoxes",
+                                undefined,
+                                (draft) => {
+                                    const mailbox = draft.data.find(
+                                        (mb) => mb.name === oldName
+                                    );
+                                    if (mailbox) {
+                                        mailbox.name = arg.body.gmailLabelName;
+                                    }
+                                }
+                            )
+                        );
+                    }
+                } catch (error) {}
+            },
             invalidatesTags: [
                 { type: "KanbanColumns", id: "KANBAN_COLUMNS_LIST" },
             ],
@@ -411,18 +517,7 @@ const inboxApi = api.injectEndpoints({
             }),
             invalidatesTags: [
                 { type: "KanbanColumns", id: "KANBAN_COLUMNS_LIST" },
-            ],
-        }),
-        getAllColumnDetails: builder.query<
-            SuccessResponse<KanbanColumnDetails[]>,
-            void
-        >({
-            query: () => ({
-                url: constant.URL_CREATE_KANBAN_COLUMN,
-                method: HTTP_METHOD.GET,
-            }),
-            providesTags: [
-                { type: "KanbanColumns", id: "KANBAN_COLUMNS_LIST" },
+                { type: "Emails", id: "MAILBOXES_LIST" },
             ],
         }),
     }),
@@ -440,7 +535,7 @@ export const {
     useUpdateKanBanStatusMutation,
     useSummarizeEmailQuery,
     useUpdateFrozenStatusMutation,
-    useSearchPuzzleEmailsQuery,
+    useSearchEmailsQuery,
     useCreateKanbanColumnMutation,
     useUpdateKanBanColumnMutation,
     useDeleteKanBanColumnMutation,

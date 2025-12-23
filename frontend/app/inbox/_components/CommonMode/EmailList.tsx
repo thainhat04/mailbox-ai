@@ -200,7 +200,6 @@ export default function EmailList({
     const toggleRead = async (id: string) => {
         const email = previewEmails.find((e) => e.id === id);
         if (!email) return;
-        console.log("Toggling read for", id, "current isRead:", email.isRead);
         if (email.isRead) return;
 
         const result = await modifyEmail.ModifyEmail({

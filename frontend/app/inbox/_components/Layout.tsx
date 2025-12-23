@@ -4,17 +4,22 @@ import HeaderInbox from "@/components/common/HeaderInboxEnhanced";
 import CommondLayout from "./CommonMode/CommonLayout";
 import KanbanLayout from "./KanbanMode/KanbanLayout";
 import SearchModal from "./SearchModal";
+import { ModeSearch } from "../_types";
 
 function InboxLayout() {
     const [isCommondMode, setIsCommandMode] = useState(false);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [mode, setMode] = useState<ModeSearch>("puzzy");
 
     const handleSearch = (query: string) => {
         if (query.trim()) {
             setSearchQuery(query);
             setIsSearchOpen(true);
         }
+    };
+    const handleModeChange = (newMode: ModeSearch) => {
+        setMode(newMode);
     };
 
     const handleCloseSearch = () => {
@@ -29,6 +34,8 @@ function InboxLayout() {
                 isCommondMode={isCommondMode}
                 setIsCommandMode={setIsCommandMode}
                 onSearch={handleSearch}
+                onModeChange={handleModeChange}
+                modeSearch={mode}
             />
 
             <CommondLayout isCommondMode={isCommondMode} />
@@ -42,6 +49,7 @@ function InboxLayout() {
                 isOpen={isSearchOpen}
                 onClose={handleCloseSearch}
                 searchQuery={searchQuery}
+                mode={mode}
             />
         </div>
     );

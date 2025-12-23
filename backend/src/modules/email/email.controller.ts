@@ -60,7 +60,7 @@ export class EmailController {
     private readonly emailService: EmailService,
     private readonly kanbanService: KanbanService,
     private readonly summaryService: SummaryService,
-  ) { }
+  ) {}
 
   @Get("labels")
   async getAllLabels(
@@ -127,7 +127,7 @@ export class EmailController {
     );
   }
 
-  @Get("emails/fuzzy-search")
+  @Get("emails-search/fuzzy-search")
   @ApiOperation({
     summary: "Fuzzy search emails with typo tolerance and partial matching",
     description:
@@ -155,7 +155,7 @@ export class EmailController {
     );
   }
 
-  @Post("emails/semantic-search")
+  @Get("emails-search/semantic-search")
   @ApiOperation({
     summary: "Semantic search emails using AI vector embeddings",
     description:
@@ -166,15 +166,23 @@ export class EmailController {
       "NOTE: This is different from fuzzy search which finds emails by text similarity/typos.",
   })
   @ApiBody({ type: SemanticSearchQueryDto })
-  @ApiResponse({ status: 200, description: "Semantic search emails", type: SemanticSearchResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: "Semantic search emails",
+    type: SemanticSearchResponseDto,
+  })
   async semanticSearchEmails(
-    @Body() dto: SemanticSearchQueryDto,
+    @Query() dto: SemanticSearchQueryDto,
     @CurrentUser() user: JwtPayload,
   ): Promise<ResponseDto<SemanticSearchResponseDto>> {
-    const result = await this.emailService.semanticSearchEmails(dto.query, user.sub, {
-      page: dto.page,
-      limit: dto.limit,
-    });
+    const result = await this.emailService.semanticSearchEmails(
+      dto.query,
+      user.sub,
+      {
+        page: dto.page,
+        limit: dto.limit,
+      },
+    );
     return ResponseDto.success(
       result,
       `Found ${result.total} matching emails with semantic search`,
