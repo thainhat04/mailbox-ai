@@ -858,4 +858,94 @@ export class EmailMessageRepository {
       total,
     };
   }
+
+  async semanticSearchEmails(
+    userId: string,
+    query: string,
+    embedding: number[],
+    options?: {
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{
+    results: Array<PrismaEmailMessage & { relevanceScore: number }>;
+    total: number;
+  }> {
+    const limit = options?.limit || 50;
+    const offset = options?.offset || 0;
+    const similarityThreshold = 0.45;
+
+    this.logger.debug(
+      `Semantic searching emails for user ${userId} with query: "${query}"`,
+    );
+
+    const searchQuery = `
+      SELECT
+        em.*,
+        GREATEST(
+          COALESCE(similarity(em.subject, $1), 0),
+          COALESCE(word_similarity($1, em.subject), 0),
+          COALESCE(similarity(em."from", $1), 0),
+          COALESCE(word_similarity($1, em."from"), 0),
+          COALESCE(similarity(em."fromName", $1), 0),
+          COALESCE(word_similarity($1, em."fromName"), 0),
+          COALESCE(similarity(em.snippet, $1), 0),
+          COALESCE(word_similarity($1, em.snippet), 0)
+        ) AS relevance_score
+      FROM email_messages em
+      WHERE
+        em."emailAccountId" = $2
+        AND (
+          similarity(em.subject, $2) > $3
+          OR similarity(em."from", $2) > $3
+          OR similarity(em."fromName", $2) > $3
+          OR similarity(em.snippet, $2) > $3
+          OR word_similarity($2, em.subject) > $3
+          OR word_similarity($2, em."from") > $3
+          OR word_similarity($2, em."fromName") > $3
+          OR word_similarity($2, em.snippet) > $3
+          OR em.subject ILIKE '%' || $2 || '%'
+          OR em."from" ILIKE '%' || $2 || '%'
+          OR em."fromName" ILIKE '%' || $2 || '%'
+          OR em.snippet ILIKE '%' || $2 || '%'
+        )
+      ORDER BY relevance_score DESC, em.date DESC
+      LIMIT $4 OFFSET $5
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM email_messages em
+      WHERE
+        em."emailAccountId" = ANY($1::text[])
+        AND (
+          similarity(em.subject, $2) > $3
+          OR similarity(em."from", $2) > $3
+          OR similarity(em."fromName", $2) > $3
+          OR similarity(em.snippet, $2) > $3
+          OR word_similarity($2, em.subject) > $3
+          OR word_similarity($2, em."from") > $3
+          OR word_similarity($2, em."fromName") > $3
+          OR word_similarity($2, em.snippet) > $3
+          OR em.subject ILIKE '%' || $2 || '%'
+          OR em."from" ILIKE '%' || $2 || '%'
+          OR em."fromName" ILIKE '%' || $2 || '%'
+          OR em.snippet ILIKE '%' || $2 || '%'
+        )
+    `;
+
+    const [results] = await Promise.all([
+      this.prisma.$queryRawUnsafe<
+        Array<PrismaEmailMessage & { relevance_score: number }>
+      >(searchQuery, userId, embedding, limit, offset),
+    ]);
+
+    return {
+      results: results.map((result) => ({
+        ...result,
+        relevanceScore: Number(result.relevance_score),
+      })),
+      total: results.length,
+    };
+  }
 }

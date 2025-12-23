@@ -12,6 +12,7 @@ import { OAuth2TokenService } from "./services/oauth2-token.service";
 import { MailProviderRegistry } from "./providers/provider.registry";
 import { EmailMessageRepository } from "./repositories/email-message.repository";
 import { EmailListQueryDto } from "./dto";
+import { SearchVectorService } from "./services/search-vector.service";
 
 @Injectable()
 export class EmailService {
@@ -22,7 +23,8 @@ export class EmailService {
     private readonly oauth2TokenService: OAuth2TokenService,
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
-  ) {}
+    private readonly searchVectorService: SearchVectorService,
+  ) { }
 
   async getLabelById(labelId: string, userId: string): Promise<any> {
     if (!userId) {
@@ -295,6 +297,47 @@ export class EmailService {
     );
 
     // Convert database messages to Email entities with relevance score
+    const emails = results.map((msg) => ({
+      ...this.convertToEmail(msg),
+      relevanceScore: msg.relevanceScore,
+    }));
+
+    return {
+      emails,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async semanticSearchEmails(query: string, userId: string, options?: {
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    emails: Array<Email & { relevanceScore: number }>;
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  }> {
+    const page = options?.page || 1;
+    const limit = options?.limit || 50;
+    const offset = (page - 1) * limit;
+
+    this.logger.log(
+      `Semantic search request: query="${query}", userId=${userId}, page=${page}, limit=${limit}`,
+    );
+
+
+    const embedding = await this.searchVectorService.createVectorEmbedding(query);
+
+    const { results, total } = await this.messageRepository.semanticSearchEmails(
+      userId,
+      query,
+      embedding,
+    );
+
     const emails = results.map((msg) => ({
       ...this.convertToEmail(msg),
       relevanceScore: msg.relevanceScore,

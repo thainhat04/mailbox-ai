@@ -17,3 +17,4 @@ async def create_vector_embedding(request: VectorEmbeddingRequest) -> VectorEmbe
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create vector embedding: {str(e)}")
 
+
