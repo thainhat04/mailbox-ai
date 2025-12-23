@@ -893,7 +893,7 @@ export class EmailMessageRepository {
   }> {
     const limit = options?.limit || 50;
     const offset = options?.offset || 0;
-    const similarityThreshold = 0.5;
+    const similarityThreshold = 0.2; // Lowered from 0.5 for better results
 
     this.logger.debug(
       `Semantic searching emails for user ${userId} with query: "${query}"`,

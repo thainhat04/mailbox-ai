@@ -6,7 +6,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './src/app.module';
 import { PrismaService } from './src/database/prisma.service';
-import { RedisService } from './src/common/redis/redis.service';
 import { SearchVectorService } from './src/modules/email/services/search-vector.service';
 import { EmailSyncService } from './src/modules/email/services/email-sync.service';
 import { ConfigService } from '@nestjs/config';
@@ -17,17 +16,14 @@ async function verifyEmbeddings() {
 
   const app = await NestFactory.createApplicationContext(AppModule);
   const prisma = app.get(PrismaService);
-  const redisService = app.get(RedisService);
   const searchVectorService = app.get(SearchVectorService);
   const emailSyncService = app.get(EmailSyncService);
   const configService = app.get(ConfigService);
 
   const results = {
     database: { status: '❌', message: '' },
-    redis: { status: '❌', message: '' },
     aiService: { status: '❌', message: '' },
     messages: { status: '❌', message: '', count: 0 },
-    worker: { status: '❌', message: '' },
     config: { status: '❌', message: '' },
   };
 
@@ -71,21 +67,8 @@ async function verifyEmbeddings() {
     console.log(`   ❌ Error checking extension: ${error.message}`);
   }
 
-  // 3. Check Redis connection
-  console.log('\n3️⃣ Checking Redis connection...');
-  try {
-    const publisher = redisService.getPublisher();
-    await publisher.ping();
-    results.redis = { status: '✅', message: 'Redis is connected' };
-    console.log('   ✅ Redis is connected');
-  } catch (error) {
-    results.redis = { status: '❌', message: `Redis connection failed: ${error.message}` };
-    console.log(`   ❌ Redis connection failed: ${error.message}`);
-    console.log('   💡 Make sure Redis is running and REDIS_URL is correct');
-  }
-
-  // 4. Check AI Service
-  console.log('\n4️⃣ Checking AI Service...');
+  // 3. Check AI Service
+  console.log('\n3️⃣ Checking AI Service...');
   const aiServiceUrl = configService.get<string>('AI_SERVICE_URL', 'http://localhost:8000');
   try {
     const response = await axios.get(`${aiServiceUrl}/health`, { timeout: 5000 });
@@ -98,8 +81,8 @@ async function verifyEmbeddings() {
     console.log('   💡 Make sure AI service is running and AI_SERVICE_URL is correct');
   }
 
-  // 5. Check messages without embeddings
-  console.log('\n5️⃣ Checking messages without embeddings...');
+  // 4. Check messages without embeddings
+  console.log('\n4️⃣ Checking messages without embeddings...');
   try {
     const messagesWithoutEmbeddings = await prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*) as count
@@ -122,20 +105,18 @@ async function verifyEmbeddings() {
     console.log(`   ❌ Error checking messages: ${error.message}`);
   }
 
-  // 6. Check configuration
-  console.log('\n6️⃣ Checking configuration...');
-  const redisUrl = configService.get<string>('REDIS_URL', 'redis://localhost:6379');
-  console.log(`   REDIS_URL: ${redisUrl}`);
+  // 5. Check configuration
+  console.log('\n5️⃣ Checking configuration...');
   console.log(`   AI_SERVICE_URL: ${aiServiceUrl}`);
 
-  if (redisUrl && aiServiceUrl) {
+  if (aiServiceUrl) {
     results.config = { status: '✅', message: 'Configuration looks good' };
   } else {
     results.config = { status: '❌', message: 'Missing configuration' };
   }
 
-  // 7. Test embedding generation
-  console.log('\n7️⃣ Testing embedding generation...');
+  // 6. Test embedding generation
+  console.log('\n6️⃣ Testing embedding generation...');
   try {
     const testEmbedding = await searchVectorService.createVectorEmbedding('test email content');
     if (testEmbedding && testEmbedding.length === 384) {
@@ -152,7 +133,6 @@ async function verifyEmbeddings() {
   console.log('📊 SUMMARY');
   console.log('='.repeat(60));
   console.log(`Database:        ${results.database.status} ${results.database.message}`);
-  console.log(`Redis:           ${results.redis.status} ${results.redis.message}`);
   console.log(`AI Service:      ${results.aiService.status} ${results.aiService.message}`);
   console.log(`Messages:        ${results.messages.status} ${results.messages.message}`);
   console.log(`Configuration:   ${results.config.status} ${results.config.message}`);
@@ -160,25 +140,17 @@ async function verifyEmbeddings() {
   // Recommendations
   console.log('\n💡 RECOMMENDATIONS:');
   if (results.database.status === '❌') {
-    console.log('   - Install pgvector extension: CREATE EXTENSION IF NOT EXISTS vector;');
-    console.log('   - Run migrations: npx prisma migrate deploy');
-  }
-  if (results.redis.status === '❌') {
-    console.log('   - Start Redis: redis-server (or docker run redis)');
-    console.log('   - Check REDIS_URL in .env file');
+    console.log('   - Install pgvector extension: npx ts-node src/scripts/run-pgvector-setup.ts');
+    console.log('   - Or manually: CREATE EXTENSION IF NOT EXISTS vector;');
   }
   if (results.aiService.status === '❌') {
-    console.log('   - Start AI service: cd ai-service && python main.py');
+    console.log('   - Start AI service: cd ai-service && source .venv/bin/activate && uvicorn app.main:app --reload');
     console.log('   - Check AI_SERVICE_URL in .env file');
   }
   if (results.messages.count > 0) {
     console.log(`   - ${results.messages.count} messages need embeddings`);
-    console.log('   - Start vector worker: npm run start:vector-worker');
-    console.log('   - Or trigger sync to queue messages for embedding generation');
-  }
-  if (results.worker.status === '❌') {
-    console.log('   - Vector worker is not running');
-    console.log('   - Start it: npm run start:vector-worker');
+    console.log('   - Embeddings will be generated automatically during email sync (every 30s)');
+    console.log('   - Or run backfill: npx ts-node src/scripts/backfill-embeddings.ts');
   }
 
   await app.close();
