@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 
-import { PuzzleEmail } from "@/app/inbox/_types";
+import { SearchEmail } from "@/app/inbox/_types";
 import { formatEmailDate } from "@/helper/dateFormatter";
 
 interface SimpleCardItemProps {
-    item: PuzzleEmail;
-    onClick: (item: PuzzleEmail) => void;
+    item: SearchEmail;
+    onClick: (item: SearchEmail) => void;
 }
 
 export default function SimpleCardItem({ item, onClick }: SimpleCardItemProps) {
@@ -46,6 +46,12 @@ export default function SimpleCardItem({ item, onClick }: SimpleCardItemProps) {
                     {item.preview && (
                         <p className="text-xs text-white/60 line-clamp-2">
                             {item.preview}
+                        </p>
+                    )}
+                    {/* Relevance Score */}
+                    {item.relevanceScore && (
+                        <p className="text-xs text-cyan-300 font-medium">
+                            Relevance Score: {item.relevanceScore.toFixed(2)}
                         </p>
                     )}
                 </div>

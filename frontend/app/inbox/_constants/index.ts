@@ -1,3 +1,5 @@
+import { ModeSearch } from "../_types";
+
 const constant = {
     URL_MAILBOXES: "/labels",
     FILE_MAX_SIZE_MB: 15,
@@ -13,7 +15,10 @@ const constant = {
     URL_FROZEN_EMAILS: (id: string) => `/${id}/freeze`,
     URL_UNFREEZE_EMAILS: (id: string) => `/${id}/unfreeze`,
     URL_SUMMARIZE_EMAIL: (id: string) => `/${id}/summary`,
-    URL_PUZZLE_SEARCH: "/emails/fuzzy-search",
+    URL_SEARCH: (mode: ModeSearch) =>
+        mode === "puzzy"
+            ? "/emails-search/fuzzy-search"
+            : "/emails-search/semantic-search",
     URL_CREATE_KANBAN_COLUMN: "/kanban/columns",
 };
 export default constant;

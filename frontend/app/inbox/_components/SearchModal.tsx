@@ -1,25 +1,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchPuzzleEmailsQuery } from "../_services";
+import { useSearchEmailsQuery } from "../_services";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import SimpleCardItem from "@/components/ui/SimpleCardItem";
-import { PreviewEmail, PuzzleEmail } from "../_types";
+import { PreviewEmail, SearchEmail, ModeSearch } from "../_types";
 import EmailDetail from "./CommonMode/EmailDetail";
 
 interface SearchModalProps {
     isOpen: boolean;
     onClose: () => void;
     searchQuery: string;
+    mode: ModeSearch;
 }
 
 export default function SearchModal({
     isOpen,
     onClose,
     searchQuery,
+    mode,
 }: SearchModalProps) {
     const [currentPage, setCurrentPage] = useState(1);
-    const [emails, setEmails] = useState<PuzzleEmail[]>([]);
+    const [emails, setEmails] = useState<SearchEmail[]>([]);
     const [total, setTotal] = useState<number>(0);
     const [totalPages, setTotalPages] = useState<number>(0);
     const [selectedEmail, setSelectedEmail] = useState<PreviewEmail | null>(
@@ -28,14 +30,19 @@ export default function SearchModal({
     const limit = 20;
 
     const { result, isLoading, isFetching, error } = useQueryHandler(
-        useSearchPuzzleEmailsQuery,
+        useSearchEmailsQuery,
         {
             q: searchQuery,
             page: currentPage,
             limit: limit,
+            mode: mode,
         },
         {
-            skip: !isOpen || !searchQuery.trim(),
+            skip:
+                !isOpen ||
+                !searchQuery.trim() ||
+                searchQuery.length === 0 ||
+                !mode,
         }
     );
 
@@ -43,7 +50,10 @@ export default function SearchModal({
     useEffect(() => {
         setCurrentPage(1);
         setSelectedEmail(null);
-    }, [searchQuery]);
+        setEmails([]);
+        setTotal(0);
+        setTotalPages(0);
+    }, [searchQuery, mode]);
 
     useEffect(() => {
         if (result) {
@@ -64,7 +74,7 @@ export default function SearchModal({
         };
     }, [isOpen]);
 
-    const handleEmailClick = (email: PuzzleEmail) => {
+    const handleEmailClick = (email: SearchEmail) => {
         setSelectedEmail(email);
     };
 
@@ -191,19 +201,24 @@ export default function SearchModal({
                 {/* Pagination Footer */}
                 {totalPages > 1 && !isLoading && !error && (
                     <div className="border-t border-white/10 p-6">
-                        <div className="flex items-center justify-between">
+                        <div
+                            style={{
+                                alignItems: "stretch",
+                            }}
+                            className="flex justify-between"
+                        >
                             {/* Page Info */}
                             <div className="text-sm text-white/60">
                                 Page {currentPage} of {totalPages}
                             </div>
 
                             {/* Pagination Controls */}
-                            <div className="flex items-center gap-2">
+                            <div className="flex gap-2">
                                 {/* First Page */}
                                 <button
                                     onClick={() => setCurrentPage(1)}
                                     disabled={currentPage === 1}
-                                    className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
+                                    className="px-3 cursor-pointer py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
                                 >
                                     <svg
                                         className="w-4 h-4"
@@ -228,7 +243,7 @@ export default function SearchModal({
                                         )
                                     }
                                     disabled={currentPage === 1}
-                                    className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
+                                    className="px-4 cursor-pointer py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
                                 >
                                     Previous
                                 </button>
@@ -270,7 +285,7 @@ export default function SearchModal({
                                                         className={`w-10 h-10 rounded-lg border transition-colors ${
                                                             currentPage === page
                                                                 ? "bg-cyan-500/20 border-cyan-400/50 text-cyan-400"
-                                                                : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
+                                                                : "bg-white/5 cursor-pointer border-white/10 text-white/80 hover:bg-white/10"
                                                         }`}
                                                     >
                                                         {page}
@@ -288,7 +303,7 @@ export default function SearchModal({
                                         )
                                     }
                                     disabled={currentPage === totalPages}
-                                    className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
+                                    className="px-4 cursor-pointer py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
                                 >
                                     Next
                                 </button>
@@ -297,7 +312,7 @@ export default function SearchModal({
                                 <button
                                     onClick={() => setCurrentPage(totalPages)}
                                     disabled={currentPage === totalPages}
-                                    className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
+                                    className="px-3 cursor-pointer py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
                                 >
                                     <svg
                                         className="w-4 h-4"
