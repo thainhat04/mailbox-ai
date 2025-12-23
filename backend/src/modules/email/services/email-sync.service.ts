@@ -5,16 +5,12 @@ import { MailProviderRegistry } from "../providers/provider.registry";
 import { EmailMessageRepository } from "../repositories/email-message.repository";
 import { OAuth2TokenService } from "./oauth2-token.service";
 import { SearchVectorService } from "./search-vector.service";
-import {
-  RedisService,
-  VectorSyncBatchMessage,
-} from "../../../common/redis/redis.service";
 import { SyncConfig } from "../../../common/configs/sync.config";
 import {
   retryWithBackoff,
   isTokenExpiredError,
 } from "../../../common/utils/retry.util";
-import { v4 as uuidv4 } from "uuid";
+
 
 /**
  * Email Sync Service
@@ -30,8 +26,7 @@ export class EmailSyncService {
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
     private readonly searchVectorService: SearchVectorService,
-    private readonly redisService: RedisService,
-  ) {}
+  ) { }
 
   @Cron(CronExpression.EVERY_5_HOURS)
   //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
@@ -212,12 +207,13 @@ export class EmailSyncService {
         `Sync completed for account ${emailAccountId}: +${messagesAdded} messages, -${messagesDeleted} messages`,
       );
 
-      // Publish to Redis queue for vector embedding generation (async, non-blocking)
+      // Generate embeddings for new messages (async, non-blocking)
       if (messagesAdded > 0) {
-        this.publishVectorSyncMessages(emailAccountId).catch((error) => {
-          this.logger.error(
-            `Failed to publish vector sync messages for account ${emailAccountId}: ${error.message}`,
+        this.generateEmbeddingsForAccount(emailAccountId).catch((error) => {
+          this.logger.warn(
+            `Failed to generate embeddings for account ${emailAccountId}: ${error.message}`,
           );
+          // Don't fail the sync if embedding generation fails
         });
       }
 
@@ -504,15 +500,13 @@ export class EmailSyncService {
   }
 
   /**
-   * Publish vector sync messages to Redis in batches of 20
+   * Generate embeddings for messages without embeddings in batches of 20
    */
-  async publishVectorSyncMessages(emailAccountId: string): Promise<void> {
-    this.logger.log(
-      `Publishing vector sync messages for account: ${emailAccountId}`,
-    );
+  async generateEmbeddingsForAccount(emailAccountId: string): Promise<void> {
+    this.logger.log(`[EMBEDDINGS] Generating embeddings for account: ${emailAccountId}`);
 
     try {
-      // Find messages without embeddings (limit to 100 to process in 5 batches of 20)
+      // Find messages without embeddings (limit to 100)
       const messagesWithoutEmbeddings = await this.prisma.$queryRaw<
         Array<{
           id: string;
@@ -531,55 +525,63 @@ export class EmailSyncService {
       `;
 
       if (messagesWithoutEmbeddings.length === 0) {
-        this.logger.debug(
-          `No messages without embeddings for account ${emailAccountId}`,
-        );
+        this.logger.debug(`[EMBEDDINGS] No messages without embeddings for account ${emailAccountId}`);
         return;
       }
 
       this.logger.log(
-        `Found ${messagesWithoutEmbeddings.length} messages without embeddings`,
+        `[EMBEDDINGS] Found ${messagesWithoutEmbeddings.length} messages without embeddings`,
       );
 
-      // Split into batches of 20
+      // Process in batches of 20
       const BATCH_SIZE = 20;
-      const batches: VectorSyncBatchMessage[] = [];
+      const totalBatches = Math.ceil(messagesWithoutEmbeddings.length / BATCH_SIZE);
 
       for (let i = 0; i < messagesWithoutEmbeddings.length; i += BATCH_SIZE) {
-        const batchEmails = messagesWithoutEmbeddings.slice(i, i + BATCH_SIZE);
+        const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+        const batch = messagesWithoutEmbeddings.slice(i, i + BATCH_SIZE);
 
-        const batchMessage: VectorSyncBatchMessage = {
-          batchId: uuidv4(),
-          emails: batchEmails.map((msg) => ({
-            emailMessageId: msg.id,
-            subject: msg.subject || "",
-            bodyText: msg.bodyText || "",
-          })),
-          timestamp: new Date(),
-        };
-
-        batches.push(batchMessage);
-      }
-
-      // Publish all batches to Redis
-      this.logger.log(
-        `Publishing ${batches.length} batches to Redis queue (channel: email:vector:sync:batch)`,
-      );
-
-      for (let i = 0; i < batches.length; i++) {
-        const batch = batches[i];
-        await this.redisService.publishVectorSyncBatchMessage(batch);
         this.logger.debug(
-          `Published batch ${i + 1}/${batches.length} (ID: ${batch.batchId}, ${batch.emails.length} emails)`,
+          `[EMBEDDINGS] Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`,
         );
+
+        // Prepare texts for batch embedding
+        const texts = batch.map((msg) =>
+          `${msg.subject || ''}\n${msg.bodyText || ''}`.trim()
+        );
+
+        try {
+          // Generate embeddings in batch
+          const embeddings = await this.searchVectorService.createVectorEmbeddingBatch(texts);
+
+          if (!embeddings || embeddings.length === 0) {
+            this.logger.warn(
+              `[EMBEDDINGS] Failed to generate embeddings for batch ${batchNumber}, skipping`,
+            );
+            continue;
+          }
+
+          // Store embeddings in database
+          const emailMessageIds = batch.map((msg) => msg.id);
+          await this.searchVectorService.storeBatchEmbeddings(emailMessageIds, embeddings);
+
+          this.logger.debug(
+            `[EMBEDDINGS] ✓ Batch ${batchNumber}/${totalBatches} completed (${embeddings.length} embeddings stored)`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `[EMBEDDINGS] Failed to process batch ${batchNumber}: ${error.message}`,
+          );
+          // Continue with next batch even if one fails
+        }
       }
 
       this.logger.log(
-        `✅ Published ${batches.length} batches (${messagesWithoutEmbeddings.length} total emails) to Redis queue`,
+        `[EMBEDDINGS] ✅ Completed embedding generation for account ${emailAccountId} (${messagesWithoutEmbeddings.length} emails processed)`,
       );
     } catch (error) {
       this.logger.error(
-        `Failed to publish vector sync messages for account ${emailAccountId}: ${error.message}`,
+        `[EMBEDDINGS] Failed to generate embeddings for account ${emailAccountId}: ${error.message}`,
       );
       throw error;
     }

@@ -12,7 +12,6 @@ import { SummaryService } from './services/summary.service';
 import { SnoozeSchedulerService } from './services/snooze-scheduler.service';
 import { SearchVectorService } from './services/search-vector.service';
 import { DatabaseModule } from '../../database/database.module';
-import { VectorWorkerService } from '../../workers/vector-worker.service';
 
 // Provider abstraction
 import { GmailProvider } from './providers/gmail/gmail.provider';
@@ -46,7 +45,6 @@ import { EmailMessageRepository } from './repositories/email-message.repository'
     SearchVectorService,
 
     // Workers
-    VectorWorkerService,
 
     // Repository
     EmailMessageRepository,
