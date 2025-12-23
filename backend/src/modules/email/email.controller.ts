@@ -18,6 +18,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiQuery,
+  ApiResponse,
 } from "@nestjs/swagger";
 import { EmailService } from "./email.service";
 import { KanbanService } from "./services/kanban.service";
@@ -147,6 +148,8 @@ export class EmailController {
 
   @Post("emails/semantic-search")
   @ApiOperation({ summary: "Semantic search emails" })
+  @ApiBody({ type: SemanticSearchQueryDto })
+  @ApiResponse({ status: 200, description: "Semantic search emails", type: SemanticSearchResponseDto })
   async semanticSearchEmails(
     @Body() dto: SemanticSearchQueryDto,
     @CurrentUser() user: JwtPayload,
