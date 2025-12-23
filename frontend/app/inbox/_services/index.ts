@@ -412,7 +412,7 @@ const inboxApi = api.injectEndpoints({
             providesTags: (_, __, arg) => [
                 {
                     type: "Emails",
-                    id: `PUZZLE-${arg.q}-${arg.page}`,
+                    id: `SEARCH-${arg.q}-${arg.page}`,
                 },
             ],
         }),

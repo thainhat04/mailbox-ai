@@ -241,7 +241,7 @@ function HeaderInbox({
                                     ? "bg-linear-to-r from-purple-500/30 to-pink-500/30 text-purple-300"
                                     : "hover:bg-white/5 text-white/60 hover:text-white/80"
                             }`}
-                            title="Pattern-based puzzle search"
+                            title="Pattern-based fuzzy search"
                         >
                             <span className="flex items-center gap-1.5">
                                 <svg
@@ -257,7 +257,7 @@ function HeaderInbox({
                                         d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"
                                     />
                                 </svg>
-                                Puzzle
+                                Fuzzy
                             </span>
                         </button>
                     </div>
