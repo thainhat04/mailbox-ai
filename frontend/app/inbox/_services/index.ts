@@ -13,9 +13,9 @@ import {
     type KanbanBoardData,
     type KanbanItem,
     type SetFrozenRequest,
-    type PuzzleEmail,
-    type PuzzleEmailResponse,
-    type PuzzleEmailRequest,
+    type SearchEmail,
+    type SearchEmailResponse,
+    type SearchEmailRequest,
     type UpdateKanbanStatusResponse,
 } from "../_types";
 import type { SuccessResponse } from "@/types/success-response";
@@ -27,7 +27,6 @@ import type { RootState } from "@/store";
 import {
     CreateKanbanColumnRequest,
     EmailSummaryData,
-    KanbanColumn,
     KanbanColumnDetails,
     UpdateKanbanStatusRequest,
 } from "../_types/kanban";
@@ -388,19 +387,27 @@ const inboxApi = api.injectEndpoints({
                 },
             }),
         }),
-        searchPuzzleEmails: builder.query<
-            SuccessResponse<PuzzleEmailResponse>,
-            PuzzleEmailRequest
+        searchEmails: builder.query<
+            SuccessResponse<SearchEmailResponse>,
+            SearchEmailRequest
         >({
-            query: (body) => ({
-                url: constant.URL_PUZZLE_SEARCH,
-                method: HTTP_METHOD.GET,
-                params: {
-                    q: body.q,
+            query: (body) => {
+                const params: any = {
                     page: body.page || 1,
                     limit: body.limit || 20,
-                },
-            }),
+                };
+
+                if (body.mode === "puzzy") {
+                    params.q = body.q;
+                } else if (body.mode === "semantic") {
+                    params.query = body.q;
+                }
+                return {
+                    url: constant.URL_SEARCH(body.mode),
+                    method: HTTP_METHOD.GET,
+                    params: params,
+                };
+            },
             providesTags: (_, __, arg) => [
                 {
                     type: "Emails",
@@ -408,6 +415,7 @@ const inboxApi = api.injectEndpoints({
                 },
             ],
         }),
+
         getAllColumnDetails: builder.query<
             SuccessResponse<KanbanColumnDetails[]>,
             void
@@ -527,7 +535,7 @@ export const {
     useUpdateKanBanStatusMutation,
     useSummarizeEmailQuery,
     useUpdateFrozenStatusMutation,
-    useSearchPuzzleEmailsQuery,
+    useSearchEmailsQuery,
     useCreateKanbanColumnMutation,
     useUpdateKanBanColumnMutation,
     useDeleteKanBanColumnMutation,

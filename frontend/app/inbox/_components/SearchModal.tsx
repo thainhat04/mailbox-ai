@@ -1,25 +1,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchPuzzleEmailsQuery } from "../_services";
+import { useSearchEmailsQuery } from "../_services";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import SimpleCardItem from "@/components/ui/SimpleCardItem";
-import { PreviewEmail, PuzzleEmail } from "../_types";
+import { PreviewEmail, SearchEmail, ModeSearch } from "../_types";
 import EmailDetail from "./CommonMode/EmailDetail";
 
 interface SearchModalProps {
     isOpen: boolean;
     onClose: () => void;
     searchQuery: string;
+    mode: ModeSearch;
 }
 
 export default function SearchModal({
     isOpen,
     onClose,
     searchQuery,
+    mode,
 }: SearchModalProps) {
     const [currentPage, setCurrentPage] = useState(1);
-    const [emails, setEmails] = useState<PuzzleEmail[]>([]);
+    const [emails, setEmails] = useState<SearchEmail[]>([]);
     const [total, setTotal] = useState<number>(0);
     const [totalPages, setTotalPages] = useState<number>(0);
     const [selectedEmail, setSelectedEmail] = useState<PreviewEmail | null>(
@@ -28,14 +30,19 @@ export default function SearchModal({
     const limit = 20;
 
     const { result, isLoading, isFetching, error } = useQueryHandler(
-        useSearchPuzzleEmailsQuery,
+        useSearchEmailsQuery,
         {
             q: searchQuery,
             page: currentPage,
             limit: limit,
+            mode: mode,
         },
         {
-            skip: !isOpen || !searchQuery.trim(),
+            skip:
+                !isOpen ||
+                !searchQuery.trim() ||
+                searchQuery.length === 0 ||
+                !mode,
         }
     );
 
@@ -43,8 +50,10 @@ export default function SearchModal({
     useEffect(() => {
         setCurrentPage(1);
         setSelectedEmail(null);
+        setEmails([]);
+        setTotal(0);
         setTotalPages(0);
-    }, [searchQuery]);
+    }, [searchQuery, mode]);
 
     useEffect(() => {
         if (result) {
@@ -65,7 +74,7 @@ export default function SearchModal({
         };
     }, [isOpen]);
 
-    const handleEmailClick = (email: PuzzleEmail) => {
+    const handleEmailClick = (email: SearchEmail) => {
         setSelectedEmail(email);
     };
 

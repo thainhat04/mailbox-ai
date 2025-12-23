@@ -5,13 +5,16 @@ import { MailProviderRegistry } from "../providers/provider.registry";
 import { EmailMessageRepository } from "../repositories/email-message.repository";
 import { OAuth2TokenService } from "./oauth2-token.service";
 import { SearchVectorService } from "./search-vector.service";
-import { RedisService, VectorSyncBatchMessage } from "../../../common/redis/redis.service";
+import {
+  RedisService,
+  VectorSyncBatchMessage,
+} from "../../../common/redis/redis.service";
 import { SyncConfig } from "../../../common/configs/sync.config";
 import {
   retryWithBackoff,
   isTokenExpiredError,
 } from "../../../common/utils/retry.util";
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 
 /**
  * Email Sync Service
@@ -28,9 +31,10 @@ export class EmailSyncService {
     private readonly messageRepository: EmailMessageRepository,
     private readonly searchVectorService: SearchVectorService,
     private readonly redisService: RedisService,
-  ) { }
+  ) {}
 
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  @Cron(CronExpression.EVERY_5_HOURS)
+  //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
   async syncAllEmails(): Promise<void> {
     this.logger.log("[EMAILS] Starting scheduled email sync");
 
@@ -67,7 +71,8 @@ export class EmailSyncService {
     }
   }
 
-  @Cron(CronExpression.EVERY_11_HOURS)
+  @Cron(CronExpression.EVERY_5_HOURS)
+  //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
   async syncAllLabels(): Promise<void> {
     this.logger.log("[LABELS] Starting scheduled label sync");
 
@@ -156,9 +161,9 @@ export class EmailSyncService {
       // Convert SyncStateData to SyncState
       const syncState = syncStateData
         ? {
-          historyId: syncStateData.lastSyncedHistoryId,
-          deltaLink: syncStateData.lastDeltaLink,
-        }
+            historyId: syncStateData.lastSyncedHistoryId,
+            deltaLink: syncStateData.lastDeltaLink,
+          }
         : {};
 
       // Perform sync with retry logic
@@ -502,7 +507,9 @@ export class EmailSyncService {
    * Publish vector sync messages to Redis in batches of 20
    */
   async publishVectorSyncMessages(emailAccountId: string): Promise<void> {
-    this.logger.log(`Publishing vector sync messages for account: ${emailAccountId}`);
+    this.logger.log(
+      `Publishing vector sync messages for account: ${emailAccountId}`,
+    );
 
     try {
       // Find messages without embeddings (limit to 100 to process in 5 batches of 20)
@@ -524,7 +531,9 @@ export class EmailSyncService {
       `;
 
       if (messagesWithoutEmbeddings.length === 0) {
-        this.logger.debug(`No messages without embeddings for account ${emailAccountId}`);
+        this.logger.debug(
+          `No messages without embeddings for account ${emailAccountId}`,
+        );
         return;
       }
 
@@ -543,8 +552,8 @@ export class EmailSyncService {
           batchId: uuidv4(),
           emails: batchEmails.map((msg) => ({
             emailMessageId: msg.id,
-            subject: msg.subject || '',
-            bodyText: msg.bodyText || '',
+            subject: msg.subject || "",
+            bodyText: msg.bodyText || "",
           })),
           timestamp: new Date(),
         };

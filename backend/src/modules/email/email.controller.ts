@@ -33,6 +33,8 @@ import {
   SuggestionResponseDto,
   SuggestionItemDto,
   SuggestionType,
+  SemanticSearchQueryDto,
+  SemanticSearchResponseDto,
 } from "./dto";
 import { ResponseDto } from "../../common/dtos/response.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
@@ -118,7 +120,7 @@ export class EmailController {
     );
   }
 
-  @Get("emails/fuzzy-search")
+  @Get("emails-search/fuzzy-search")
   @ApiOperation({
     summary: "Fuzzy search emails with typo tolerance and partial matching",
     description:
@@ -140,6 +142,26 @@ export class EmailController {
     return ResponseDto.success(
       result,
       `Found ${result.total} matching emails with fuzzy search`,
+    );
+  }
+
+  @Get("emails-search/semantic-search")
+  @ApiOperation({ summary: "Semantic search emails" })
+  async semanticSearchEmails(
+    @Query() dto: SemanticSearchQueryDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<SemanticSearchResponseDto>> {
+    const result = await this.emailService.semanticSearchEmails(
+      dto.query,
+      user.sub,
+      {
+        page: dto.page,
+        limit: dto.limit,
+      },
+    );
+    return ResponseDto.success(
+      result,
+      `Found ${result.total} matching emails with semantic search`,
     );
   }
 
