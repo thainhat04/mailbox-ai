@@ -1,5 +1,5 @@
 from .summarization import SummarizeRequest, SummarizeResponse, HealthResponse as SummarizationHealthResponse
-from .search_vector import VectorEmbeddingRequest, VectorEmbeddingResponse, HealthResponse
+from .search_vector import VectorEmbeddingRequest, VectorEmbeddingResponse, BatchVectorEmbeddingRequest, BatchVectorEmbeddingResponse, HealthResponse
 
 __all__ = [
     "SummarizeRequest",
@@ -7,5 +7,7 @@ __all__ = [
     "SummarizationHealthResponse",
     "VectorEmbeddingRequest",
     "VectorEmbeddingResponse",
+    "BatchVectorEmbeddingRequest",
+    "BatchVectorEmbeddingResponse",
     "HealthResponse",
 ]

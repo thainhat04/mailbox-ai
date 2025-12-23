@@ -329,13 +329,27 @@ export class EmailService {
       `Semantic search request: query="${query}", userId=${userId}, page=${page}, limit=${limit}`,
     );
 
-
+    // Generate embedding for the query
     const embedding = await this.searchVectorService.createVectorEmbedding(query);
+
+    // Validate embedding
+    if (!embedding || embedding.length === 0) {
+      this.logger.error(`Failed to generate embedding for query: "${query}"`);
+      throw new BadRequestException(
+        'Failed to generate search embedding. Please try again or check AI service.',
+      );
+    }
+
+    this.logger.debug(`Generated embedding with ${embedding.length} dimensions`);
 
     const { results, total } = await this.messageRepository.semanticSearchEmails(
       userId,
       query,
       embedding,
+      {
+        limit,
+        offset,
+      },
     );
 
     const emails = results.map((msg) => ({

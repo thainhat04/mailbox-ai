@@ -893,79 +893,94 @@ export class EmailMessageRepository {
   }> {
     const limit = options?.limit || 50;
     const offset = options?.offset || 0;
-    const similarityThreshold = 0.45;
+    const similarityThreshold = 0.5;
 
     this.logger.debug(
       `Semantic searching emails for user ${userId} with query: "${query}"`,
     );
 
+    // Get all email account IDs for the user
+    const emailAccounts = await this.prisma.emailAccount.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (emailAccounts.length === 0) {
+      return { results: [], total: 0 };
+    }
+
+    const accountIds = emailAccounts.map((acc) => acc.id);
+    const embeddingStr = `[${embedding.join(',')}]`;
+
+    // Use pgvector for semantic similarity search
     const searchQuery = `
       SELECT
         em.*,
-        GREATEST(
-          COALESCE(similarity(em.subject, $1), 0),
-          COALESCE(word_similarity($1, em.subject), 0),
-          COALESCE(similarity(em."from", $1), 0),
-          COALESCE(word_similarity($1, em."from"), 0),
-          COALESCE(similarity(em."fromName", $1), 0),
-          COALESCE(word_similarity($1, em."fromName"), 0),
-          COALESCE(similarity(em.snippet, $1), 0),
-          COALESCE(word_similarity($1, em.snippet), 0)
-        ) AS relevance_score
+        (1 - (mb.embedding <=> $1::vector)) AS relevance_score
       FROM email_messages em
+      INNER JOIN message_bodies mb ON mb."emailMessageId" = em.id
       WHERE
-        em."emailAccountId" = $2
-        AND (
-          similarity(em.subject, $2) > $3
-          OR similarity(em."from", $2) > $3
-          OR similarity(em."fromName", $2) > $3
-          OR similarity(em.snippet, $2) > $3
-          OR word_similarity($2, em.subject) > $3
-          OR word_similarity($2, em."from") > $3
-          OR word_similarity($2, em."fromName") > $3
-          OR word_similarity($2, em.snippet) > $3
-          OR em.subject ILIKE '%' || $2 || '%'
-          OR em."from" ILIKE '%' || $2 || '%'
-          OR em."fromName" ILIKE '%' || $2 || '%'
-          OR em.snippet ILIKE '%' || $2 || '%'
-        )
-      ORDER BY relevance_score DESC, em.date DESC
+        em."emailAccountId" = ANY($2::text[])
+        AND mb.embedding IS NOT NULL
+        AND (1 - (mb.embedding <=> $1::vector)) > $3
+      ORDER BY mb.embedding <=> $1::vector ASC
       LIMIT $4 OFFSET $5
     `;
 
     const countQuery = `
       SELECT COUNT(*) as total
       FROM email_messages em
+      INNER JOIN message_bodies mb ON mb."emailMessageId" = em.id
       WHERE
         em."emailAccountId" = ANY($1::text[])
-        AND (
-          similarity(em.subject, $2) > $3
-          OR similarity(em."from", $2) > $3
-          OR similarity(em."fromName", $2) > $3
-          OR similarity(em.snippet, $2) > $3
-          OR word_similarity($2, em.subject) > $3
-          OR word_similarity($2, em."from") > $3
-          OR word_similarity($2, em."fromName") > $3
-          OR word_similarity($2, em.snippet) > $3
-          OR em.subject ILIKE '%' || $2 || '%'
-          OR em."from" ILIKE '%' || $2 || '%'
-          OR em."fromName" ILIKE '%' || $2 || '%'
-          OR em.snippet ILIKE '%' || $2 || '%'
-        )
+        AND mb.embedding IS NOT NULL
+        AND (1 - (mb.embedding <=> $2::vector)) > $3
     `;
 
-    const [results] = await Promise.all([
+    // Execute both queries in parallel
+    const [results, countResult] = await Promise.all([
       this.prisma.$queryRawUnsafe<
         Array<PrismaEmailMessage & { relevance_score: number }>
-      >(searchQuery, userId, embedding, limit, offset),
+      >(searchQuery, embeddingStr, accountIds, similarityThreshold, limit, offset),
+      this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+        countQuery,
+        accountIds,
+        embeddingStr,
+        similarityThreshold,
+      ),
     ]);
 
+    // Fetch full message details with relations for each result
+    const messagesWithDetails = await Promise.all(
+      results.map(async (result) => {
+        const fullMessage = await this.prisma.emailMessage.findUnique({
+          where: { id: result.id },
+          include: {
+            body: true,
+            attachments: true,
+          },
+        });
+
+        if (!fullMessage) {
+          throw new Error(`Email message ${result.id} not found`);
+        }
+
+        return {
+          ...fullMessage,
+          relevanceScore: Number(result.relevance_score),
+        } as PrismaEmailMessage & { relevanceScore: number };
+      }),
+    );
+
+    const total = Number(countResult[0]?.total || 0);
+
+    this.logger.log(
+      `Semantic search found ${total} results, returning ${results.length} with limit ${limit}`,
+    );
+
     return {
-      results: results.map((result) => ({
-        ...result,
-        relevanceScore: Number(result.relevance_score),
-      })),
-      total: results.length,
+      results: messagesWithDetails,
+      total,
     };
   }
 }

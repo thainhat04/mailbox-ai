@@ -1,35 +1,16 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate
-from app.core.config import settings
+from sentence_transformers import SentenceTransformer
 import re
-import json
 
 
 class SearchVectorService:
-    """Service for searching vectors using Gemini via LangChain"""
+    """Service for generating vector embeddings using local sentence-transformers model"""
 
     def __init__(self):
-        # Initialize Gemini model via LangChain
-        self.llm = ChatGoogleGenerativeAI(
-            model=settings.GEMINI_MODEL,
-            google_api_key=settings.GOOGLE_API_KEY,
-            temperature=settings.TEMPERATURE,
-        )
-
-
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a helpful assistant that generates vector embeddings. 
-            Your task is to create a vector embedding (a list of floating-point numbers) for the given text.
-            
-            IMPORTANT: You must output ONLY a valid JSON array of numbers, nothing else. No explanations, no markdown, no code blocks.
-            Example format: [0.1, 0.2, 0.3, 0.4, ...]
-            The array should contain at least 10 numbers and represent the semantic meaning of the text.
-            """),
-            ("user", "Create a vector embedding for this text: {text}\n\nOutput only the JSON array:")
-        ])
-
-        # Use raw output and parse manually since JsonOutputParser may not handle arrays well
-        self.chain = self.prompt | self.llm
+        # Initialize local sentence-transformers model
+        # all-MiniLM-L6-v2 produces 384-dimensional embeddings
+        # It's a lightweight model optimized for semantic search
+        self.model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+        self.embedding_dimension = 384
 
 
     def clean_text(self, text: str) -> str:
@@ -41,65 +22,67 @@ class SearchVectorService:
         text = re.sub(r'(Sent from|Get Outlook|--\s)', '', text, flags=re.IGNORECASE)
         return text.strip()
 
-    async def create_vector_embedding(self, text: str, max_length: int = 1000) -> list[float]:
-        """Create a vector embedding for the given text"""
-        if max_length is None:
-            max_length = settings.MAX_SUMMARY_LENGTH
+    async def create_vector_embedding(self, text: str, max_length: int = 512) -> list[float]:
+        """Create a vector embedding for the given text using local sentence-transformers model"""
+        if not text or not text.strip():
+            return []
 
         clean_text = self.clean_text(text)
 
-        try: 
-            # Get raw output from LLM
-            result = await self.chain.ainvoke({
-                "text": clean_text[:max_length]
-            })
+        # Truncate to max_length (all-MiniLM-L6-v2 supports up to 256 word pieces, ~512 characters is safe)
+        if len(clean_text) > max_length:
+            clean_text = clean_text[:max_length]
 
-            # Extract content from AIMessage if it's a message object
-            if hasattr(result, 'content'):
-                content = result.content
-            elif isinstance(result, str):
-                content = result
-            else:
-                content = str(result)
-            
-            # Clean the content - remove markdown code blocks if present
-            original_content = content
-            content = content.strip()
-            if content.startswith("```"):
-                # Remove markdown code blocks
-                lines = content.split("\n")
-                content = "\n".join(lines[1:-1]) if len(lines) > 2 else content
-            if content.startswith("```json"):
-                lines = content.split("\n")
-                content = "\n".join(lines[1:-1]) if len(lines) > 2 else content
-            
-            
-            # Parse JSON
-            parsed = json.loads(content.strip())
-            
-            # Handle different response formats
-            if isinstance(parsed, list):
-                # Ensure all elements are floats
-                embedding = [float(x) for x in parsed]
-                return embedding
-            elif isinstance(parsed, dict):
-                # Try to find the embedding in the dict
-                for key in ["embedding", "vector", "output", "result", "data"]:
-                    if key in parsed and isinstance(parsed[key], list):
-                        embedding = [float(x) for x in parsed[key]]
-                        return embedding
-                # If no key found, try the first list value
-                for key, value in parsed.items():
-                    if isinstance(value, list):
-                        embedding = [float(x) for x in value]
-                        return embedding
-            
-            return []
-            
-        except json.JSONDecodeError as e:
-            return []
+        try:
+            # Generate embedding using local model
+            # The model returns a numpy array, convert to list
+            embedding = self.model.encode(clean_text, convert_to_numpy=True)
+
+            # Convert numpy array to Python list (384 dimensions)
+            return embedding.tolist()
         except Exception as e:
             import traceback
+            print(f"Error generating embedding: {e}")
+            traceback.print_exc()
+            return []
+
+    async def create_vector_embeddings_batch(self, texts: list[str], max_length: int = 512) -> list[list[float]]:
+        """Create vector embeddings for multiple texts in batch using local sentence-transformers model"""
+        if not texts or len(texts) == 0:
+            return []
+
+        # Clean all texts
+        cleaned_texts = [
+            self.clean_text(text)[:max_length] if text else ""
+            for text in texts
+        ]
+
+        try:
+            # Generate embeddings in batch for efficiency
+            # sentence-transformers supports efficient batch processing
+            # Filter out empty texts but keep track of their indices
+            non_empty_texts = [text for text in cleaned_texts if text]
+            non_empty_indices = [i for i, text in enumerate(cleaned_texts) if text]
+
+            if not non_empty_texts:
+                return [[] for _ in texts]
+
+            # Generate embeddings for non-empty texts
+            embeddings_array = self.model.encode(
+                non_empty_texts,
+                convert_to_numpy=True,
+                show_progress_bar=False
+            )
+
+            # Reconstruct the full list with empty lists for empty texts
+            embeddings = [[] for _ in texts]
+            for idx, embedding in zip(non_empty_indices, embeddings_array):
+                embeddings[idx] = embedding.tolist()
+
+            return embeddings
+        except Exception as e:
+            import traceback
+            print(f"Error generating batch embeddings: {e}")
             traceback.print_exc()
             return []
 

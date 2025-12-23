@@ -253,14 +253,6 @@ export class SemanticSearchQueryDto {
   @IsString()
   query: string;
 
-  @ApiProperty({
-    example: "john.doe@example.com",
-    description: "Email to search in",
-    required: false
-  })
-  @IsString()
-  email?: string;
-
   @ApiProperty({ required: false, default: 1, description: "Page number for pagination" })
   @IsOptional()
   @Type(() => Number)
