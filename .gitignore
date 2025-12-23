@@ -1,8 +1,34 @@
-# Nestjs specific
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Build outputs
 /dist
-/node_modules
 /build
-/tmp
+/.next/
+/out/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
 
 # Logs
 logs
@@ -13,12 +39,44 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-# dotenv environment variable files
+# Environment variables
 .env
+.env*.local
 .env.development
 .env.test
 .env.production
+!.env.example
 
-# temp directory
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Testing
+coverage/
+.nyc_output/
+junit.xml
+
+# Temporary files
 .temp
 .tmp
+tmp/
+temp/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+prisma/dev.db
+
+# Docker
+.dockerignore
