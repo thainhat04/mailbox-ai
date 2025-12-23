@@ -16,7 +16,7 @@ const constant = {
     URL_UNFREEZE_EMAILS: (id: string) => `/${id}/unfreeze`,
     URL_SUMMARIZE_EMAIL: (id: string) => `/${id}/summary`,
     URL_SEARCH: (mode: ModeSearch) =>
-        mode === "puzzy"
+        mode === "fuzzy"
             ? "/emails-search/fuzzy-search"
             : "/emails-search/semantic-search",
     URL_CREATE_KANBAN_COLUMN: "/kanban/columns",

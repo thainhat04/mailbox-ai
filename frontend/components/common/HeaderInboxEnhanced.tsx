@@ -235,9 +235,9 @@ function HeaderInbox({
                         </button>
                         <button
                             type="button"
-                            onClick={() => onModeChange("puzzy")}
+                            onClick={() => onModeChange("fuzzy")}
                             className={`px-3 py-1.5 cursor-pointer rounded-md text-xs font-medium transition-all whitespace-nowrap ${
-                                modeSearch === "puzzy"
+                                modeSearch === "fuzzy"
                                     ? "bg-linear-to-r from-purple-500/30 to-pink-500/30 text-purple-300"
                                     : "hover:bg-white/5 text-white/60 hover:text-white/80"
                             }`}

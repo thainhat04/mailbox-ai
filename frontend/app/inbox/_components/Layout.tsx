@@ -10,7 +10,7 @@ function InboxLayout() {
     const [isCommondMode, setIsCommandMode] = useState(false);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [mode, setMode] = useState<ModeSearch>("puzzy");
+    const [mode, setMode] = useState<ModeSearch>("fuzzy");
 
     const handleSearch = (query: string) => {
         if (query.trim()) {

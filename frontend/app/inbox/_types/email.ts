@@ -85,7 +85,7 @@ export interface PreviewEmailResponse {
     total: number;
     totalPages: number;
 }
-export type ModeSearch = "puzzy" | "semantic";
+export type ModeSearch = "fuzzy" | "semantic";
 export interface SearchEmailRequest {
     mode: ModeSearch;
     q: string;

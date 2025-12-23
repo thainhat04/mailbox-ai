@@ -62,6 +62,7 @@ const inboxApi = api.injectEndpoints({
             }),
             providesTags: (_, __, arg) => [
                 { type: "Emails", id: `${arg.mailboxId}-${arg.page}` },
+                { type: "Emails", id: `LIST-${arg.mailboxId}` },
             ],
         }),
 
@@ -275,7 +276,7 @@ const inboxApi = api.injectEndpoints({
 
                 // Nếu update STARRED
                 if (hasStarred) {
-                    return [{ type: "Emails", id: "STARRED-1" }];
+                    return [{ type: "Emails", id: "LIST-STARRED" }];
                 }
 
                 // Nếu DELETE hoặc STARRED thì KHÔNG invalidate theo emailId
@@ -397,7 +398,7 @@ const inboxApi = api.injectEndpoints({
                     limit: body.limit || 20,
                 };
 
-                if (body.mode === "puzzy") {
+                if (body.mode === "fuzzy") {
                     params.q = body.q;
                 } else if (body.mode === "semantic") {
                     params.query = body.q;
