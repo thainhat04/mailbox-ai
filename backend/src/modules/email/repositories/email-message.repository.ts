@@ -50,7 +50,7 @@ export interface SyncStateData {
 export class EmailMessageRepository {
   private readonly logger = new Logger(EmailMessageRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Upsert a single email message
@@ -93,17 +93,17 @@ export class EmailMessageRepository {
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-                upsert: {
-                  create: {
-                    bodyText: messageData.bodyText,
-                    bodyHtml: messageData.bodyHtml,
-                  },
-                  update: {
-                    bodyText: messageData.bodyText,
-                    bodyHtml: messageData.bodyHtml,
-                  },
+              upsert: {
+                create: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
                 },
-              }
+                update: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
+                },
+              },
+            }
             : undefined,
       },
       create: {
@@ -130,11 +130,11 @@ export class EmailMessageRepository {
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-                create: {
-                  bodyText: messageData.bodyText,
-                  bodyHtml: messageData.bodyHtml,
-                },
-              }
+              create: {
+                bodyText: messageData.bodyText,
+                bodyHtml: messageData.bodyHtml,
+              },
+            }
             : undefined,
       },
     });
@@ -871,6 +871,111 @@ export class EmailMessageRepository {
 
     this.logger.log(
       `Fuzzy search found ${total} results, returning ${results.length} with limit ${limit}`,
+    );
+
+    return {
+      results: messagesWithDetails,
+      total,
+    };
+  }
+
+  async semanticSearchEmails(
+    userId: string,
+    query: string,
+    embedding: number[],
+    options?: {
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{
+    results: Array<PrismaEmailMessage & { relevanceScore: number }>;
+    total: number;
+  }> {
+    const limit = options?.limit || 50;
+    const offset = options?.offset || 0;
+    const similarityThreshold = 0.5;
+
+    this.logger.debug(
+      `Semantic searching emails for user ${userId} with query: "${query}"`,
+    );
+
+    // Get all email account IDs for the user
+    const emailAccounts = await this.prisma.emailAccount.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (emailAccounts.length === 0) {
+      return { results: [], total: 0 };
+    }
+
+    const accountIds = emailAccounts.map((acc) => acc.id);
+    const embeddingStr = `[${embedding.join(',')}]`;
+
+    // Use pgvector for semantic similarity search
+    const searchQuery = `
+      SELECT
+        em.*,
+        (1 - (mb.embedding <=> $1::vector)) AS relevance_score
+      FROM email_messages em
+      INNER JOIN message_bodies mb ON mb."emailMessageId" = em.id
+      WHERE
+        em."emailAccountId" = ANY($2::text[])
+        AND mb.embedding IS NOT NULL
+        AND (1 - (mb.embedding <=> $1::vector)) > $3
+      ORDER BY mb.embedding <=> $1::vector ASC
+      LIMIT $4 OFFSET $5
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM email_messages em
+      INNER JOIN message_bodies mb ON mb."emailMessageId" = em.id
+      WHERE
+        em."emailAccountId" = ANY($1::text[])
+        AND mb.embedding IS NOT NULL
+        AND (1 - (mb.embedding <=> $2::vector)) > $3
+    `;
+
+    // Execute both queries in parallel
+    const [results, countResult] = await Promise.all([
+      this.prisma.$queryRawUnsafe<
+        Array<PrismaEmailMessage & { relevance_score: number }>
+      >(searchQuery, embeddingStr, accountIds, similarityThreshold, limit, offset),
+      this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+        countQuery,
+        accountIds,
+        embeddingStr,
+        similarityThreshold,
+      ),
+    ]);
+
+    // Fetch full message details with relations for each result
+    const messagesWithDetails = await Promise.all(
+      results.map(async (result) => {
+        const fullMessage = await this.prisma.emailMessage.findUnique({
+          where: { id: result.id },
+          include: {
+            body: true,
+            attachments: true,
+          },
+        });
+
+        if (!fullMessage) {
+          throw new Error(`Email message ${result.id} not found`);
+        }
+
+        return {
+          ...fullMessage,
+          relevanceScore: Number(result.relevance_score),
+        } as PrismaEmailMessage & { relevanceScore: number };
+      }),
+    );
+
+    const total = Number(countResult[0]?.total || 0);
+
+    this.logger.log(
+      `Semantic search found ${total} results, returning ${results.length} with limit ${limit}`,
     );
 
     return {

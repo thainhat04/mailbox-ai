@@ -1,0 +1,12 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/ai-service/.venv/bin/python",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/ai-service/.venv/lib/python3.13/site-packages"
+    ],
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.diagnosticMode": "workspace",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.python"
+    }
+}

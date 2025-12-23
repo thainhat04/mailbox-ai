@@ -7,7 +7,8 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 // -------------------------------------------------------------
@@ -183,6 +184,10 @@ model MessageBody {
 
   bodyText String? @db.Text
   bodyHtml String? @db.Text
+
+  // Vector embedding for semantic search (subject + body)
+  // Using sentence-transformers/all-MiniLM-L6-v2 model which outputs 384-dimensional vectors
+  embedding Unsupported("vector(384)")?
 
   createdAt DateTime @default(now())
 

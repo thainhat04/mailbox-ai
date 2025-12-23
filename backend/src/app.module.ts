@@ -7,6 +7,7 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { validationSchema } from "./common/configs/config";
 import { DatabaseModule } from "./database/database.module";
+import { RedisModule } from "./common/redis/redis.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { EmailModule } from "./modules/email/email.module";
 import { JwtAuthGuard } from "./common/guards";
@@ -34,6 +35,9 @@ import { JwtAuthGuard } from "./common/guards";
 
     // Database
     DatabaseModule,
+
+    // Redis for pub/sub
+    RedisModule,
 
     // Feature modules
     AuthModule,

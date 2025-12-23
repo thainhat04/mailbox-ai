@@ -13,9 +13,14 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
-    # Gemini API Configuration
-    GOOGLE_API_KEY: str
+    # Gemini API Configuration (only needed for summarization, not for embeddings)
+    GOOGLE_API_KEY: str = ""  # Optional: only required if using Gemini for summarization
     GEMINI_MODEL: str = "gemini-1.5-flash"
+
+    # Local Embedding Configuration
+    USE_LOCAL_EMBEDDINGS: bool = True  # Use local sentence-transformers model for embeddings
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_DIMENSION: int = 384  # Dimension of all-MiniLM-L6-v2 embeddings
 
     # Summarization Configuration
     MAX_SUMMARY_LENGTH: int = 200

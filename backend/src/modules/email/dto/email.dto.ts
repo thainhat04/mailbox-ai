@@ -6,6 +6,10 @@ import {
   IsOptional,
   IsArray,
   ValidateNested,
+  IsInt,
+  Min,
+  Max,
+  IsIn,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -241,3 +245,44 @@ export class FuzzySearchResponseDto {
   totalPages: number;
 }
 
+export class SemanticSearchQueryDto {
+  @ApiProperty({
+    example: "What is the marketing campaign?",
+    description: "Search query - supports typos and partial matches"
+  })
+  @IsString()
+  query: string;
+
+  @ApiProperty({ required: false, default: 1, description: "Page number for pagination" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  page: number = 1;
+
+  @ApiProperty({ required: false, default: 50, description: "Number of results per page" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit: number = 50;
+}
+
+export class SemanticSearchResponseDto {
+  @ApiProperty({ type: [EmailWithScoreDto] })
+  emails: EmailWithScoreDto[];
+
+  @ApiProperty({ example: 1 })
+  page: number;
+
+  @ApiProperty({ example: 50 })
+  limit: number;
+
+  @ApiProperty({ example: 25, description: "Total number of matching results" })
+  total: number;
+
+  @ApiProperty({ example: 1 })
+  totalPages: number;
+}
