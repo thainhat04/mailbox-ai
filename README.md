@@ -10,19 +10,30 @@ Smart email management system with AI-powered summarization and Kanban board wor
 ## Prerequisites
 
 - **Backend**: Node.js 18+, Yarn
-- **AI Service**: Python 3.13+, UV
-- **Database**: PostgreSQL
-- **API Keys**: Google OAuth credentials, Google Gemini API key
+- **AI Service**: Python 3.13+, UV (package manager)
+- **Database**: PostgreSQL 12+ with `pgvector` and `pg_trgm` extensions
+- **API Keys**:
+  - Google OAuth credentials (for Gmail login)
+  - Google Gemini API key (for AI summarization)
 
 ## Local Setup
 
 ### 1. Clone Repository
 ```bash
-git clone [repository-url]
+git clone https://github.com/thainhat04/mailbox-ai
 cd mailbox-ai
 ```
 
-### 2. Backend Setup
+### 2. Database Setup (PostgreSQL with Extensions)
+
+Your PostgreSQL database needs two extensions (`pg_trgm` for fuzzy search, `vector` for semantic search). These will be created automatically when you run Prisma migrations in step 3:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+### 3. Backend Setup
 ```bash
 cd backend
 yarn install
@@ -31,7 +42,7 @@ yarn install
 cp .env.example .env
 # Edit .env with your configuration
 
-# Setup database
+# Setup database and extensions
 npx prisma migrate dev
 npx prisma generate
 
@@ -40,21 +51,49 @@ yarn start:dev
 # Server runs at http://localhost:8080
 ```
 
-### 3. AI Service Setup
+### 4. AI Service Setup
 ```bash
 cd ai-service
 uv sync
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your Gemini API key
+# Edit .env with your configuration (see below)
 
 # Start service
-python main.py
+uv run python main.py
 # Service runs at http://localhost:8000
 ```
 
-### 4. Frontend Setup
+**Required Environment Variables:**
+```env
+# Gemini API for Summarization (Required)
+GOOGLE_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+
+# Local Embedding Configuration (Required for Semantic Search)
+USE_LOCAL_EMBEDDINGS=true
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_DIMENSION=384
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+
+# Optional Summarization Settings
+MAX_SUMMARY_LENGTH=200
+TEMPERATURE=0.3
+```
+
+**First-time Setup:**
+The AI service will automatically download the embedding model (`all-MiniLM-L6-v2`) on first run. This is a ~80MB download and only happens once.
+
+**Get Gemini API Key:**
+1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Click "Create API Key"
+3. Copy the key to your `.env` file
+
+### 5. Frontend Setup
 ```bash
 cd frontend
 npm install  # or yarn install
@@ -184,16 +223,65 @@ npm run dev
 
 - **API**: `GET /api/v1/kanban/board?sortBy=date_desc&unreadOnly=true&hasAttachmentsOnly=true&fromEmail=sender@example.com`
 
-  **Example Response**:
-  ```json
-  {
-    "inbox": [...],
-    "todo": [...],
-    "processing": [...],
-    "done": [...],
-    "frozen": [...]
-  }
-  ```
+### VII. Semantic Search (Vector Embeddings)
+- **Conceptual Relevance**: Searches by meaning, not exact text (e.g., "money" finds "invoice", "salary", "payment")
+- **Local AI Model**: Uses `sentence-transformers/all-MiniLM-L6-v2` (384 dimensions, no API costs)
+- **Vector Storage**: PostgreSQL pgvector extension with cosine similarity (IVFFlat index)
+- **Automatic Processing**: New emails get embeddings on sync
+- **Integration**: Works alongside fuzzy search
+
+- **API**: `GET /api/v1/emails-search/semantic-search?query=text&page=1&limit=50`
+
+### VIII. Search Auto-Suggestion
+- **Type-ahead Dropdown**: Shows suggestions as user types (300ms debounce)
+- **Dual Sources**: Sender suggestions (name + email) and keyword suggestions (from subjects)
+- **Smart Filtering**: Excludes stop words, min 3 chars, ordered by frequency
+- **Keyboard Navigation**: Arrow keys, Enter to select, Escape to close, Ctrl+K to focus
+
+- **API**: `GET /api/v1/emails/suggestions?q=query&limit=5`
+
+### IX. Dynamic Kanban Configuration
+- **Custom Columns**: Create/rename/delete workflow columns (max 10)
+- **Full Customization**: Name, color (16 presets), icon
+- **Gmail Label Mapping**: Each column maps to Gmail label, auto-syncs on card move
+- **System Protection**: INBOX and FROZEN columns cannot be deleted
+- **Drag-to-Reorder**: Change column order in settings
+- **Persistence**: Configuration saved to database
+
+- **APIs**:
+  - `GET /api/v1/kanban/columns` - Get all columns
+  - `POST /api/v1/kanban/columns` - Create column
+  - `PUT /api/v1/kanban/columns/:id` - Update column
+  - `DELETE /api/v1/kanban/columns/:id` - Delete column (moves emails to INBOX)
+  - `PATCH /api/v1/kanban/columns/reorder` - Reorder columns
+
+## Running All Services Together
+
+To run the complete application, you need all three services running simultaneously:
+
+**Terminal 1 - Backend:**
+```bash
+cd backend
+yarn start:dev
+```
+
+**Terminal 2 - AI Service:**
+```bash
+cd ai-service
+uv run python main.py
+```
+
+**Terminal 3 - Frontend:**
+```bash
+cd frontend
+npm run dev
+```
+
+**Service Dependencies:**
+- Frontend → Backend (API calls)
+- Backend → AI Service (summarization + embeddings)
+- Backend → PostgreSQL (data + vector storage)
+- Backend → Gmail API (email sync)
 
 ## Authentication
 
@@ -203,6 +291,6 @@ Authorization: Bearer YOUR_JWT_TOKEN
 ```
 
 ## Architecture
-- **Backend**: NestJS with Fastify, Prisma ORM, PostgreSQL
-- **AI Service**: FastAPI, Google Gemini AI
-- **Frontend**: Next.js (React)
+- **Backend**: NestJS with Fastify, Prisma ORM, PostgreSQL (with pgvector + pg_trgm)
+- **AI Service**: FastAPI, sentence-transformers (local), Google Gemini AI (cloud)
+- **Frontend**: Next.js 16 (React 19), Redux Toolkit, RTK Query
