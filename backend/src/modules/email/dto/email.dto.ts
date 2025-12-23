@@ -206,7 +206,7 @@ export class EmailListResponseDto {
 export class FuzzySearchQueryDto {
   @ApiProperty({
     example: "marketing",
-    description: "Search query - supports typos and partial matches"
+    description: "Search query for fuzzy search - uses PostgreSQL pg_trgm for typo tolerance, partial matching, and similarity ranking. Best for finding emails with spelling variations or partial text matches."
   })
   @IsString()
   q: string;
@@ -248,7 +248,7 @@ export class FuzzySearchResponseDto {
 export class SemanticSearchQueryDto {
   @ApiProperty({
     example: "What is the marketing campaign?",
-    description: "Search query - supports typos and partial matches"
+    description: "Search query for semantic search - uses AI vector embeddings to find emails with similar meaning, even if they don't contain the exact keywords. Best for finding conceptually related emails."
   })
   @IsString()
   query: string;
