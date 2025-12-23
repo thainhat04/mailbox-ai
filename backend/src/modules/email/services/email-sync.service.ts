@@ -4,11 +4,14 @@ import { PrismaService } from "../../../database/prisma.service";
 import { MailProviderRegistry } from "../providers/provider.registry";
 import { EmailMessageRepository } from "../repositories/email-message.repository";
 import { OAuth2TokenService } from "./oauth2-token.service";
+import { SearchVectorService } from "./search-vector.service";
+import { RedisService, VectorSyncBatchMessage } from "../../../common/redis/redis.service";
 import { SyncConfig } from "../../../common/configs/sync.config";
 import {
   retryWithBackoff,
   isTokenExpiredError,
 } from "../../../common/utils/retry.util";
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Email Sync Service
@@ -23,7 +26,9 @@ export class EmailSyncService {
     private readonly prisma: PrismaService,
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
-  ) {}
+    private readonly searchVectorService: SearchVectorService,
+    private readonly redisService: RedisService,
+  ) { }
 
   @Cron(CronExpression.EVERY_30_SECONDS)
   async syncAllEmails(): Promise<void> {
@@ -151,9 +156,9 @@ export class EmailSyncService {
       // Convert SyncStateData to SyncState
       const syncState = syncStateData
         ? {
-            historyId: syncStateData.lastSyncedHistoryId,
-            deltaLink: syncStateData.lastDeltaLink,
-          }
+          historyId: syncStateData.lastSyncedHistoryId,
+          deltaLink: syncStateData.lastDeltaLink,
+        }
         : {};
 
       // Perform sync with retry logic
@@ -201,6 +206,15 @@ export class EmailSyncService {
       this.logger.log(
         `Sync completed for account ${emailAccountId}: +${messagesAdded} messages, -${messagesDeleted} messages`,
       );
+
+      // Publish to Redis queue for vector embedding generation (async, non-blocking)
+      if (messagesAdded > 0) {
+        this.publishVectorSyncMessages(emailAccountId).catch((error) => {
+          this.logger.error(
+            `Failed to publish vector sync messages for account ${emailAccountId}: ${error.message}`,
+          );
+        });
+      }
 
       return {
         messagesAdded,
@@ -482,6 +496,84 @@ export class EmailSyncService {
     }
 
     return totalSynced;
+  }
+
+  /**
+   * Publish vector sync messages to Redis in batches of 20
+   */
+  async publishVectorSyncMessages(emailAccountId: string): Promise<void> {
+    this.logger.log(`Publishing vector sync messages for account: ${emailAccountId}`);
+
+    try {
+      // Find messages without embeddings (limit to 100 to process in 5 batches of 20)
+      const messagesWithoutEmbeddings = await this.prisma.$queryRaw<
+        Array<{
+          id: string;
+          messageId: string;
+          subject: string | null;
+          bodyText: string | null;
+        }>
+      >`
+        SELECT em.id, em."messageId", em.subject, mb."bodyText"
+        FROM email_messages em
+        LEFT JOIN message_bodies mb ON mb."emailMessageId" = em.id
+        WHERE em."emailAccountId" = ${emailAccountId}
+          AND mb.embedding IS NULL
+          AND mb."bodyText" IS NOT NULL
+        LIMIT 100
+      `;
+
+      if (messagesWithoutEmbeddings.length === 0) {
+        this.logger.debug(`No messages without embeddings for account ${emailAccountId}`);
+        return;
+      }
+
+      this.logger.log(
+        `Found ${messagesWithoutEmbeddings.length} messages without embeddings`,
+      );
+
+      // Split into batches of 20
+      const BATCH_SIZE = 20;
+      const batches: VectorSyncBatchMessage[] = [];
+
+      for (let i = 0; i < messagesWithoutEmbeddings.length; i += BATCH_SIZE) {
+        const batchEmails = messagesWithoutEmbeddings.slice(i, i + BATCH_SIZE);
+
+        const batchMessage: VectorSyncBatchMessage = {
+          batchId: uuidv4(),
+          emails: batchEmails.map((msg) => ({
+            emailMessageId: msg.id,
+            subject: msg.subject || '',
+            bodyText: msg.bodyText || '',
+          })),
+          timestamp: new Date(),
+        };
+
+        batches.push(batchMessage);
+      }
+
+      // Publish all batches to Redis
+      this.logger.log(
+        `Publishing ${batches.length} batches to Redis queue (channel: email:vector:sync:batch)`,
+      );
+
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        await this.redisService.publishVectorSyncBatchMessage(batch);
+        this.logger.debug(
+          `Published batch ${i + 1}/${batches.length} (ID: ${batch.batchId}, ${batch.emails.length} emails)`,
+        );
+      }
+
+      this.logger.log(
+        `✅ Published ${batches.length} batches (${messagesWithoutEmbeddings.length} total emails) to Redis queue`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to publish vector sync messages for account ${emailAccountId}: ${error.message}`,
+      );
+      throw error;
+    }
   }
 
   /**

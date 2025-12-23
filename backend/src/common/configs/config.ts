@@ -31,6 +31,9 @@ export const validationSchema = Joi.object({
   MICROSOFT_CLIENT_ID: Joi.string().required(),
   MICROSOFT_CLIENT_SECRET: Joi.string().required(),
   MICROSOFT_CALLBACK_URL: Joi.string().required(),
+
+  // Redis 
+  REDIS_URL: Joi.string().required(),
 });
 
 export interface EnvironmentVariables {
@@ -50,4 +53,5 @@ export interface EnvironmentVariables {
   MICROSOFT_CLIENT_ID: string;
   MICROSOFT_CLIENT_SECRET: string;
   MICROSOFT_CALLBACK_URL: string;
+  REDIS_URL: string;
 }

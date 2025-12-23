@@ -10,7 +10,9 @@ import { KanbanColumnService } from './services/kanban-column.service';
 import { GmailLabelInitializerService } from './services/gmail-label-initializer.service';
 import { SummaryService } from './services/summary.service';
 import { SnoozeSchedulerService } from './services/snooze-scheduler.service';
+import { SearchVectorService } from './services/search-vector.service';
 import { DatabaseModule } from '../../database/database.module';
+import { VectorWorkerService } from '../../workers/vector-worker.service';
 
 // Provider abstraction
 import { GmailProvider } from './providers/gmail/gmail.provider';
@@ -40,6 +42,12 @@ import { EmailMessageRepository } from './repositories/email-message.repository'
     SummaryService,
     SnoozeSchedulerService,
 
+    // Search services
+    SearchVectorService,
+
+    // Workers
+    VectorWorkerService,
+
     // Repository
     EmailMessageRepository,
 
@@ -63,4 +71,4 @@ import { EmailMessageRepository } from './repositories/email-message.repository'
     MailProviderRegistry,
   ],
 })
-export class EmailModule {}
+export class EmailModule { }
