@@ -35,6 +35,7 @@ export class SearchVectorService {
     async createVectorEmbeddingBatch(texts: string[]): Promise<number[][]> {
         try {
             this.logger.log(`[AI Service] Creating batch embeddings for ${texts.length} texts at ${this.aiServiceUrl}/api/v1/search/vector/embeddings/batch`);
+
             const response = await axios.post(
                 `${this.aiServiceUrl}/api/v1/search/vector/embeddings/batch`,
                 { texts },
@@ -43,8 +44,16 @@ export class SearchVectorService {
                     headers: {
                         'Content-Type': 'application/json',
                     },
+                    validateStatus: (status) => status < 500, // Don't throw on 4xx errors
                 }
             );
+
+            // Check for HTTP errors
+            if (response.status >= 400) {
+                const errorMsg = `AI service returned ${response.status}: ${JSON.stringify(response.data)}`;
+                this.logger.error(`[AI Service] ${errorMsg}`);
+                throw new Error(errorMsg);
+            }
 
             this.logger.log(`[AI Service] Received response with ${response.data?.embeddings?.length || 0} embeddings`);
 
@@ -56,15 +65,41 @@ export class SearchVectorService {
             return response.data.embeddings as Array<number[]>;
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                this.logger.error(
-                    `[AI Service] Failed to create batch vector embeddings: ${error.message}`,
-                );
-                this.logger.error(`[AI Service] Response status: ${error.response?.status}`);
-                this.logger.error(`[AI Service] Response data: ${JSON.stringify(error.response?.data)}`);
+                // Connection errors (ECONNREFUSED, ETIMEDOUT, etc.)
+                if (error.code) {
+                    this.logger.error(
+                        `[AI Service] Connection error (${error.code}): Cannot connect to ${this.aiServiceUrl}. Is the AI service running?`,
+                    );
+                    throw new Error(
+                        `AI service connection failed: ${error.message}. Please ensure the AI service is running at ${this.aiServiceUrl}`,
+                    );
+                }
+
+                // HTTP errors
+                if (error.response) {
+                    this.logger.error(
+                        `[AI Service] HTTP error ${error.response.status}: ${error.response.statusText}`,
+                    );
+                    this.logger.error(`[AI Service] Response data: ${JSON.stringify(error.response.data)}`);
+                    throw new Error(
+                        `AI service error: ${error.response.status} ${error.response.statusText}`,
+                    );
+                }
+
+                // Request timeout
+                if (error.code === 'ECONNABORTED') {
+                    this.logger.error(`[AI Service] Request timeout after 60s`);
+                    throw new Error('AI service request timeout. The service may be overloaded.');
+                }
+
+                // Other axios errors
+                this.logger.error(`[AI Service] Axios error: ${error.message}`);
+                throw error;
             } else {
-                this.logger.error(`[AI Service] Failed to create batch vector embeddings: ${error.message}`);
+                // Non-axios errors
+                this.logger.error(`[AI Service] Error: ${error.message}`);
+                throw error;
             }
-            throw error;
         }
     }
 
