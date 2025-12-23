@@ -109,7 +109,13 @@ export class EmailController {
   }
 
   @Get("emails/search")
-  @ApiOperation({ summary: "Search emails" })
+  @ApiOperation({
+    summary: "Basic text search emails",
+    description:
+      "Simple text search using case-insensitive substring matching on subject, snippet, and sender. " +
+      "Best for: quick exact or partial keyword searches. " +
+      "For typo tolerance, use fuzzy-search. For meaning-based search, use semantic-search.",
+  })
   async searchEmails(
     @Query("q") query: string,
     @CurrentUser() user: JwtPayload,
@@ -125,8 +131,11 @@ export class EmailController {
   @ApiOperation({
     summary: "Fuzzy search emails with typo tolerance and partial matching",
     description:
-      "Search emails using PostgreSQL pg_trgm extension. Supports typos, partial matches, and Vietnamese characters. " +
-      "Results are ranked by match quality (best matches first).",
+      "Fuzzy search using PostgreSQL pg_trgm extension. " +
+      "Uses text similarity algorithms to find emails even with typos, spelling variations, or partial matches. " +
+      "Best for: finding emails when you're unsure of exact spelling, searching by partial words, or handling typos. " +
+      "Results are ranked by similarity score (best matches first). " +
+      "NOTE: This is different from semantic search which finds emails by meaning/similarity.",
   })
   async fuzzySearchEmails(
     @Query() query: FuzzySearchQueryDto,
@@ -147,7 +156,15 @@ export class EmailController {
   }
 
   @Post("emails/semantic-search")
-  @ApiOperation({ summary: "Semantic search emails" })
+  @ApiOperation({
+    summary: "Semantic search emails using AI vector embeddings",
+    description:
+      "Semantic search using AI-generated vector embeddings (pgvector). " +
+      "Finds emails with similar meaning or concepts, even if they don't contain the exact search terms. " +
+      "Best for: finding conceptually related emails, searching by intent/meaning, or discovering related content. " +
+      "Requires embeddings to be generated (may return empty results if embeddings are not available). " +
+      "NOTE: This is different from fuzzy search which finds emails by text similarity/typos.",
+  })
   @ApiBody({ type: SemanticSearchQueryDto })
   @ApiResponse({ status: 200, description: "Semantic search emails", type: SemanticSearchResponseDto })
   async semanticSearchEmails(

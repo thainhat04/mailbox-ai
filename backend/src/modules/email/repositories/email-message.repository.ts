@@ -778,27 +778,27 @@ export class EmailMessageRepository {
       SELECT
         em.*,
         GREATEST(
-          COALESCE(similarity(em.subject, $1), 0),
-          COALESCE(word_similarity($1, em.subject), 0),
-          COALESCE(similarity(em."from", $1), 0),
-          COALESCE(word_similarity($1, em."from"), 0),
-          COALESCE(similarity(em."fromName", $1), 0),
-          COALESCE(word_similarity($1, em."fromName"), 0),
-          COALESCE(similarity(em.snippet, $1), 0),
-          COALESCE(word_similarity($1, em.snippet), 0)
+          COALESCE(similarity(em.subject::text, $1::text), 0),
+          COALESCE(word_similarity($1::text, em.subject::text), 0),
+          COALESCE(similarity(em."from"::text, $1::text), 0),
+          COALESCE(word_similarity($1::text, em."from"::text), 0),
+          COALESCE(similarity(COALESCE(em."fromName", '')::text, $1::text), 0),
+          COALESCE(word_similarity($1::text, COALESCE(em."fromName", '')::text), 0),
+          COALESCE(similarity(COALESCE(em.snippet, '')::text, $1::text), 0),
+          COALESCE(word_similarity($1::text, COALESCE(em.snippet, '')::text), 0)
         ) AS relevance_score
       FROM email_messages em
       WHERE
         em."emailAccountId" = ANY($2::text[])
         AND (
-          similarity(em.subject, $1) > $3
-          OR similarity(em."from", $1) > $3
-          OR similarity(em."fromName", $1) > $3
-          OR similarity(em.snippet, $1) > $3
-          OR word_similarity($1, em.subject) > $3
-          OR word_similarity($1, em."from") > $3
-          OR word_similarity($1, em."fromName") > $3
-          OR word_similarity($1, em.snippet) > $3
+          similarity(em.subject::text, $1::text) > $3
+          OR similarity(em."from"::text, $1::text) > $3
+          OR similarity(COALESCE(em."fromName", '')::text, $1::text) > $3
+          OR similarity(COALESCE(em.snippet, '')::text, $1::text) > $3
+          OR word_similarity($1::text, em.subject::text) > $3
+          OR word_similarity($1::text, em."from"::text) > $3
+          OR word_similarity($1::text, COALESCE(em."fromName", '')::text) > $3
+          OR word_similarity($1::text, COALESCE(em.snippet, '')::text) > $3
           OR em.subject ILIKE '%' || $1 || '%'
           OR em."from" ILIKE '%' || $1 || '%'
           OR em."fromName" ILIKE '%' || $1 || '%'
@@ -814,16 +814,16 @@ export class EmailMessageRepository {
       WHERE
         em."emailAccountId" = ANY($1::text[])
         AND (
-          -- Fuzzy similarity matching
-          similarity(em.subject, $2) > $3
-          OR similarity(em."from", $2) > $3
-          OR similarity(em."fromName", $2) > $3
-          OR similarity(em.snippet, $2) > $3
+          -- Fuzzy similarity matching (with explicit text casting)
+          similarity(em.subject::text, $2::text) > $3
+          OR similarity(em."from"::text, $2::text) > $3
+          OR similarity(COALESCE(em."fromName", '')::text, $2::text) > $3
+          OR similarity(COALESCE(em.snippet, '')::text, $2::text) > $3
           -- Word-level similarity
-          OR word_similarity($2, em.subject) > $3
-          OR word_similarity($2, em."from") > $3
-          OR word_similarity($2, em."fromName") > $3
-          OR word_similarity($2, em.snippet) > $3
+          OR word_similarity($2::text, em.subject::text) > $3
+          OR word_similarity($2::text, em."from"::text) > $3
+          OR word_similarity($2::text, COALESCE(em."fromName", '')::text) > $3
+          OR word_similarity($2::text, COALESCE(em.snippet, '')::text) > $3
           -- Substring matching
           OR em.subject ILIKE '%' || $2 || '%'
           OR em."from" ILIKE '%' || $2 || '%'
