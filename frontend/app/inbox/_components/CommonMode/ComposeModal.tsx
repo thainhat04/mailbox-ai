@@ -2,7 +2,7 @@
 
 import { X, Paperclip } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useComposeEmail } from "../../hooks/useComposeEmail";
+import { useComposeEmail } from "../../_hooks/useComposeEmail";
 import EmailAttachmentItem from "./EmailAttachmentItem";
 import { useSendEmailMutation } from "../../_services";
 import { useMutationHandler } from "@/hooks/useMutationHandler";

@@ -12,7 +12,14 @@ import {
   Put,
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from "@nestjs/swagger";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiBody,
+  ApiQuery,
+  ApiResponse,
+} from "@nestjs/swagger";
 import { EmailService } from "./email.service";
 import { KanbanService } from "./services/kanban.service";
 import { SummaryService } from "./services/summary.service";
@@ -23,6 +30,12 @@ import {
   LabelDto,
   FuzzySearchQueryDto,
   FuzzySearchResponseDto,
+  SuggestionQueryDto,
+  SuggestionResponseDto,
+  SuggestionItemDto,
+  SuggestionType,
+  SemanticSearchQueryDto,
+  SemanticSearchResponseDto,
 } from "./dto";
 import { ResponseDto } from "../../common/dtos/response.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
@@ -32,7 +45,11 @@ import { SendEmailDto } from "./dto/send-email.dto";
 import { ReplyEmailDto } from "./dto/reply-emai.dto";
 import { ModifyEmailDto } from "./dto/modify.dto";
 import { SendEmailResponse } from "./dto/send-email-response";
-import { UpdateKanbanStatusDto, SnoozeEmailDto } from "./dto/kanban.dto";
+import {
+  UpdateKanbanStatusDto,
+  UpdateKanbanColDto,
+  SnoozeEmailDto,
+} from "./dto/kanban.dto";
 
 @ApiTags("Email")
 @Controller()
@@ -92,7 +109,13 @@ export class EmailController {
   }
 
   @Get("emails/search")
-  @ApiOperation({ summary: "Search emails" })
+  @ApiOperation({
+    summary: "Basic text search emails",
+    description:
+      "Simple text search using case-insensitive substring matching on subject, snippet, and sender. " +
+      "Best for: quick exact or partial keyword searches. " +
+      "For typo tolerance, use fuzzy-search. For meaning-based search, use semantic-search.",
+  })
   async searchEmails(
     @Query("q") query: string,
     @CurrentUser() user: JwtPayload,
@@ -104,12 +127,15 @@ export class EmailController {
     );
   }
 
-  @Get("emails/fuzzy-search")
+  @Get("emails-search/fuzzy-search")
   @ApiOperation({
     summary: "Fuzzy search emails with typo tolerance and partial matching",
     description:
-      "Search emails using PostgreSQL pg_trgm extension. Supports typos, partial matches, and Vietnamese characters. " +
-      "Results are ranked by match quality (best matches first).",
+      "Fuzzy search using PostgreSQL pg_trgm extension. " +
+      "Uses text similarity algorithms to find emails even with typos, spelling variations, or partial matches. " +
+      "Best for: finding emails when you're unsure of exact spelling, searching by partial words, or handling typos. " +
+      "Results are ranked by similarity score (best matches first). " +
+      "NOTE: This is different from semantic search which finds emails by meaning/similarity.",
   })
   async fuzzySearchEmails(
     @Query() query: FuzzySearchQueryDto,
@@ -126,6 +152,82 @@ export class EmailController {
     return ResponseDto.success(
       result,
       `Found ${result.total} matching emails with fuzzy search`,
+    );
+  }
+
+  @Get("emails-search/semantic-search")
+  @ApiOperation({
+    summary: "Semantic search emails using AI vector embeddings",
+    description:
+      "Semantic search using AI-generated vector embeddings (pgvector). " +
+      "Finds emails with similar meaning or concepts, even if they don't contain the exact search terms. " +
+      "Best for: finding conceptually related emails, searching by intent/meaning, or discovering related content. " +
+      "Requires embeddings to be generated (may return empty results if embeddings are not available). " +
+      "NOTE: This is different from fuzzy search which finds emails by text similarity/typos.",
+  })
+  @ApiBody({ type: SemanticSearchQueryDto })
+  @ApiResponse({
+    status: 200,
+    description: "Semantic search emails",
+    type: SemanticSearchResponseDto,
+  })
+  async semanticSearchEmails(
+    @Query() dto: SemanticSearchQueryDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<SemanticSearchResponseDto>> {
+    const result = await this.emailService.semanticSearchEmails(
+      dto.query,
+      user.sub,
+      {
+        page: dto.page,
+        limit: dto.limit,
+      },
+    );
+    return ResponseDto.success(
+      result,
+      `Found ${result.total} matching emails with semantic search`,
+    );
+  }
+
+  @Get("emails/suggestions")
+  @ApiOperation({
+    summary: "Get search suggestions for auto-complete",
+    description:
+      "Returns sender names and subject keywords based on query. " +
+      "Used for type-ahead search functionality.",
+  })
+  async getSearchSuggestions(
+    @Query() query: SuggestionQueryDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResponseDto<SuggestionResponseDto>> {
+    const result = await this.emailService.getSuggestions(
+      query.q,
+      user.sub,
+      query.limit,
+    );
+
+    // Transform to SuggestionItemDto format
+    const suggestions: SuggestionItemDto[] = [
+      ...result.senders.map((sender) => ({
+        type: SuggestionType.SENDER,
+        value: sender.email,
+        label: sender.name || sender.email,
+      })),
+      ...result.keywords.map((keyword) => ({
+        type: SuggestionType.SUBJECT_KEYWORD,
+        value: keyword.keyword,
+        label: keyword.keyword,
+      })),
+    ];
+
+    const response: SuggestionResponseDto = {
+      suggestions,
+      query: query.q,
+    };
+
+    return ResponseDto.success(
+      response,
+      `Found ${suggestions.length} suggestions`,
     );
   }
 
@@ -270,6 +372,15 @@ export class EmailController {
 
   @Get("kanban/board")
   @ApiOperation({ summary: "Get Kanban board view (all columns)" })
+  @ApiQuery({ name: "includeDoneAll", required: false, type: Boolean })
+  @ApiQuery({ name: "unreadOnly", required: false, type: Boolean })
+  @ApiQuery({ name: "hasAttachmentsOnly", required: false, type: Boolean })
+  @ApiQuery({ name: "fromEmail", required: false, type: String })
+  @ApiQuery({
+    name: "sortBy",
+    required: false,
+    enum: ["date_desc", "date_asc", "sender"],
+  })
   async getKanbanBoard(
     @CurrentUser() user: JwtPayload,
     @Query("includeDoneAll") includeDoneAll?: boolean,
@@ -279,8 +390,9 @@ export class EmailController {
     @Query("sortBy") sortBy?: "date_desc" | "date_asc" | "sender",
   ) {
     const filters = {
-      unreadOnly: unreadOnly === true || unreadOnly === "true" as any,
-      hasAttachmentsOnly: hasAttachmentsOnly === true || hasAttachmentsOnly === "true" as any,
+      unreadOnly: unreadOnly === true || unreadOnly === ("true" as any),
+      hasAttachmentsOnly:
+        hasAttachmentsOnly === true || hasAttachmentsOnly === ("true" as any),
       fromEmail,
     };
 
@@ -293,8 +405,28 @@ export class EmailController {
     return ResponseDto.success(result, "Kanban board retrieved successfully");
   }
 
+  @Patch(":id/kanban/column")
+  @ApiOperation({ summary: "Update email kanban column (drag-and-drop)" })
+  @ApiBody({ type: UpdateKanbanColDto })
+  async updateKanbanColumn(
+    @CurrentUser() user: JwtPayload,
+    @Param("id") emailId: string,
+    @Body() updateDto: UpdateKanbanColDto,
+  ) {
+    const result = await this.kanbanService.updateKanbanColumn(
+      user.sub,
+      emailId,
+      updateDto.columnId,
+    );
+    return ResponseDto.success(result, "Kanban column updated successfully");
+  }
+
   @Patch(":id/kanban/status")
-  @ApiOperation({ summary: "Update email kanban status (drag-and-drop)" })
+  @ApiOperation({
+    summary:
+      "Update email kanban status (DEPRECATED: use /kanban/column instead)",
+    deprecated: true,
+  })
   @ApiBody({ type: UpdateKanbanStatusDto })
   async updateKanbanStatus(
     @CurrentUser() user: JwtPayload,

@@ -66,7 +66,7 @@ export interface PreviewEmail {
     labelId: string[];
     threadCount?: number;
 }
-export interface PuzzleEmail extends PreviewEmail {
+export interface SearchEmail extends PreviewEmail {
     relevanceScore: number;
 }
 
@@ -85,14 +85,15 @@ export interface PreviewEmailResponse {
     total: number;
     totalPages: number;
 }
-
-export interface PuzzleEmailRequest {
+export type ModeSearch = "fuzzy" | "semantic";
+export interface SearchEmailRequest {
+    mode: ModeSearch;
     q: string;
     page: number;
     limit: number;
 }
-export interface PuzzleEmailResponse {
-    emails: PuzzleEmail[];
+export interface SearchEmailResponse {
+    emails: SearchEmail[];
     page: number;
     limit: number;
     total: number;

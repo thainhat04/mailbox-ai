@@ -4,11 +4,13 @@ import { PrismaService } from "../../../database/prisma.service";
 import { MailProviderRegistry } from "../providers/provider.registry";
 import { EmailMessageRepository } from "../repositories/email-message.repository";
 import { OAuth2TokenService } from "./oauth2-token.service";
+import { SearchVectorService } from "./search-vector.service";
 import { SyncConfig } from "../../../common/configs/sync.config";
 import {
   retryWithBackoff,
   isTokenExpiredError,
 } from "../../../common/utils/retry.util";
+
 
 /**
  * Email Sync Service
@@ -23,43 +25,51 @@ export class EmailSyncService {
     private readonly prisma: PrismaService,
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
+    private readonly searchVectorService: SearchVectorService,
   ) { }
 
-  // @Cron(CronExpression.EVERY_30_SECONDS)
-  // async syncAllEmails(): Promise<void> {
-  //   this.logger.log('[EMAILS] Starting scheduled email sync');
+  @Cron(CronExpression.EVERY_5_HOURS)
+  //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
+  async syncAllEmails(): Promise<void> {
+    this.logger.log("[EMAILS] Starting scheduled email sync");
 
-  //   try {
-  //     const emailAccounts = await this.prisma.emailAccount.findMany({
-  //       select: { id: true },
-  //     });
+    try {
+      const emailAccounts = await this.prisma.emailAccount.findMany({
+        select: { id: true },
+      });
 
-  //     if (emailAccounts.length === 0) {
-  //       return;
-  //     }
+      if (emailAccounts.length === 0) {
+        return;
+      }
 
-  //     let synced = 0;
-  //     let failed = 0;
+      let synced = 0;
+      let failed = 0;
 
-  //     for (const account of emailAccounts) {
-  //       try {
-  //         const result = await this.syncAccount(account.id);
-  //         if (result.success) synced++;
-  //       } catch (error) {
-  //         this.logger.error(`[EMAILS] Failed for ${account.id}:`, error.message);
-  //         failed++;
-  //       }
-  //     }
+      for (const account of emailAccounts) {
+        try {
+          const result = await this.syncAccount(account.id);
+          if (result.success) synced++;
+        } catch (error) {
+          this.logger.error(
+            `[EMAILS] Failed for ${account.id}:`,
+            error.message,
+          );
+          failed++;
+        }
+      }
 
-  //     this.logger.log(`[EMAILS] Sync completed: ${synced} success, ${failed} failed`);
-  //   } catch (error) {
-  //     this.logger.error('[EMAILS] Sync failed:', error);
-  //   }
-  // }
+      this.logger.log(
+        `[EMAILS] Sync completed: ${synced} success, ${failed} failed`,
+      );
+    } catch (error) {
+      this.logger.error("[EMAILS] Sync failed:", error);
+    }
+  }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_5_HOURS)
+  //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
   async syncAllLabels(): Promise<void> {
-    this.logger.log('[LABELS] Starting scheduled label sync');
+    this.logger.log("[LABELS] Starting scheduled label sync");
 
     try {
       const emailAccounts = await this.prisma.emailAccount.findMany({
@@ -78,14 +88,19 @@ export class EmailSyncService {
           const count = await this.syncLabels(account.id);
           totalSynced += count;
         } catch (error) {
-          this.logger.error(`[LABELS] Failed for ${account.id}:`, error.message);
+          this.logger.error(
+            `[LABELS] Failed for ${account.id}:`,
+            error.message,
+          );
           failed++;
         }
       }
 
-      this.logger.log(`[LABELS] Sync completed: ${totalSynced} labels synced, ${failed} failed`);
+      this.logger.log(
+        `[LABELS] Sync completed: ${totalSynced} labels synced, ${failed} failed`,
+      );
     } catch (error) {
-      this.logger.error('[LABELS] Sync failed:', error);
+      this.logger.error("[LABELS] Sync failed:", error);
     }
   }
 
@@ -141,9 +156,9 @@ export class EmailSyncService {
       // Convert SyncStateData to SyncState
       const syncState = syncStateData
         ? {
-          historyId: syncStateData.lastSyncedHistoryId,
-          deltaLink: syncStateData.lastDeltaLink,
-        }
+            historyId: syncStateData.lastSyncedHistoryId,
+            deltaLink: syncStateData.lastDeltaLink,
+          }
         : {};
 
       // Perform sync with retry logic
@@ -162,10 +177,18 @@ export class EmailSyncService {
         this.logger,
       );
 
-      // Store synced messages in database
+      // Get user's columns to map emails to columnId based on Gmail labels
+      const userColumns = await this.prisma.kanbanColumn.findMany({
+        where: { userId: emailAccount.userId },
+        select: { id: true, gmailLabelId: true, key: true },
+      });
+
+      // Store synced messages in database with columnId mapping
       const messagesAdded = await this.messageRepository.upsertMessages(
         emailAccountId,
-        syncResult.messages.map((msg) => this.convertToMessageData(msg)),
+        syncResult.messages.map((msg) =>
+          this.convertToMessageData(msg, userColumns),
+        ),
       );
 
       // Delete removed messages
@@ -183,6 +206,16 @@ export class EmailSyncService {
       this.logger.log(
         `Sync completed for account ${emailAccountId}: +${messagesAdded} messages, -${messagesDeleted} messages`,
       );
+
+      // Generate embeddings for new messages (async, non-blocking)
+      if (messagesAdded > 0) {
+        this.generateEmbeddingsForAccount(emailAccountId).catch((error) => {
+          this.logger.warn(
+            `Failed to generate embeddings for account ${emailAccountId}: ${error.message}`,
+          );
+          // Don't fail the sync if embedding generation fails
+        });
+      }
 
       return {
         messagesAdded,
@@ -467,9 +500,125 @@ export class EmailSyncService {
   }
 
   /**
-   * Convert EmailMessage to MessageData for repository
+   * Generate embeddings for messages without embeddings in batches of 20
    */
-  private convertToMessageData(message: any): any {
+  async generateEmbeddingsForAccount(emailAccountId: string): Promise<void> {
+    this.logger.log(`[EMBEDDINGS] Generating embeddings for account: ${emailAccountId}`);
+
+    try {
+      // Find messages without embeddings (limit to 100)
+      const messagesWithoutEmbeddings = await this.prisma.$queryRaw<
+        Array<{
+          id: string;
+          messageId: string;
+          subject: string | null;
+          bodyText: string | null;
+        }>
+      >`
+        SELECT em.id, em."messageId", em.subject, mb."bodyText"
+        FROM email_messages em
+        LEFT JOIN message_bodies mb ON mb."emailMessageId" = em.id
+        WHERE em."emailAccountId" = ${emailAccountId}
+          AND mb.embedding IS NULL
+          AND mb."bodyText" IS NOT NULL
+        LIMIT 100
+      `;
+
+      if (messagesWithoutEmbeddings.length === 0) {
+        this.logger.debug(`[EMBEDDINGS] No messages without embeddings for account ${emailAccountId}`);
+        return;
+      }
+
+      this.logger.log(
+        `[EMBEDDINGS] Found ${messagesWithoutEmbeddings.length} messages without embeddings`,
+      );
+
+      // Process in batches of 20
+      const BATCH_SIZE = 20;
+      const totalBatches = Math.ceil(messagesWithoutEmbeddings.length / BATCH_SIZE);
+
+      for (let i = 0; i < messagesWithoutEmbeddings.length; i += BATCH_SIZE) {
+        const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+        const batch = messagesWithoutEmbeddings.slice(i, i + BATCH_SIZE);
+
+        this.logger.debug(
+          `[EMBEDDINGS] Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`,
+        );
+
+        // Prepare texts for batch embedding
+        const texts = batch.map((msg) =>
+          `${msg.subject || ''}\n${msg.bodyText || ''}`.trim()
+        );
+
+        try {
+          // Generate embeddings in batch
+          const embeddings = await this.searchVectorService.createVectorEmbeddingBatch(texts);
+
+          if (!embeddings || embeddings.length === 0) {
+            this.logger.warn(
+              `[EMBEDDINGS] Failed to generate embeddings for batch ${batchNumber}, skipping`,
+            );
+            continue;
+          }
+
+          // Store embeddings in database
+          const emailMessageIds = batch.map((msg) => msg.id);
+          await this.searchVectorService.storeBatchEmbeddings(emailMessageIds, embeddings);
+
+          this.logger.debug(
+            `[EMBEDDINGS] ✓ Batch ${batchNumber}/${totalBatches} completed (${embeddings.length} embeddings stored)`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `[EMBEDDINGS] Failed to process batch ${batchNumber}: ${error.message}`,
+          );
+          // Continue with next batch even if one fails
+        }
+      }
+
+      this.logger.log(
+        `[EMBEDDINGS] ✅ Completed embedding generation for account ${emailAccountId} (${messagesWithoutEmbeddings.length} emails processed)`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[EMBEDDINGS] Failed to generate embeddings for account ${emailAccountId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Convert EmailMessage to MessageData for repository
+   * Maps Gmail labels to kanbanColumnId
+   */
+  private convertToMessageData(
+    message: any,
+    userColumns: Array<{
+      id: string;
+      gmailLabelId: string | null;
+      key: string | null;
+    }>,
+  ): any {
+    // Map Gmail labels to kanbanColumnId
+    const emailLabels = message.labels || [];
+    let kanbanColumnId: string | null = null;
+
+    // Try to find matching column by Gmail label ID
+    for (const column of userColumns) {
+      if (column.gmailLabelId && emailLabels.includes(column.gmailLabelId)) {
+        kanbanColumnId = column.id;
+        break;
+      }
+    }
+
+    // If no match found, use INBOX column (system protected)
+    if (!kanbanColumnId) {
+      const inboxColumn = userColumns.find((col) => col.key === "INBOX");
+      if (inboxColumn) {
+        kanbanColumnId = inboxColumn.id;
+      }
+    }
+
     return {
       messageId: message.id,
       threadId: message.threadId,
@@ -490,6 +639,7 @@ export class EmailSyncService {
       references: message.references || [],
       bodyText: message.bodyText,
       bodyHtml: message.bodyHtml,
+      kanbanColumnId,
       attachments: message.attachments?.map((att: any) => ({
         providerId: att.id,
         filename: att.filename,

@@ -1,11 +1,28 @@
-// Trạng thái Kanban hợp lệ
-export type KanbanStatus = "INBOX" | "TODO" | "PROCESSING" | "DONE" | "FROZEN";
-
 // Thông tin người gửi trong email
+import { Folder } from "../_types/folder";
 export interface EmailSender {
     name: string;
     email: string;
 }
+export interface KanbanColumn {
+    id: string;
+    name: string;
+    key: string;
+    color: string;
+    icon: string;
+    order: number;
+    isSystemProtected: boolean;
+    emailCount: number;
+}
+
+export interface KanbanColumnDetails extends KanbanColumn {
+    gmailLabelName: string;
+    gmailLabelId: string;
+    updatedAt: string;
+    createdAt: string;
+    label: Folder;
+}
+export type KanbanStatus = string;
 
 // Item trong các cột Kanban
 export interface KanbanItem {
@@ -17,7 +34,7 @@ export interface KanbanItem {
     date: string;
     isRead: boolean;
     hasAttachments?: boolean;
-
+    kanbanColumnId: string;
     kanbanStatus: KanbanStatus;
     statusChangedAt: string;
 
@@ -28,13 +45,9 @@ export interface KanbanItem {
     threadId?: string;
 }
 
-// Các cột của Kanban Board
 export interface KanbanBoardData {
-    inbox: KanbanItem[];
-    todo: KanbanItem[];
-    processing: KanbanItem[];
-    done: KanbanItem[];
-    frozen: KanbanItem[];
+    columns: KanbanColumn[];
+    emails: Record<string, KanbanItem[]>;
 }
 
 export interface UpdateKanbanStatusRequest {
@@ -49,7 +62,6 @@ export interface EmailSummaryData {
     cached: boolean;
     keyPoints: string[];
 }
-export type KanbanColumnKey = keyof KanbanBoardData;
 
 export type FrozenTimeouts =
     | `1_HOUR`
@@ -66,7 +78,7 @@ export interface SetFrozenRequest {
 }
 
 // Filter and Sort types
-export type SortOption = 'date_desc' | 'date_asc' | 'sender';
+export type SortOption = "date_desc" | "date_asc" | "sender";
 
 export interface KanbanFilters {
     unreadOnly: boolean;
@@ -80,4 +92,17 @@ export interface KanbanBoardParams {
     hasAttachmentsOnly?: boolean;
     fromEmail?: string;
     sortBy?: SortOption;
+}
+
+export interface CreateKanbanColumnRequest {
+    name: string;
+    color: string;
+    icon: string;
+    gmailLabelName: string;
+}
+
+export interface UpdateKanbanStatusResponse {
+    destinationLabel: Folder;
+    sourceLabel: Folder;
+    email: KanbanItem;
 }

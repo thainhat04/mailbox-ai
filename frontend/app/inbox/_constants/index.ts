@@ -1,3 +1,5 @@
+import { ModeSearch } from "../_types";
+
 const constant = {
     URL_MAILBOXES: "/labels",
     FILE_MAX_SIZE_MB: 15,
@@ -5,12 +7,18 @@ const constant = {
     URL_MODIFY_EMAIL: (id: string) => `/emails/${id}/modify`,
     URL_REPLY_EMAIL: (id: string) => `/emails/${id}/reply`,
     TIME_FREEZE_MS: 3000,
-    nameFrozenColumn: "FROZEN",
+    TOAST_TIME_MS: 4000,
+    FROZEN_COLUMN_KEY: "FROZEN",
+    KANBAN_INBOX_KEY: "INBOX",
     URL_KANBAN: "/kanban/board",
-    URL_UPDATE_KANBAN_STATUS: (id: string) => `/${id}/kanban/status`,
+    URL_UPDATE_KANBAN_STATUS: (id: string) => `/${id}/kanban/column`,
     URL_FROZEN_EMAILS: (id: string) => `/${id}/freeze`,
     URL_UNFREEZE_EMAILS: (id: string) => `/${id}/unfreeze`,
     URL_SUMMARIZE_EMAIL: (id: string) => `/${id}/summary`,
-    URL_PUZZLE_SEARCH: "/emails/fuzzy-search",
+    URL_SEARCH: (mode: ModeSearch) =>
+        mode === "fuzzy"
+            ? "/emails-search/fuzzy-search"
+            : "/emails-search/semantic-search",
+    URL_CREATE_KANBAN_COLUMN: "/kanban/columns",
 };
 export default constant;

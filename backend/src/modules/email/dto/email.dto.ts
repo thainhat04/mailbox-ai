@@ -6,6 +6,10 @@ import {
   IsOptional,
   IsArray,
   ValidateNested,
+  IsInt,
+  Min,
+  Max,
+  IsIn,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -202,7 +206,7 @@ export class EmailListResponseDto {
 export class FuzzySearchQueryDto {
   @ApiProperty({
     example: "marketing",
-    description: "Search query - supports typos and partial matches"
+    description: "Search query for fuzzy search - uses PostgreSQL pg_trgm for typo tolerance, partial matching, and similarity ranking. Best for finding emails with spelling variations or partial text matches."
   })
   @IsString()
   q: string;
@@ -241,3 +245,44 @@ export class FuzzySearchResponseDto {
   totalPages: number;
 }
 
+export class SemanticSearchQueryDto {
+  @ApiProperty({
+    example: "What is the marketing campaign?",
+    description: "Search query for semantic search - uses AI vector embeddings to find emails with similar meaning, even if they don't contain the exact keywords. Best for finding conceptually related emails."
+  })
+  @IsString()
+  query: string;
+
+  @ApiProperty({ required: false, default: 1, description: "Page number for pagination" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  page: number = 1;
+
+  @ApiProperty({ required: false, default: 50, description: "Number of results per page" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit: number = 50;
+}
+
+export class SemanticSearchResponseDto {
+  @ApiProperty({ type: [EmailWithScoreDto] })
+  emails: EmailWithScoreDto[];
+
+  @ApiProperty({ example: 1 })
+  page: number;
+
+  @ApiProperty({ example: 50 })
+  limit: number;
+
+  @ApiProperty({ example: 25, description: "Total number of matching results" })
+  total: number;
+
+  @ApiProperty({ example: 1 })
+  totalPages: number;
+}

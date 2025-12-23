@@ -1,8 +1,10 @@
 "use client";
 import KanbanWrapper from "./KanbanWrapper";
-import useKanban from "../../hooks/useKanban";
+import useKanban from "../../_hooks/useKanban";
 import RefreshButton from "./RefreshButton";
 import FilterSortControls from "./FilterSortControls";
+import ColumnManagerButton from "./ColumnManagerButton";
+import { useState } from "react";
 
 function KanbanLayout() {
     const {
@@ -15,7 +17,12 @@ function KanbanLayout() {
         setFilters,
         sortBy,
         setSortBy,
+        createKanbanColumn,
+        updateKanbanColumn,
+        deleteKanbanColumn,
     } = useKanban();
+
+    const [isRefresh, setIsRefresh] = useState(false);
 
     return (
         <div className="relative kanban__layout h-screen w-full flex flex-col overflow-hidden text-white">
@@ -29,10 +36,26 @@ function KanbanLayout() {
                 )}
                 <div className="p-2 sm:p-3 md:p-4 pb-0">
                     <div className="flex items-center justify-between mb-2">
-                        <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
-                            Kanban Board
-                        </h1>
-                        <RefreshButton onClick={refetch} />
+                        <div>
+                            <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
+                                Kanban Board
+                            </h1>
+                        </div>
+                        <div className="flex items-center gap-5">
+                            <RefreshButton
+                                onClick={() => {
+                                    setIsRefresh(true);
+                                    refetch();
+                                }}
+                            />
+                            <ColumnManagerButton
+                                onCreateColumn={createKanbanColumn}
+                                onUpdateColumn={updateKanbanColumn}
+                                onDeleteColumn={deleteKanbanColumn}
+                                isRefresh={isRefresh}
+                                setIsRefresh={setIsRefresh}
+                            />
+                        </div>
                     </div>
                     <FilterSortControls
                         onFilterChange={setFilters}

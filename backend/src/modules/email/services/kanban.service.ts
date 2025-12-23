@@ -1,12 +1,16 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
-import { EmailMessageRepository } from '../repositories/email-message.repository';
-import { PrismaService } from '../../../database/prisma.service';
-import { SummaryService } from './summary.service';
 import {
-  KanbanBoardDto,
-  SnoozeEmailDto,
-  EmailDto,
-} from '../dto';
+  Injectable,
+  NotFoundException,
+  Logger,
+  BadRequestException,
+} from "@nestjs/common";
+import { EmailMessageRepository } from "../repositories/email-message.repository";
+import { PrismaService } from "../../../database/prisma.service";
+import { SummaryService } from "./summary.service";
+import { KanbanColumnService } from "./kanban-column.service";
+import { MailProviderRegistry } from "../providers/provider.registry";
+import { SnoozeEmailDto, DragDropColumnResponseDto } from "../dto";
+import { LabelDto } from "../dto/label.dto";
 
 @Injectable()
 export class KanbanService {
@@ -16,16 +20,212 @@ export class KanbanService {
     private readonly emailMessageRepository: EmailMessageRepository,
     private readonly prisma: PrismaService,
     private readonly summaryService: SummaryService,
+    private readonly kanbanColumnService: KanbanColumnService,
+    private readonly providerRegistry: MailProviderRegistry,
   ) {}
 
   /**
-   * Update email kanban status
+   * Update email kanban column (NEW dynamic columns)
+   * Syncs Gmail labels when moving emails between columns
+   * Returns updated email with source and destination label info
    */
-  async updateKanbanStatus(
+  async updateKanbanColumn(
     userId: string,
     emailId: string,
-    newStatus: string,
-  ) {
+    columnId: string,
+  ): Promise<DragDropColumnResponseDto> {
+    // Verify user owns the email
+    const email = await this.prisma.emailMessage.findFirst({
+      where: {
+        id: emailId,
+        emailAccount: { userId },
+      },
+      include: {
+        emailAccount: {
+          include: {
+            account: true,
+          },
+        },
+      },
+    });
+
+    if (!email) {
+      throw new NotFoundException("Email not found");
+    }
+
+    // Verify column exists and belongs to user
+    const columns = await this.kanbanColumnService.getColumns(userId);
+    const newColumn = columns.find((c) => c.id === columnId);
+
+    if (!newColumn) {
+      throw new NotFoundException("Column not found");
+    }
+
+    // Get old column information
+    const oldColumn = email.kanbanColumnId
+      ? columns.find((c) => c.id === email.kanbanColumnId)
+      : null;
+
+    // Sync Gmail labels if account is Google
+    if (email.emailAccount.account?.provider === "google") {
+      try {
+        await this.syncGmailLabels(
+          email.emailAccount.id,
+          email.messageId,
+          oldColumn,
+          newColumn,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to sync Gmail labels for email ${emailId}: ${error.message}`,
+        );
+        throw new BadRequestException(
+          `Failed to update Gmail labels: ${error.message}`,
+        );
+      }
+    }
+
+    // Update database only after Gmail sync succeeds
+    const updatedEmail = await this.emailMessageRepository.updateKanbanColumn(
+      emailId,
+      columnId,
+    );
+
+    // Get label info for source and destination
+    const sourceLabel = await this.getLabelInfo(
+      email.emailAccount.id,
+      oldColumn?.gmailLabelId ?? null,
+    );
+    const destinationLabel = await this.getLabelInfo(
+      email.emailAccount.id,
+      newColumn?.gmailLabelId ?? null,
+    );
+
+    return {
+      email: updatedEmail as any,
+      sourceLabel,
+      destinationLabel,
+    };
+  }
+
+  /**
+   * Get label information from Gmail API (realtime)
+   */
+  private async getLabelInfo(
+    emailAccountId: string,
+    labelId: string | null,
+  ): Promise<LabelDto | null> {
+    if (!labelId) {
+      return null;
+    }
+
+    try {
+      // Get realtime stats from Gmail API
+      const provider = await this.providerRegistry.getProvider(emailAccountId);
+      const gmailLabel = await (provider as any).getLabel(labelId);
+
+      // Get additional info from database (color, etc.)
+      const dbLabel = await this.prisma.label.findUnique({
+        where: {
+          emailAccountId_labelId: {
+            emailAccountId,
+            labelId,
+          },
+        },
+      });
+
+      return {
+        id: gmailLabel.id,
+        name: gmailLabel.name,
+        type: gmailLabel.type as "system" | "user",
+        unreadCount: gmailLabel.messagesUnread || 0,
+        totalCount: gmailLabel.messagesTotal || 0,
+        color: dbLabel?.color || gmailLabel.color || undefined,
+        messageListVisibility: gmailLabel.messageListVisibility || undefined,
+        labelListVisibility: gmailLabel.labelListVisibility || undefined,
+      };
+    } catch (error) {
+      this.logger.warn(`Could not get label info from Gmail: ${error.message}`);
+
+      // Fallback to database
+      const label = await this.prisma.label.findUnique({
+        where: {
+          emailAccountId_labelId: {
+            emailAccountId,
+            labelId,
+          },
+        },
+      });
+
+      if (!label) {
+        return null;
+      }
+
+      return {
+        id: label.labelId,
+        name: label.name,
+        type: label.type as "system" | "user",
+        unreadCount: 0,
+        totalCount: 0,
+        color: label.color || undefined,
+        messageListVisibility: label.messageListVisibility || undefined,
+        labelListVisibility: label.labelListVisibility || undefined,
+      };
+    }
+  }
+
+  /**
+   * Sync Gmail labels when moving email between columns
+   * - Removes old column's label
+   * - Adds new column's label
+   * - Removes INBOX label when moving out of INBOX column
+   */
+  private async syncGmailLabels(
+    emailAccountId: string,
+    messageId: string,
+    oldColumn: any,
+    newColumn: any,
+  ): Promise<void> {
+    const provider = await this.providerRegistry.getProvider(emailAccountId);
+
+    const labelsToRemove: string[] = [];
+    const labelsToAdd: string[] = [];
+
+    // Remove old column's Gmail label
+    if (oldColumn?.gmailLabelId) {
+      labelsToRemove.push(oldColumn.gmailLabelId);
+    }
+
+    // Remove INBOX label when moving out of INBOX column
+    if (oldColumn?.key === "INBOX") {
+      labelsToRemove.push("INBOX");
+    }
+
+    // Add new column's Gmail label
+    if (newColumn?.gmailLabelId) {
+      labelsToAdd.push(newColumn.gmailLabelId);
+    }
+
+    // Call Gmail API to modify labels
+    if (labelsToRemove.length > 0 || labelsToAdd.length > 0) {
+      this.logger.log(
+        `Syncing Gmail labels for message ${messageId}: ` +
+          `removing [${labelsToRemove.join(", ")}], ` +
+          `adding [${labelsToAdd.join(", ")}]`,
+      );
+
+      await provider.modifyLabels(messageId, {
+        addLabelIds: labelsToAdd,
+        removeLabelIds: labelsToRemove,
+      });
+    }
+  }
+
+  /**
+   * Update email kanban status
+   * @deprecated Use updateKanbanColumn instead
+   */
+  async updateKanbanStatus(userId: string, emailId: string, newStatus: string) {
     // Verify user owns the email
     const email = await this.prisma.emailMessage.findFirst({
       where: {
@@ -35,7 +235,7 @@ export class KanbanService {
     });
 
     if (!email) {
-      throw new NotFoundException('Email not found');
+      throw new NotFoundException("Email not found");
     }
 
     // Update status
@@ -43,7 +243,7 @@ export class KanbanService {
   }
 
   /**
-   * Get emails grouped by kanban status
+   * Get emails grouped by kanban columns (NEW dynamic approach)
    */
   async getKanbanBoard(
     userId: string,
@@ -53,57 +253,52 @@ export class KanbanService {
       hasAttachmentsOnly?: boolean;
       fromEmail?: string;
     },
-    sortBy?: 'date_desc' | 'date_asc' | 'sender',
-  ): Promise<KanbanBoardDto> {
-    // Fetch emails for each status in parallel
-    const [inbox, todo, processing, done, frozen] = await Promise.all([
-      this.emailMessageRepository.findByKanbanStatus(
+    sortBy?: "date_desc" | "date_asc" | "sender",
+  ): Promise<any> {
+    // Get user's columns
+    const columns = await this.kanbanColumnService.getColumns(userId);
+
+    if (columns.length === 0) {
+      return { columns: [], emails: {} };
+    }
+
+    // Fetch emails for each column in parallel
+    const emailsPromises = columns.map((column) =>
+      this.emailMessageRepository.findByColumnId(
         userId,
-        'INBOX',
-        false,
-        filters,
+        column.id,
+        { ...filters, includeDoneAll },
         sortBy,
       ),
-      this.emailMessageRepository.findByKanbanStatus(
-        userId,
-        'TODO',
-        false,
-        filters,
-        sortBy,
-      ),
-      this.emailMessageRepository.findByKanbanStatus(
-        userId,
-        'PROCESSING',
-        false,
-        filters,
-        sortBy,
-      ),
-      this.emailMessageRepository.findByKanbanStatus(
-        userId,
-        'DONE',
-        includeDoneAll,
-        filters,
-        sortBy,
-      ),
-      this.emailMessageRepository.findByKanbanStatus(
-        userId,
-        'FROZEN',
-        false,
-        filters,
-        sortBy,
-      ),
-    ]);
+    );
+
+    const emailsArrays = await Promise.all(emailsPromises);
+
+    // Build response with column info and emails
+    const emailsByColumn: Record<string, any[]> = {};
+    const allEmails: any[] = [];
+
+    columns.forEach((column, index) => {
+      const emails = emailsArrays[index];
+      emailsByColumn[column.id] = emails;
+      allEmails.push(...emails);
+    });
 
     // Pre-generate summaries for emails that don't have one
-    const allEmails = [...inbox, ...todo, ...processing, ...done, ...frozen];
     await this.ensureSummaries(userId, allEmails);
 
     return {
-      inbox: inbox as any,
-      todo: todo as any,
-      processing: processing as any,
-      done: done as any,
-      frozen: frozen as any,
+      columns: columns.map((col) => ({
+        id: col.id,
+        name: col.name,
+        key: col.key,
+        color: col.color,
+        icon: col.icon,
+        order: col.order,
+        isSystemProtected: col.isSystemProtected,
+        emailCount: emailsByColumn[col.id].length,
+      })),
+      emails: emailsByColumn,
     };
   }
 
@@ -124,7 +319,7 @@ export class KanbanService {
     });
 
     if (!email) {
-      throw new NotFoundException('Email not found');
+      throw new NotFoundException("Email not found");
     }
 
     // Calculate snoozedUntil datetime
@@ -136,7 +331,7 @@ export class KanbanService {
     // Update to FROZEN status
     return this.emailMessageRepository.updateKanbanStatus(
       emailId,
-      'FROZEN',
+      "FROZEN",
       snoozedUntil,
     );
   }
@@ -154,7 +349,7 @@ export class KanbanService {
     });
 
     if (!email) {
-      throw new NotFoundException('Email not found');
+      throw new NotFoundException("Email not found");
     }
 
     // Restore to previous status (or INBOX if no previous status)
@@ -167,7 +362,7 @@ export class KanbanService {
   async getFrozenEmails(userId: string) {
     return this.emailMessageRepository.findByKanbanStatus(
       userId,
-      'FROZEN',
+      "FROZEN",
       false,
     );
   }
@@ -182,13 +377,13 @@ export class KanbanService {
     const now = new Date();
 
     switch (duration) {
-      case '1_HOUR':
+      case "1_HOUR":
         return new Date(now.getTime() + 60 * 60 * 1000); // +1 hour
 
-      case '3_HOURS':
+      case "3_HOURS":
         return new Date(now.getTime() + 3 * 60 * 60 * 1000); // +3 hours
 
-      case '1_DAY': {
+      case "1_DAY": {
         // Tomorrow at 9 AM
         const tomorrow = new Date(now);
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -196,7 +391,7 @@ export class KanbanService {
         return tomorrow;
       }
 
-      case '3_DAYS': {
+      case "3_DAYS": {
         // 3 days from now at 9 AM
         const threeDays = new Date(now);
         threeDays.setDate(threeDays.getDate() + 3);
@@ -204,7 +399,7 @@ export class KanbanService {
         return threeDays;
       }
 
-      case '1_WEEK': {
+      case "1_WEEK": {
         // 7 days from now at 9 AM
         const oneWeek = new Date(now);
         oneWeek.setDate(oneWeek.getDate() + 7);
@@ -212,9 +407,9 @@ export class KanbanService {
         return oneWeek;
       }
 
-      case 'CUSTOM':
+      case "CUSTOM":
         if (!customDateTime) {
-          throw new Error('Custom datetime is required for CUSTOM duration');
+          throw new Error("Custom datetime is required for CUSTOM duration");
         }
         return new Date(customDateTime);
 
@@ -255,7 +450,7 @@ export class KanbanService {
     );
 
     const successCount = results.filter(
-      (r) => r.status === 'fulfilled' && r.value !== null,
+      (r) => r.status === "fulfilled" && r.value !== null,
     ).length;
 
     this.logger.log(

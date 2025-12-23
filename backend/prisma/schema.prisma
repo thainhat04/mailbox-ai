@@ -7,27 +7,29 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 // -------------------------------------------------------------
 // USER — app user
 // -------------------------------------------------------------
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  hashPassword  String
-  name          String?
-  isActive      Boolean   @default(true)
-  role          UserRole  @default(USER)
+  id           String   @id @default(uuid())
+  email        String   @unique
+  hashPassword String
+  name         String?
+  isActive     Boolean  @default(true)
+  role         UserRole @default(USER)
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   accounts      Account[]
   sessions      Session[]
   emailAccounts EmailAccount[]
+  kanbanColumns KanbanColumn[]
 
   @@map("users")
 }
@@ -36,30 +38,30 @@ model User {
 // ACCOUNT — OAuth credentials (replaces OAuth2Token)
 // -------------------------------------------------------------
 model Account {
-  id                     String       @id @default(uuid())
-  userId                 String
-  user                   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  provider               String       // "google" or "microsoft"
-  type                   String       @default("oauth")
-  providerAccountId      String       // provider's user ID
+  provider          String // "google" or "microsoft"
+  type              String @default("oauth")
+  providerAccountId String // provider's user ID
 
   // OAuth tokens
-  refresh_token          String?      @db.Text
-  refreshTokenExpiresAt  DateTime?
-  access_token           String?      @db.Text
-  expires_at             DateTime?
-  token_type             String?
-  scope                  String?      @db.Text
-  id_token               String?      @db.Text
-  session_state          String?
+  refresh_token         String?   @db.Text
+  refreshTokenExpiresAt DateTime?
+  access_token          String?   @db.Text
+  expires_at            DateTime?
+  token_type            String?
+  scope                 String?   @db.Text
+  id_token              String?   @db.Text
+  session_state         String?
 
-  emailAccountId         String?      @unique
+  emailAccountId String? @unique
 
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  emailAccount           EmailAccount? @relation(fields: [emailAccountId], references: [id])
+  emailAccount EmailAccount? @relation(fields: [emailAccountId], references: [id])
 
   @@unique([provider, providerAccountId])
   @@index([userId])
@@ -70,14 +72,14 @@ model Account {
 // SESSION — app sessions
 // -------------------------------------------------------------
 model Session {
-  id            String    @id @default(uuid())
-  sessionToken  String    @unique
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String @id @default(uuid())
+  sessionToken String @unique
+  userId       String
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  expires       DateTime
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  expires   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@map("sessions")
@@ -87,26 +89,26 @@ model Session {
 // EMAILACCOUNT — mailbox identity
 // -------------------------------------------------------------
 model EmailAccount {
-  id                          String    @id @default(uuid())
-  email                       String    @unique
-  userId                      String
-  user                        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  email  String @unique
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  name                        String?
-  image                       String?
+  name  String?
+  image String?
 
   // Gmail/Outlook sync state
-  watchEmailsExpirationDate   DateTime?
-  watchEmailsSubscriptionId   String?
-  lastSyncedHistoryId         String?   // for Gmail
-  lastDeltaLink               String?   // for Outlook
+  watchEmailsExpirationDate DateTime?
+  watchEmailsSubscriptionId String?
+  lastSyncedHistoryId       String? // for Gmail
+  lastDeltaLink             String? // for Outlook
 
-  createdAt                   DateTime  @default(now())
-  updatedAt                   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  account                     Account?
-  messages                    EmailMessage[]
-  labels                      Label[]
+  account  Account?
+  messages EmailMessage[]
+  labels   Label[]
 
   @@index([userId])
   @@map("email_accounts")
@@ -116,53 +118,58 @@ model EmailAccount {
 // EMAILMESSAGE — message metadata
 // -------------------------------------------------------------
 model EmailMessage {
-  id                String        @id @default(uuid())
+  id String @id @default(uuid())
 
-  emailAccountId    String
-  emailAccount      EmailAccount  @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  emailAccountId String
+  emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
 
-  messageId         String        // provider's message ID
-  threadId          String        // provider's thread ID
+  messageId String // provider's message ID
+  threadId  String // provider's thread ID
 
-  from              String
-  fromName          String?
-  to                String[]
-  cc                String[]
-  bcc               String[]
-  replyTo           String?
+  from     String
+  fromName String?
+  to       String[]
+  cc       String[]
+  bcc      String[]
+  replyTo  String?
 
-  subject           String?       @db.Text
-  snippet           String?       @db.Text
-  labels            String[]
+  subject String?  @db.Text
+  snippet String?  @db.Text
+  labels  String[]
 
-  date              DateTime
-  isRead            Boolean       @default(false)
-  isStarred         Boolean       @default(false)
-  hasAttachments    Boolean       @default(false)
+  date           DateTime
+  isRead         Boolean  @default(false)
+  isStarred      Boolean  @default(false)
+  hasAttachments Boolean  @default(false)
 
   // Threading
-  inReplyTo         String?
-  references        String[]
+  inReplyTo  String?
+  references String[]
 
-  // Kanban workflow fields
-  kanbanStatus      String?       @default("INBOX")   // INBOX, TODO, PROCESSING, DONE, FROZEN
-  previousKanbanStatus String?                        // Status before freezing
-  statusChangedAt   DateTime      @default(now())     // For sorting within columns
-  snoozedUntil      DateTime?                         // When to auto-unsnooze (null = not frozen)
-  summary           String?       @db.Text            // Cached AI summary
-  summaryGeneratedAt DateTime?                        // Track when summary was created
+  // Kanban workflow fields - NEW DYNAMIC APPROACH
+  kanbanColumnId String?
+  kanbanColumn   KanbanColumn? @relation(fields: [kanbanColumnId], references: [id], onDelete: SetNull)
 
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  // DEPRECATED: Giữ lại để backward compatible, sẽ migrate sang kanbanColumnId
+  kanbanStatus         String?   @default("INBOX") // INBOX, TODO, PROCESSING, DONE, FROZEN
+  previousKanbanStatus String? // Status before freezing
+  statusChangedAt      DateTime  @default(now()) // For sorting within columns
+  snoozedUntil         DateTime? // When to auto-unsnooze (null = not frozen)
+  summary              String?   @db.Text // Cached AI summary
+  summaryGeneratedAt   DateTime? // Track when summary was created
 
-  body              MessageBody?
-  attachments       Attachment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  body        MessageBody?
+  attachments Attachment[]
 
   @@unique([emailAccountId, messageId])
   @@index([emailAccountId, threadId])
   @@index([emailAccountId, date])
   @@index([emailAccountId, isRead])
   @@index([kanbanStatus, statusChangedAt])
+  @@index([kanbanColumnId])
   @@map("email_messages")
 }
 
@@ -170,15 +177,19 @@ model EmailMessage {
 // MESSAGEBODY — full message content
 // -------------------------------------------------------------
 model MessageBody {
-  id              String        @id @default(uuid())
+  id String @id @default(uuid())
 
-  emailMessageId  String        @unique
-  emailMessage    EmailMessage  @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+  emailMessageId String       @unique
+  emailMessage   EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
 
-  bodyText        String?       @db.Text
-  bodyHtml        String?       @db.Text
+  bodyText String? @db.Text
+  bodyHtml String? @db.Text
 
-  createdAt       DateTime      @default(now())
+  // Vector embedding for semantic search (subject + body)
+  // Using sentence-transformers/all-MiniLM-L6-v2 model which outputs 384-dimensional vectors
+  embedding Unsupported("vector(384)")?
+
+  createdAt DateTime @default(now())
 
   @@map("message_bodies")
 }
@@ -187,20 +198,20 @@ model MessageBody {
 // ATTACHMENT
 // -------------------------------------------------------------
 model Attachment {
-  id              String        @id @default(uuid())
+  id String @id @default(uuid())
 
-  emailMessageId  String
-  emailMessage    EmailMessage  @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+  emailMessageId String
+  emailMessage   EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
 
-  providerId      String
-  filename        String
-  mimeType        String
-  size            Int
+  providerId String
+  filename   String
+  mimeType   String
+  size       Int
 
-  contentId       String?
-  isInline        Boolean       @default(false)
+  contentId String?
+  isInline  Boolean @default(false)
 
-  createdAt       DateTime      @default(now())
+  createdAt DateTime @default(now())
 
   @@index([emailMessageId])
   @@map("attachments")
@@ -210,24 +221,53 @@ model Attachment {
 // LABEL — Gmail labels / Outlook categories
 // -------------------------------------------------------------
 model Label {
-  id                      String        @id @default(uuid())
+  id String @id @default(uuid())
 
-  emailAccountId          String
-  emailAccount            EmailAccount  @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  emailAccountId String
+  emailAccount   EmailAccount @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
 
-  labelId                 String        // Provider's label ID (e.g., INBOX, SENT, etc.)
-  name                    String
-  type                    String?       // "system" or "user"
-  color                   String?
-  messageListVisibility   String?       // Gmail: show/hide in message list
-  labelListVisibility     String?       // Gmail: show/hide in label list
+  labelId               String // Provider's label ID (e.g., INBOX, SENT, etc.)
+  name                  String
+  type                  String? // "system" or "user"
+  color                 String?
+  messageListVisibility String? // Gmail: show/hide in message list
+  labelListVisibility   String? // Gmail: show/hide in label list
 
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([emailAccountId, labelId])
   @@index([emailAccountId])
   @@map("labels")
+}
+
+model KanbanColumn {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name  String // "Inbox", "To Do", "Việc Gấp"
+  key   String? // only system columns: "INBOX"
+  color String? // "#3B82F6" (hex color)
+  icon  String? // "📥" or lucide icon name
+  order Int // 0, 1, 2... for sorting
+
+  // Gmail label mapping
+  gmailLabelId   String? // "Label_832819" - actual ID on Gmail
+  gmailLabelName String? // "Khách hàng VIP" - Cache of the label name
+
+  isSystemProtected Boolean @default(false) // true only for INBOX (cannot be deleted)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reverse relation
+  emails EmailMessage[]
+
+  // Only unique key when it is NOT NULL (for system columns)
+  @@unique([userId, key])
+  @@index([userId, order])
+  @@map("kanban_columns")
 }
 
 // -------------------------------------------------------------

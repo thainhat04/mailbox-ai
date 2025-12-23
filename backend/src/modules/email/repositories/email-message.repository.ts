@@ -25,6 +25,7 @@ export interface EmailMessageData {
   references?: string[];
   bodyText?: string;
   bodyHtml?: string;
+  kanbanColumnId?: string;
   attachments?: AttachmentData[];
 }
 
@@ -49,7 +50,7 @@ export interface SyncStateData {
 export class EmailMessageRepository {
   private readonly logger = new Logger(EmailMessageRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Upsert a single email message
@@ -86,22 +87,23 @@ export class EmailMessageRepository {
         hasAttachments: messageData.hasAttachments,
         inReplyTo: messageData.inReplyTo,
         references: messageData.references || [],
+        kanbanColumnId: messageData.kanbanColumnId,
         updatedAt: new Date(),
         // Update body if provided
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-                upsert: {
-                  create: {
-                    bodyText: messageData.bodyText,
-                    bodyHtml: messageData.bodyHtml,
-                  },
-                  update: {
-                    bodyText: messageData.bodyText,
-                    bodyHtml: messageData.bodyHtml,
-                  },
+              upsert: {
+                create: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
                 },
-              }
+                update: {
+                  bodyText: messageData.bodyText,
+                  bodyHtml: messageData.bodyHtml,
+                },
+              },
+            }
             : undefined,
       },
       create: {
@@ -123,15 +125,16 @@ export class EmailMessageRepository {
         hasAttachments: messageData.hasAttachments,
         inReplyTo: messageData.inReplyTo,
         references: messageData.references || [],
+        kanbanColumnId: messageData.kanbanColumnId,
         // Create body if provided
         body:
           messageData.bodyText || messageData.bodyHtml
             ? {
-                create: {
-                  bodyText: messageData.bodyText,
-                  bodyHtml: messageData.bodyHtml,
-                },
-              }
+              create: {
+                bodyText: messageData.bodyText,
+                bodyHtml: messageData.bodyHtml,
+              },
+            }
             : undefined,
       },
     });
@@ -333,7 +336,64 @@ export class EmailMessageRepository {
   }
 
   /**
+   * Find emails by kanban column ID (NEW dynamic columns approach)
+   */
+  async findByColumnId(
+    userId: string,
+    columnId: string,
+    filters?: {
+      unreadOnly?: boolean;
+      hasAttachmentsOnly?: boolean;
+      fromEmail?: string;
+      includeDoneAll?: boolean;
+    },
+    sortBy?: "date_desc" | "date_asc" | "sender",
+  ): Promise<PrismaEmailMessage[]> {
+    const whereClause: any = {
+      emailAccount: { userId },
+      kanbanColumnId: columnId,
+    };
+
+    // Apply filters
+    if (filters?.unreadOnly) {
+      whereClause.isRead = false;
+    }
+
+    if (filters?.hasAttachmentsOnly) {
+      whereClause.hasAttachments = true;
+    }
+
+    if (filters?.fromEmail) {
+      whereClause.from = {
+        contains: filters.fromEmail,
+        mode: "insensitive",
+      };
+    }
+
+    // Determine sort order
+    let orderBy: any = { statusChangedAt: "desc" }; // Default
+
+    if (sortBy === "date_desc") {
+      orderBy = { date: "desc" };
+    } else if (sortBy === "date_asc") {
+      orderBy = { date: "asc" };
+    } else if (sortBy === "sender") {
+      orderBy = { fromName: "asc" };
+    }
+
+    return this.prisma.emailMessage.findMany({
+      where: whereClause,
+      orderBy,
+      include: {
+        attachments: true,
+        body: true,
+      },
+    });
+  }
+
+  /**
    * Find emails by kanban status with optional DONE filtering
+   * @deprecated Use findByColumnId instead for dynamic columns
    */
   async findByKanbanStatus(
     userId: string,
@@ -415,27 +475,110 @@ export class EmailMessageRepository {
   }
 
   /**
+   * Update email's kanban column (NEW dynamic columns approach)
+   */
+  async updateKanbanColumn(
+    emailId: string,
+    columnId: string,
+  ): Promise<PrismaEmailMessage> {
+    // Get current email state
+    const currentEmail = await this.prisma.emailMessage.findUnique({
+      where: { id: emailId },
+      select: {
+        kanbanColumnId: true,
+        kanbanColumn: {
+          select: { key: true },
+        },
+      },
+    });
+
+    // Get the target column to sync kanbanStatus with its KEY
+    const targetColumn = await this.prisma.kanbanColumn.findUnique({
+      where: { id: columnId },
+      select: { key: true },
+    });
+
+    if (!targetColumn) {
+      throw new Error(`Column ${columnId} not found`);
+    }
+
+    const updateData: any = {
+      kanbanColumnId: columnId,
+      kanbanStatus: targetColumn.key || "INBOX", // Sync kanbanStatus with column KEY
+      statusChangedAt: new Date(),
+    };
+
+    // If moving TO FROZEN column, save current column's KEY
+    if (targetColumn.key === "FROZEN" && currentEmail?.kanbanColumn) {
+      updateData.previousKanbanStatus = currentEmail.kanbanColumn.key;
+    }
+
+    // If moving AWAY FROM FROZEN column, clear previousKanbanStatus
+    if (targetColumn.key !== "FROZEN") {
+      updateData.previousKanbanStatus = null;
+      updateData.snoozedUntil = null;
+    }
+
+    return this.prisma.emailMessage.update({
+      where: { id: emailId },
+      data: updateData,
+      include: {
+        attachments: true,
+        body: true,
+      },
+    });
+  }
+
+  /**
    * Update kanban status for a single email
+   * @deprecated Use updateKanbanColumn instead for dynamic columns
    */
   async updateKanbanStatus(
     emailId: string,
     status: string,
     snoozedUntil?: Date | null,
   ): Promise<PrismaEmailMessage> {
-    // Get current status before updating (for FROZEN status)
+    // Get current email with userId to find target column
     const currentEmail = await this.prisma.emailMessage.findUnique({
       where: { id: emailId },
-      select: { kanbanStatus: true },
+      select: {
+        kanbanStatus: true,
+        kanbanColumnId: true,
+        kanbanColumn: {
+          select: { key: true },
+        },
+        emailAccount: {
+          select: { userId: true },
+        },
+      },
     });
+
+    if (!currentEmail) {
+      throw new Error(`Email ${emailId} not found`);
+    }
+
+    const userId = currentEmail.emailAccount.userId;
+
+    // Find target column by status KEY
+    const targetColumn = await this.prisma.kanbanColumn.findFirst({
+      where: { userId, key: status },
+    });
+
+    if (!targetColumn) {
+      throw new Error(`Column with key "${status}" not found for user ${userId}`);
+    }
 
     const updateData: any = {
       kanbanStatus: status,
+      kanbanColumnId: targetColumn.id,
       statusChangedAt: new Date(),
     };
 
-    // When freezing, save the current status as previousKanbanStatus
+    // When freezing, save the current column KEY as previousKanbanStatus
     if (status === "FROZEN" && currentEmail) {
-      updateData.previousKanbanStatus = currentEmail.kanbanStatus;
+      // Prefer column KEY over kanbanStatus for better accuracy
+      updateData.previousKanbanStatus =
+        currentEmail.kanbanColumn?.key || currentEmail.kanbanStatus;
     }
 
     // Clear snoozedUntil and previousKanbanStatus if moving away from FROZEN status
@@ -460,7 +603,7 @@ export class EmailMessageRepository {
    * Batch update snoozed emails back to their previous status (or INBOX if none)
    */
   async unsnoozeExpiredEmails(emailIds: string[]): Promise<number> {
-    // Get emails with their previous status
+    // Get emails with their previous status and userId
     const emails = await this.prisma.emailMessage.findMany({
       where: {
         id: { in: emailIds },
@@ -468,6 +611,9 @@ export class EmailMessageRepository {
       select: {
         id: true,
         previousKanbanStatus: true,
+        emailAccount: {
+          select: { userId: true },
+        },
       },
     });
 
@@ -475,10 +621,36 @@ export class EmailMessageRepository {
     let count = 0;
     for (const email of emails) {
       try {
+        const targetKey = email.previousKanbanStatus || "INBOX";
+        const userId = email.emailAccount.userId;
+
+        // Find target column by KEY
+        let targetColumn = await this.prisma.kanbanColumn.findFirst({
+          where: { userId, key: targetKey },
+        });
+
+        // Fallback to INBOX if column was deleted
+        if (!targetColumn) {
+          this.logger.warn(
+            `Column with key "${targetKey}" not found for user ${userId}, falling back to INBOX`,
+          );
+          targetColumn = await this.prisma.kanbanColumn.findFirst({
+            where: { userId, key: "INBOX" },
+          });
+        }
+
+        if (!targetColumn) {
+          this.logger.error(
+            `INBOX column not found for user ${userId}, skipping email ${email.id}`,
+          );
+          continue;
+        }
+
         await this.prisma.emailMessage.update({
           where: { id: email.id },
           data: {
-            kanbanStatus: email.previousKanbanStatus || "INBOX", // Default to INBOX if no previous status
+            kanbanColumnId: targetColumn.id,
+            kanbanStatus: targetKey, // Backward compatible
             previousKanbanStatus: null,
             snoozedUntil: null,
             statusChangedAt: new Date(),
@@ -501,13 +673,45 @@ export class EmailMessageRepository {
   async unsnoozeEmail(emailId: string): Promise<PrismaEmailMessage> {
     const email = await this.prisma.emailMessage.findUnique({
       where: { id: emailId },
-      select: { previousKanbanStatus: true },
+      select: {
+        previousKanbanStatus: true,
+        emailAccount: {
+          select: { userId: true },
+        },
+      },
     });
+
+    if (!email) {
+      throw new Error(`Email ${emailId} not found`);
+    }
+
+    const targetKey = email.previousKanbanStatus || "INBOX";
+    const userId = email.emailAccount.userId;
+
+    // Find target column by KEY
+    let targetColumn = await this.prisma.kanbanColumn.findFirst({
+      where: { userId, key: targetKey },
+    });
+
+    // Fallback to INBOX if column was deleted
+    if (!targetColumn) {
+      this.logger.warn(
+        `Column with key "${targetKey}" not found for user ${userId}, falling back to INBOX`,
+      );
+      targetColumn = await this.prisma.kanbanColumn.findFirst({
+        where: { userId, key: "INBOX" },
+      });
+    }
+
+    if (!targetColumn) {
+      throw new Error(`INBOX column not found for user ${userId}`);
+    }
 
     return this.prisma.emailMessage.update({
       where: { id: emailId },
       data: {
-        kanbanStatus: email?.previousKanbanStatus || "INBOX", // Default to INBOX if no previous status
+        kanbanColumnId: targetColumn.id,
+        kanbanStatus: targetKey, // Backward compatible
         previousKanbanStatus: null,
         snoozedUntil: null,
         statusChangedAt: new Date(),
@@ -574,27 +778,27 @@ export class EmailMessageRepository {
       SELECT
         em.*,
         GREATEST(
-          COALESCE(similarity(em.subject, $1), 0),
-          COALESCE(word_similarity($1, em.subject), 0),
-          COALESCE(similarity(em."from", $1), 0),
-          COALESCE(word_similarity($1, em."from"), 0),
-          COALESCE(similarity(em."fromName", $1), 0),
-          COALESCE(word_similarity($1, em."fromName"), 0),
-          COALESCE(similarity(em.snippet, $1), 0),
-          COALESCE(word_similarity($1, em.snippet), 0)
+          COALESCE(similarity(em.subject::text, $1::text), 0),
+          COALESCE(word_similarity($1::text, em.subject::text), 0),
+          COALESCE(similarity(em."from"::text, $1::text), 0),
+          COALESCE(word_similarity($1::text, em."from"::text), 0),
+          COALESCE(similarity(COALESCE(em."fromName", '')::text, $1::text), 0),
+          COALESCE(word_similarity($1::text, COALESCE(em."fromName", '')::text), 0),
+          COALESCE(similarity(COALESCE(em.snippet, '')::text, $1::text), 0),
+          COALESCE(word_similarity($1::text, COALESCE(em.snippet, '')::text), 0)
         ) AS relevance_score
       FROM email_messages em
       WHERE
         em."emailAccountId" = ANY($2::text[])
         AND (
-          similarity(em.subject, $1) > $3
-          OR similarity(em."from", $1) > $3
-          OR similarity(em."fromName", $1) > $3
-          OR similarity(em.snippet, $1) > $3
-          OR word_similarity($1, em.subject) > $3
-          OR word_similarity($1, em."from") > $3
-          OR word_similarity($1, em."fromName") > $3
-          OR word_similarity($1, em.snippet) > $3
+          similarity(em.subject::text, $1::text) > $3
+          OR similarity(em."from"::text, $1::text) > $3
+          OR similarity(COALESCE(em."fromName", '')::text, $1::text) > $3
+          OR similarity(COALESCE(em.snippet, '')::text, $1::text) > $3
+          OR word_similarity($1::text, em.subject::text) > $3
+          OR word_similarity($1::text, em."from"::text) > $3
+          OR word_similarity($1::text, COALESCE(em."fromName", '')::text) > $3
+          OR word_similarity($1::text, COALESCE(em.snippet, '')::text) > $3
           OR em.subject ILIKE '%' || $1 || '%'
           OR em."from" ILIKE '%' || $1 || '%'
           OR em."fromName" ILIKE '%' || $1 || '%'
@@ -610,16 +814,16 @@ export class EmailMessageRepository {
       WHERE
         em."emailAccountId" = ANY($1::text[])
         AND (
-          -- Fuzzy similarity matching
-          similarity(em.subject, $2) > $3
-          OR similarity(em."from", $2) > $3
-          OR similarity(em."fromName", $2) > $3
-          OR similarity(em.snippet, $2) > $3
+          -- Fuzzy similarity matching (with explicit text casting)
+          similarity(em.subject::text, $2::text) > $3
+          OR similarity(em."from"::text, $2::text) > $3
+          OR similarity(COALESCE(em."fromName", '')::text, $2::text) > $3
+          OR similarity(COALESCE(em.snippet, '')::text, $2::text) > $3
           -- Word-level similarity
-          OR word_similarity($2, em.subject) > $3
-          OR word_similarity($2, em."from") > $3
-          OR word_similarity($2, em."fromName") > $3
-          OR word_similarity($2, em.snippet) > $3
+          OR word_similarity($2::text, em.subject::text) > $3
+          OR word_similarity($2::text, em."from"::text) > $3
+          OR word_similarity($2::text, COALESCE(em."fromName", '')::text) > $3
+          OR word_similarity($2::text, COALESCE(em.snippet, '')::text) > $3
           -- Substring matching
           OR em.subject ILIKE '%' || $2 || '%'
           OR em."from" ILIKE '%' || $2 || '%'
@@ -667,6 +871,111 @@ export class EmailMessageRepository {
 
     this.logger.log(
       `Fuzzy search found ${total} results, returning ${results.length} with limit ${limit}`,
+    );
+
+    return {
+      results: messagesWithDetails,
+      total,
+    };
+  }
+
+  async semanticSearchEmails(
+    userId: string,
+    query: string,
+    embedding: number[],
+    options?: {
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{
+    results: Array<PrismaEmailMessage & { relevanceScore: number }>;
+    total: number;
+  }> {
+    const limit = options?.limit || 50;
+    const offset = options?.offset || 0;
+    const similarityThreshold = 0.2; // Lowered from 0.5 for better results
+
+    this.logger.debug(
+      `Semantic searching emails for user ${userId} with query: "${query}"`,
+    );
+
+    // Get all email account IDs for the user
+    const emailAccounts = await this.prisma.emailAccount.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (emailAccounts.length === 0) {
+      return { results: [], total: 0 };
+    }
+
+    const accountIds = emailAccounts.map((acc) => acc.id);
+    const embeddingStr = `[${embedding.join(',')}]`;
+
+    // Use pgvector for semantic similarity search
+    const searchQuery = `
+      SELECT
+        em.*,
+        (1 - (mb.embedding <=> $1::vector)) AS relevance_score
+      FROM email_messages em
+      INNER JOIN message_bodies mb ON mb."emailMessageId" = em.id
+      WHERE
+        em."emailAccountId" = ANY($2::text[])
+        AND mb.embedding IS NOT NULL
+        AND (1 - (mb.embedding <=> $1::vector)) > $3
+      ORDER BY mb.embedding <=> $1::vector ASC
+      LIMIT $4 OFFSET $5
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM email_messages em
+      INNER JOIN message_bodies mb ON mb."emailMessageId" = em.id
+      WHERE
+        em."emailAccountId" = ANY($1::text[])
+        AND mb.embedding IS NOT NULL
+        AND (1 - (mb.embedding <=> $2::vector)) > $3
+    `;
+
+    // Execute both queries in parallel
+    const [results, countResult] = await Promise.all([
+      this.prisma.$queryRawUnsafe<
+        Array<PrismaEmailMessage & { relevance_score: number }>
+      >(searchQuery, embeddingStr, accountIds, similarityThreshold, limit, offset),
+      this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+        countQuery,
+        accountIds,
+        embeddingStr,
+        similarityThreshold,
+      ),
+    ]);
+
+    // Fetch full message details with relations for each result
+    const messagesWithDetails = await Promise.all(
+      results.map(async (result) => {
+        const fullMessage = await this.prisma.emailMessage.findUnique({
+          where: { id: result.id },
+          include: {
+            body: true,
+            attachments: true,
+          },
+        });
+
+        if (!fullMessage) {
+          throw new Error(`Email message ${result.id} not found`);
+        }
+
+        return {
+          ...fullMessage,
+          relevanceScore: Number(result.relevance_score),
+        } as PrismaEmailMessage & { relevanceScore: number };
+      }),
+    );
+
+    const total = Number(countResult[0]?.total || 0);
+
+    this.logger.log(
+      `Semantic search found ${total} results, returning ${results.length} with limit ${limit}`,
     );
 
     return {

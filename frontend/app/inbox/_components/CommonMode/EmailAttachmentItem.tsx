@@ -3,7 +3,6 @@
 import { X } from "lucide-react";
 
 export default function EmailAttachmentItem({ item, onRemove }: any) {
-    console.log("attachment item", item);
     return (
         <div
             className="

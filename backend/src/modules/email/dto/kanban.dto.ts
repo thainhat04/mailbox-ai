@@ -1,13 +1,48 @@
-import { IsEnum, IsOptional, IsDateString, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsDateString, IsString, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { EmailDto } from './email.dto';
+import { LabelDto } from './label.dto';
 
-// Update Kanban Status DTO
+// Update Kanban Column DTO (NEW)
+export class UpdateKanbanColDto {
+  @ApiProperty({
+    description: 'Target column ID',
+    example: 'uuid-column-123'
+  })
+  @IsString()
+  @IsUUID()
+  columnId: string;
+}
+
+// Response DTO for drag-drop column operation
+export class DragDropColumnResponseDto {
+  @ApiProperty({ description: 'Updated email data' })
+  email: EmailDto;
+
+  @ApiProperty({
+    description: 'Source label information (before drag)',
+    required: false,
+    nullable: true,
+    type: () => LabelDto,
+  })
+  sourceLabel: LabelDto | null;
+
+  @ApiProperty({
+    description: 'Destination label information (after drop)',
+    required: false,
+    nullable: true,
+    type: () => LabelDto,
+  })
+  destinationLabel: LabelDto | null;
+}
+
+// Update Kanban Status DTO (DEPRECATED)
 export class UpdateKanbanStatusDto {
   @ApiProperty({
-    description: 'Email kanban status',
+    description: 'Email kanban status (DEPRECATED: use columnId instead)',
     enum: ['INBOX', 'TODO', 'PROCESSING', 'DONE', 'FROZEN'],
-    example: 'TODO'
+    example: 'TODO',
+    deprecated: true
   })
   @IsEnum(['INBOX', 'TODO', 'PROCESSING', 'DONE', 'FROZEN'])
   status: string;
@@ -33,13 +68,28 @@ export class SnoozeEmailDto {
   customDateTime?: string; // For CUSTOM duration
 }
 
-// Kanban Board Response DTO
+// Kanban Board Response DTO (DEPRECATED)
 export class KanbanBoardDto {
   inbox: EmailDto[];
   todo: EmailDto[];
   processing: EmailDto[];
   done: EmailDto[];
   frozen: EmailDto[];
+}
+
+// Dynamic Kanban Board Response (NEW)
+export class DynamicKanbanBoardDto {
+  columns: Array<{
+    id: string;
+    name: string;
+    key: string | null;
+    color: string | null;
+    icon: string | null;
+    order: number;
+    isSystemProtected: boolean;
+    emailCount: number;
+  }>;
+  emails: Record<string, EmailDto[]>; // columnId -> emails
 }
 
 // Summary Response DTO
