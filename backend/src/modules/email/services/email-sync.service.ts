@@ -11,7 +11,6 @@ import {
   isTokenExpiredError,
 } from "../../../common/utils/retry.util";
 
-
 /**
  * Email Sync Service
  * Handles periodic email synchronization for all accounts using cron jobs
@@ -26,10 +25,10 @@ export class EmailSyncService {
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
     private readonly searchVectorService: SearchVectorService,
-  ) { }
+  ) {}
 
-  @Cron(CronExpression.EVERY_5_HOURS)
-  //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
+  //@Cron(CronExpression.EVERY_5_HOURS)
+  @Cron(CronExpression.EVERY_5_SECONDS) // For testing
   async syncAllEmails(): Promise<void> {
     this.logger.log("[EMAILS] Starting scheduled email sync");
 
@@ -66,8 +65,8 @@ export class EmailSyncService {
     }
   }
 
-  @Cron(CronExpression.EVERY_5_HOURS)
-  //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
+  //@Cron(CronExpression.EVERY_5_HOURS)
+  @Cron(CronExpression.EVERY_5_SECONDS) // For testing
   async syncAllLabels(): Promise<void> {
     this.logger.log("[LABELS] Starting scheduled label sync");
 
@@ -503,7 +502,9 @@ export class EmailSyncService {
    * Generate embeddings for messages without embeddings in batches of 20
    */
   async generateEmbeddingsForAccount(emailAccountId: string): Promise<void> {
-    this.logger.log(`[EMBEDDINGS] Generating embeddings for account: ${emailAccountId}`);
+    this.logger.log(
+      `[EMBEDDINGS] Generating embeddings for account: ${emailAccountId}`,
+    );
 
     try {
       // Find messages without embeddings (limit to 100)
@@ -525,7 +526,9 @@ export class EmailSyncService {
       `;
 
       if (messagesWithoutEmbeddings.length === 0) {
-        this.logger.debug(`[EMBEDDINGS] No messages without embeddings for account ${emailAccountId}`);
+        this.logger.debug(
+          `[EMBEDDINGS] No messages without embeddings for account ${emailAccountId}`,
+        );
         return;
       }
 
@@ -535,7 +538,9 @@ export class EmailSyncService {
 
       // Process in batches of 20
       const BATCH_SIZE = 20;
-      const totalBatches = Math.ceil(messagesWithoutEmbeddings.length / BATCH_SIZE);
+      const totalBatches = Math.ceil(
+        messagesWithoutEmbeddings.length / BATCH_SIZE,
+      );
 
       for (let i = 0; i < messagesWithoutEmbeddings.length; i += BATCH_SIZE) {
         const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
@@ -547,12 +552,13 @@ export class EmailSyncService {
 
         // Prepare texts for batch embedding
         const texts = batch.map((msg) =>
-          `${msg.subject || ''}\n${msg.bodyText || ''}`.trim()
+          `${msg.subject || ""}\n${msg.bodyText || ""}`.trim(),
         );
 
         try {
           // Generate embeddings in batch
-          const embeddings = await this.searchVectorService.createVectorEmbeddingBatch(texts);
+          const embeddings =
+            await this.searchVectorService.createVectorEmbeddingBatch(texts);
 
           if (!embeddings || embeddings.length === 0) {
             this.logger.warn(
@@ -563,7 +569,10 @@ export class EmailSyncService {
 
           // Store embeddings in database
           const emailMessageIds = batch.map((msg) => msg.id);
-          await this.searchVectorService.storeBatchEmbeddings(emailMessageIds, embeddings);
+          await this.searchVectorService.storeBatchEmbeddings(
+            emailMessageIds,
+            embeddings,
+          );
 
           this.logger.debug(
             `[EMBEDDINGS] ✓ Batch ${batchNumber}/${totalBatches} completed (${embeddings.length} embeddings stored)`,
