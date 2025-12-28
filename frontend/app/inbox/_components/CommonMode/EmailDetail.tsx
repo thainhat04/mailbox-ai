@@ -10,6 +10,7 @@ import {
     Download,
     File,
     ArrowLeft,
+    ExternalLink,
 } from "lucide-react";
 import { formatEmailDate } from "@/helper/dateFormatter";
 import EmailBody from "./EmailBody";
@@ -179,6 +180,15 @@ export default function EmailDetail({
         if (!result) {
             showToast(t("inbox.emailStarError"), "error");
         }
+    };
+
+    const handleOpenInGmail = () => {
+        if (!email?.messageId) {
+            return;
+        }
+
+        const gmailUrl = `https://mail.google.com/mail/u/0/#all/${email.messageId}`;
+        window.open(gmailUrl, "_blank");
     };
 
     return (
@@ -375,6 +385,16 @@ export default function EmailDetail({
                             />
                             <span className="hidden sm:inline">
                                 {t("inbox.detail.8")}
+                            </span>
+                        </button>
+                        <button
+                            onClick={handleOpenInGmail}
+                            className="flex-1 sm:flex-none cursor-pointer inline-flex items-center justify-center sm:justify-start gap-2 rounded-lg bg-white/10 px-3 sm:px-4 py-2 text-xs font-medium text-white hover:bg-white/[0.14] transition"
+                            disabled={!email?.messageId}
+                        >
+                            <ExternalLink size={14} className="sm:size-4" />
+                            <span className="hidden sm:inline">
+                                {t("inbox.detail.14")}
                             </span>
                         </button>
                     </div>

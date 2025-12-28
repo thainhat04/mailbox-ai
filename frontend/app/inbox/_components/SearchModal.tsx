@@ -6,6 +6,7 @@ import { useQueryHandler } from "@/hooks/useQueryHandler";
 import SimpleCardItem from "@/components/ui/SimpleCardItem";
 import { PreviewEmail, SearchEmail, ModeSearch } from "../_types";
 import EmailDetail from "./CommonMode/EmailDetail";
+import { useTranslation, Trans } from "react-i18next";
 
 interface SearchModalProps {
     isOpen: boolean;
@@ -20,6 +21,7 @@ export default function SearchModal({
     searchQuery,
     mode,
 }: SearchModalProps) {
+    const { t } = useTranslation();
     const [currentPage, setCurrentPage] = useState(1);
     const [emails, setEmails] = useState<SearchEmail[]>([]);
     const [total, setTotal] = useState<number>(0);
@@ -101,16 +103,25 @@ export default function SearchModal({
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
                     <div>
                         <h2 className="text-2xl font-bold text-white">
-                            Search Results
+                            {t("search_modal.1")}
                         </h2>
                         {!isFetching && (
                             <p className="text-sm text-white/60 mt-1">
-                                Found {total} result{total !== 1 ? "s" : ""} for
-                                "
-                                <span className="text-cyan-400">
-                                    {searchQuery}
-                                </span>
-                                "
+                                <Trans
+                                    i18nKey="search_modal.2"
+                                    values={{
+                                        count: total,
+                                        query: searchQuery,
+                                    }}
+                                    components={{
+                                        strong: (
+                                            <span className="font-semibold text-white" />
+                                        ),
+                                        highlight: (
+                                            <span className="text-cyan-400" />
+                                        ),
+                                    }}
+                                />
                             </p>
                         )}
                     </div>
@@ -142,7 +153,9 @@ export default function SearchModal({
                     {isLoading || isFetching ? (
                         <div className="flex flex-col items-center justify-center py-20">
                             <div className="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
-                            <p className="text-white/60 mt-4">Searching...</p>
+                            <p className="text-white/60 mt-4">
+                                {t("search_modal.3")}
+                            </p>
                         </div>
                     ) : error ? (
                         <div className="flex flex-col items-center justify-center py-20">
@@ -160,7 +173,7 @@ export default function SearchModal({
                                 />
                             </svg>
                             <p className="text-white/60 mt-4">
-                                Error loading results
+                                {t("search_modal.5")}
                             </p>
                         </div>
                     ) : emails.length === 0 ? (
@@ -179,10 +192,10 @@ export default function SearchModal({
                                 />
                             </svg>
                             <p className="text-white/60 mt-4 text-lg">
-                                No results found
+                                {t("search_modal.4")}
                             </p>
                             <p className="text-white/40 text-sm mt-2">
-                                Try different keywords
+                                {t("search_modal.6")}
                             </p>
                         </div>
                     ) : (
@@ -209,7 +222,10 @@ export default function SearchModal({
                         >
                             {/* Page Info */}
                             <div className="text-sm text-white/60">
-                                Page {currentPage} of {totalPages}
+                                {t("search_modal.7", {
+                                    current: currentPage,
+                                    total: totalPages,
+                                })}
                             </div>
 
                             {/* Pagination Controls */}
@@ -245,7 +261,7 @@ export default function SearchModal({
                                     disabled={currentPage === 1}
                                     className="px-4 cursor-pointer py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
                                 >
-                                    Previous
+                                    {t("search_modal.8")}
                                 </button>
 
                                 {/* Page Numbers */}
@@ -305,7 +321,7 @@ export default function SearchModal({
                                     disabled={currentPage === totalPages}
                                     className="px-4 cursor-pointer py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
                                 >
-                                    Next
+                                    {t("search_modal.9")}
                                 </button>
 
                                 {/* Last Page */}
@@ -356,7 +372,7 @@ export default function SearchModal({
                                     />
                                 </svg>
                                 <span className="text-sm font-medium">
-                                    Back to Results
+                                    {t("search_modal.10")}
                                 </span>
                             </button>
                         </div>

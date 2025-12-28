@@ -22,7 +22,7 @@ import { useMutationHandler } from "@/hooks/useMutationHandler";
 import { useToast } from "@/components/ui/toast-provider";
 import { getTimeoutMs } from "@/helper/get-timeout-ms";
 import isFrozenColumn from "@/helper/is-fronzen";
-import { it } from "node:test";
+import { useTranslation } from "react-i18next";
 
 function findColumnIdByItem(
     board: KanbanBoardData,
@@ -35,6 +35,7 @@ function findColumnIdByItem(
 }
 
 export default function useKanban() {
+    const { t } = useTranslation();
     const { showToast } = useToast();
     const [columns, setColumns] = useState<KanbanBoardData>({
         columns: [],
@@ -173,9 +174,9 @@ export default function useKanban() {
                     newStatus: toColumnId, // ✅ dùng ID
                 });
             }
-            showToast("Moved successfully", "success");
+            showToast(t("toast.2"), "success");
         } catch {
-            showToast("Update failed, reverting", "error");
+            showToast(t("toast.3"), "error");
             setColumns(prevState);
         }
     };
@@ -221,24 +222,20 @@ export default function useKanban() {
         gmailLabelName: string
     ) => {
         if (name.trim() === "") {
-            showToast("Column name cannot be empty", "error");
             return;
         }
         if (
             color.trim() === "" ||
             !/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)
         ) {
-            showToast("Column color cannot be empty", "error");
             return;
         }
 
         if (icon.trim() === "") {
-            showToast("Column icon cannot be empty", "error");
             return;
         }
 
         if (gmailLabelName.trim() === "") {
-            showToast("Gmail label name cannot be empty", "error");
             return;
         }
 
@@ -312,19 +309,16 @@ export default function useKanban() {
         gmailLabelName: string
     ) => {
         if (name.trim() === "") {
-            showToast("Column name cannot be empty", "error");
             return;
         }
         if (
             color.trim() === "" ||
             !/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)
         ) {
-            showToast("Column color cannot be empty", "error");
             return;
         }
 
         if (icon.trim() === "") {
-            showToast("Column icon cannot be empty", "error");
             return;
         }
 
@@ -371,7 +365,6 @@ export default function useKanban() {
             (c) => c.key === InBoxConstant.KANBAN_INBOX_KEY
         );
         if (!inboxColumn) {
-            showToast("Inbox column not found, cannot delete", "error");
             return;
         }
 
@@ -397,7 +390,7 @@ export default function useKanban() {
 
         if (!result) {
             if (snapshot) setColumns(snapshot);
-            showToast("Delete failed, reverting", "error");
+            showToast(t("toast.3"), "error");
         }
     };
 

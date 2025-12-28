@@ -1,6 +1,9 @@
+"use client";
 import { RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export default function RefreshButton({ onClick }: { onClick: () => void }) {
+    const { t } = useTranslation();
     return (
         <button
             onClick={onClick}
@@ -13,7 +16,7 @@ export default function RefreshButton({ onClick }: { onClick: () => void }) {
             "
         >
             <RefreshCw className="h-4 w-4 animate-spin-slow" />
-            Refresh
+            {t("kanban.1")}
         </button>
     );
 }

@@ -13,6 +13,7 @@ const SERVICES = {
     TIMEOUT_ERROR_MESSAGE: "TIMEOUT_ERROR_MESSAGE",
     RETRY_DELAY_MS: 2000,
     MAX_RETRY_ATTEMPTS: 30,
+    LOGOUT_MESSAGE: "LOGOUT",
     // Email endpoints
     URL_GET_EMAILS: "/api/emails",
     URL_GET_EMAIL_BY_ID: "/api/emails",

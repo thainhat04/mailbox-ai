@@ -27,8 +27,8 @@ export class EmailSyncService {
     private readonly searchVectorService: SearchVectorService,
   ) {}
 
-  //@Cron(CronExpression.EVERY_5_HOURS)
-  @Cron(CronExpression.EVERY_5_SECONDS) // For testing
+  @Cron(CronExpression.EVERY_5_HOURS)
+  //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
   async syncAllEmails(): Promise<void> {
     this.logger.log("[EMAILS] Starting scheduled email sync");
 
@@ -65,8 +65,8 @@ export class EmailSyncService {
     }
   }
 
-  //@Cron(CronExpression.EVERY_5_HOURS)
-  @Cron(CronExpression.EVERY_5_SECONDS) // For testing
+  @Cron(CronExpression.EVERY_5_HOURS)
+  //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
   async syncAllLabels(): Promise<void> {
     this.logger.log("[LABELS] Starting scheduled label sync");
 

@@ -273,6 +273,7 @@ const inboxApi = api.injectEndpoints({
 
                 const hasDelete = arg.flags.delete !== undefined;
                 const hasStarred = arg.flags.starred !== undefined;
+                const hasRead = arg.flags.read !== undefined;
 
                 // Nếu update STARRED
                 if (hasStarred) {
@@ -285,7 +286,10 @@ const inboxApi = api.injectEndpoints({
                 }
 
                 // Mặc định
-                return [{ type: "Emails", id: arg.emailId }];
+                if (!hasRead) {
+                    return [{ type: "Emails", id: arg.emailId }];
+                }
+                return [];
             },
         }),
 
