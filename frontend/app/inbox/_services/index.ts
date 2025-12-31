@@ -367,6 +367,26 @@ const inboxApi = api.injectEndpoints({
                 } catch (err) {}
             },
         }),
+        updateCachedKanbanItem: builder.mutation<
+            KanbanBoardData,
+            KanbanBoardData
+        >({
+            queryFn: async (body) => {
+                // Không gọi API, chỉ trả về data để cập nhật cache
+                return { data: body };
+            },
+            async onQueryStarted(arg, { dispatch }) {
+                dispatch(
+                    inboxApi.util.updateQueryData(
+                        "getAllKanBan",
+                        undefined,
+                        (draft) => {
+                            draft.data = arg;
+                        }
+                    )
+                );
+            },
+        }),
         summarizeEmail: builder.query<
             SuccessResponse<EmailSummaryData>,
             { emailId: string }
@@ -545,4 +565,5 @@ export const {
     useUpdateKanBanColumnMutation,
     useDeleteKanBanColumnMutation,
     useGetAllColumnDetailsQuery,
+    useUpdateCachedKanbanItemMutation,
 } = inboxApi;
