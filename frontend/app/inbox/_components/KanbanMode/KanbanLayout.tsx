@@ -42,7 +42,7 @@ function KanbanLayout() {
             )}
 
             {/* Header - Fixed at top */}
-            <div className="relative z-10 shrink-0 p-2 sm:p-3 md:p-4 pb-0">
+            <div className="relative shrink-0 p-2 sm:p-3 md:p-4 pb-0">
                 <div className="flex items-center justify-between mb-2">
                     <div>
                         <h1 className="text-lg sm:text-xl md:text-2xl font-bold">
@@ -74,7 +74,7 @@ function KanbanLayout() {
             </div>
 
             {/* Kanban content - Scrollable area */}
-            <div className="relative z-10 flex-1 overflow-hidden">
+            <div className="relative flex-1 overflow-hidden">
                 <KanbanWrapper
                     columns={columns}
                     onDragEnd={onDragEnd}

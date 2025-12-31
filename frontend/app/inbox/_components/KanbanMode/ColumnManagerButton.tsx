@@ -129,7 +129,7 @@ export default function ColumnManagerButton({
                             className="fixed inset-0 z-10"
                             onClick={() => setIsMenuOpen(false)}
                         />
-                        <div className="absolute  right-0 mt-2 w-72 bg-gray-900 rounded-lg shadow-2xl border border-white/10 z-20 overflow-hidden">
+                        <div className="absolute right-0 mt-2 w-72 bg-gray-900 rounded-lg shadow-2xl border border-white/10 z-40 overflow-hidden">
                             {/* Create Button */}
                             <button
                                 onClick={() => {
