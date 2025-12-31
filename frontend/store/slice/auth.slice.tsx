@@ -6,6 +6,8 @@ import type { AppDispatch } from "../index";
 import SERVICES from "@/constants/services";
 import { userApi } from "@/services/User";
 import { RouterClient } from "@/helper/client-router";
+import { store } from "../index";
+import { authChannel } from "@/lib/auth-channel";
 
 export interface User {
     id: string;
@@ -58,6 +60,12 @@ const authSlice = createSlice({
 
 export const { login, logout, updateUser } = authSlice.actions;
 
+export function performLogout(broadcast = true) {
+    store.dispatch(logout());
+    if (broadcast) {
+        authChannel.postMessage({ type: SERVICES.LOGOUT_MESSAGE });
+    }
+}
 /**
  * Thunk: initAuth
  * Example: check token in localStorage, optionally fetch profile,

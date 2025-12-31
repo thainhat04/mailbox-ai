@@ -7,7 +7,7 @@ import {
     useEffect,
 } from "react";
 import { toastManager } from "@/helper/toast/toast-manager";
-import { CheckCircle, XCircle, AlertTriangle, Info } from "lucide-react";
+import { CheckCircle, XCircle, AlertTriangle, Info, X } from "lucide-react";
 
 export type ToastType = "success" | "error" | "info" | "warning";
 
@@ -46,6 +46,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         }, duration);
     };
 
+    const removeToast = (id: number) => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+    };
+
     useEffect(() => {
         toastManager.register(showToast);
     }, []);
@@ -58,10 +62,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     };
 
     const colors = {
-        success: "bg-green-500/15 border-green-500/30 text-green-200",
-        error: "bg-red-500/15 border-red-500/30 text-red-200",
-        warning: "bg-yellow-500/15 border-yellow-500/30 text-yellow-200",
-        info: "bg-blue-500/15 border-blue-500/30 text-blue-200",
+        success: "bg-green-500/25 border-green-500/50 text-green-50",
+        error: "bg-red-500/25 border-red-500/50 text-red-50",
+        warning: "bg-yellow-500/25 border-yellow-500/50 text-yellow-50",
+        info: "bg-blue-500/25 border-blue-500/50 text-blue-50",
     };
 
     return (
@@ -73,16 +77,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                     <div
                         key={toast.id}
                         className={`
-                            min-w-60 px-4 py-3 rounded-xl border 
-                            backdrop-blur-sm shadow-xl flex items-start gap-3
+                            min-w-60 px-4 py-3 rounded-xl border-2 
+                            backdrop-blur-md shadow-2xl flex items-start gap-3
                             animate-toast-enter pointer-events-auto
                             ${colors[toast.type]}
                         `}
                     >
                         {icons[toast.type]}
-                        <span className="font-medium text-sm">
+                        <span className="font-semibold text-sm flex-1">
                             {toast.message}
                         </span>
+                        <button
+                            onClick={() => removeToast(toast.id)}
+                            className="hover:opacity-70 cursor-pointer transition-opacity shrink-0"
+                            aria-label="Đóng"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
                     </div>
                 ))}
             </div>

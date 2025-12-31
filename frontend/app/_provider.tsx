@@ -4,6 +4,7 @@ import { Provider } from "react-redux";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import store from "../store";
 import { InitProvider } from "@/components/provider/InitProvider";
+import AuthBroadcastProvider from "@/components/provider/AuthBroadcastProvider";
 
 export default function ProviderLayout({
     children,
@@ -13,7 +14,9 @@ export default function ProviderLayout({
     return (
         <ToastProvider>
             <Provider store={store}>
-                <InitProvider>{children}</InitProvider>
+                <AuthBroadcastProvider>
+                    <InitProvider>{children}</InitProvider>
+                </AuthBroadcastProvider>
             </Provider>
         </ToastProvider>
     );

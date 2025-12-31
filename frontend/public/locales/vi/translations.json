@@ -122,7 +122,8 @@
             "10": "Tải xuống",
             "11": "Mở",
             "12": "Chưa đọc",
-            "13": "Đang xử lý..."
+            "13": "Đang xử lý...",
+            "14": "Mở tại Gmail"
         },
         "reply": {
             "1": "Trả lời email",
@@ -136,5 +137,87 @@
         "prev": "Trước",
         "next": "Tiếp",
         "page": "Trang"
+    },
+    "inbox_header": {
+        "1": "Tìm kiếm email, liên hệ hoặc từ khóa...",
+        "2": "Người gửi",
+        "3": "Từ khóa",
+        "4": "Sử dụng ↑↓ để điều hướng",
+        "5": "Nhấn ESC để đóng",
+        "6": ""
+    },
+    "search_modal": {
+        "1": "Kết quả tìm kiếm",
+        "2": "Đã tìm thấy <strong>{{count}}</strong> kết quả cho <highlight>{{query}}</highlight>",
+        "3": "Đang tìm kiếm...",
+        "4": "Không có kết quả nào được tìm thấy.",
+        "5": "Đã xảy ra lỗi khi tìm kiếm. Vui lòng thử lại.",
+        "6": "Thử từ khóa khác",
+        "7": "Trang {{current}} của {{total}}",
+        "8": "Trước",
+        "9": "Tiếp",
+        "10": "Quay lại kết quả"
+    },
+    "card_item": {
+        "1": "Người gửi",
+        "2": "Điểm liên quan",
+        "3": "Đóng băng trong"
+    },
+    "kanban": {
+        "1": "Làm mới"
+    },
+    "filter": {
+        "1": "Bộ lọc",
+        "2": "kích hoạt",
+        "3": "Chưa đọc",
+        "4": "Có tệp đính kèm",
+        "5": "Lọc theo người gửi",
+        "6": "Nhập tên người gửi",
+        "7": "Hủy lọc",
+        "date_desc": "Ngày: Mới nhất trước",
+        "date_asc": "Ngày: Cũ nhất trước",
+        "sender": "Người gửi (A-Z)"
+    },
+    "kanban_config": {
+        "1": "Tạo cột mới",
+        "2": "Sửa",
+        "3": "Xóa",
+        "4": "Đang tải...",
+        "5": "Được bảo vệ "
+    },
+    "kanban_column_modal": {
+        "1": "Tên cột",
+        "2": "ví dụ, Đang tiến hành",
+        "3": "Tên nhãn Gmail",
+        "4": "ví dụ, ĐANG_TIẾN_HÀNH",
+        "5": "Biểu tượng",
+        "6": "Màu sắc",
+        "7": "Hủy",
+        "8": "Tạo",
+        "9": "⚠️ Côt này được bảo vệ và không thể",
+        "10": "Cập nhật",
+        "11": "Xóa",
+        "12": "Bạn chắc chắn muốn xóa cột này chứ?",
+        "13": "⚠️ Tất cả các email trong cột này sẽ được di chuyển trở lại hộp thư đến.",
+        "14": "Nhãn Gmail này sẽ đồng bộ với cột này.",
+        "15": "Đang xử lý...",
+        "errors": {
+            "nameRequired": "Tên cột là bắt buộc.",
+            "nameMinLength": "Tên cột phải có ít nhất {{count}} ký tự.",
+            "labelRequired": "Tên nhãn Gmail là bắt buộc",
+            "labelMinLength": "Tên nhãn Gmail phải có ít nhất {{count}} ký tự.",
+            "colorRequired": "Màu sắc là bắt buộc.",
+            "colorInvalid": "Định dạng màu không hợp lệ (sử dụng #RRGGBB hoặc #RGB)."
+        },
+        "mode": {
+            "1": "Tạo cột mới",
+            "2": "Cập nhật cột",
+            "3": "Xóa cột"
+        }
+    },
+    "toast": {
+        "1": "Vui lòng chọn ngày và giờ trong tương lai.",
+        "2": "Di ch chuyển email thành công.",
+        "3": "Cập nhật thất bại, đang hoàn tác."
     }
 }

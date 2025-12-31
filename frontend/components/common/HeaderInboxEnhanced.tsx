@@ -6,6 +6,7 @@ import { SuggestionItem, SuggestionType } from "@/types/suggestion";
 import UserMenu from "@/components/ui/UserMenu";
 import { User, Hash } from "lucide-react";
 import { ModeSearch } from "@/app/inbox/_types";
+import { useTranslation } from "react-i18next";
 
 interface HeaderInboxProps {
     isCommondMode: boolean;
@@ -22,6 +23,7 @@ function HeaderInbox({
     onModeChange,
     modeSearch,
 }: HeaderInboxProps) {
+    const { t } = useTranslation();
     const [searchQuery, setSearchQuery] = useState("");
     const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
 
@@ -188,7 +190,7 @@ function HeaderInbox({
     };
 
     return (
-        <header className="relative z-20 border-b border-white/10 backdrop-blur-md bg-linear-to-r from-slate-900/80 via-slate-900/60 to-slate-900/80 py-3">
+        <header className="sticky top-0 z-100 border-b border-white/10 backdrop-blur-md bg-linear-to-r from-slate-900/80 via-slate-900/60 to-slate-900/80 py-3">
             <div className="px-6 flex items-center justify-between gap-4">
                 {/* Left: Logo + Brand */}
                 <div className="flex items-center gap-3 shrink-0">
@@ -325,7 +327,7 @@ function HeaderInbox({
                                     }}
                                     onBlur={() => setIsFocused(false)}
                                     onKeyDown={handleKeyDown}
-                                    placeholder="Search emails, contacts, or keywords..."
+                                    placeholder={t("inbox_header.1")}
                                     className="flex-1 bg-transparent py-2.5 pr-3 text-sm text-white placeholder:text-white/40 focus:outline-none"
                                     autoComplete="off"
                                 />
@@ -416,8 +418,12 @@ function HeaderInbox({
                                                         <p className="text-xs text-white/40 truncate">
                                                             {suggestion.type ===
                                                             SuggestionType.SENDER
-                                                                ? "Sender"
-                                                                : "Keyword"}
+                                                                ? t(
+                                                                      "inbox_header.2"
+                                                                  )
+                                                                : t(
+                                                                      "inbox_header.3"
+                                                                  )}
                                                         </p>
                                                     </div>
                                                     {selectedIndex ===
@@ -431,8 +437,8 @@ function HeaderInbox({
                                         )}
                                     </div>
                                     <div className="px-4 py-2 bg-slate-900/50 border-t border-white/5 flex items-center justify-between text-[10px] text-white/30">
-                                        <span>Use ↑↓ to navigate</span>
-                                        <span>Press ESC to close</span>
+                                        <span>{t("inbox_header.4")}</span>
+                                        <span>{t("inbox_header.5")}</span>
                                     </div>
                                 </div>
                             )}

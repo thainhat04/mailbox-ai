@@ -16,13 +16,14 @@ import {
     useCreateKanbanColumnMutation,
     useUpdateKanBanColumnMutation,
     useDeleteKanBanColumnMutation,
+    useUpdateCachedKanbanItemMutation,
 } from "../_services";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
 import { useToast } from "@/components/ui/toast-provider";
 import { getTimeoutMs } from "@/helper/get-timeout-ms";
 import isFrozenColumn from "@/helper/is-fronzen";
-import { it } from "node:test";
+import { useTranslation } from "react-i18next";
 
 function findColumnIdByItem(
     board: KanbanBoardData,
@@ -34,7 +35,29 @@ function findColumnIdByItem(
     return null;
 }
 
+function sortEmails(emails: KanbanItem[], sortBy: SortOption): KanbanItem[] {
+    const sorted = [...emails];
+
+    switch (sortBy) {
+        case "date_desc":
+            return sorted.sort(
+                (a, b) =>
+                    new Date(b.date).getTime() - new Date(a.date).getTime()
+            );
+        case "date_asc":
+            return sorted.sort(
+                (a, b) =>
+                    new Date(a.date).getTime() - new Date(b.date).getTime()
+            );
+        case "sender":
+            return sorted.sort((a, b) => a.from.localeCompare(b.from));
+        default:
+            return sorted;
+    }
+}
+
 export default function useKanban() {
+    const { t } = useTranslation();
     const { showToast } = useToast();
     const [columns, setColumns] = useState<KanbanBoardData>({
         columns: [],
@@ -86,6 +109,11 @@ export default function useKanban() {
     const deleteColumnMutation = useMutationHandler(
         useDeleteKanBanColumnMutation,
         "Delete"
+    );
+
+    const updateCachedKanbanItemMutation = useMutationHandler(
+        useUpdateCachedKanbanItemMutation,
+        "Update"
     );
 
     useEffect(() => {
@@ -151,7 +179,7 @@ export default function useKanban() {
             }
             return col;
         });
-        setColumns((prev) => ({
+        setColumnsWithCacheUpdate((prev) => ({
             columns: newColumns,
             emails: {
                 ...prev.emails,
@@ -173,10 +201,10 @@ export default function useKanban() {
                     newStatus: toColumnId, // ✅ dùng ID
                 });
             }
-            showToast("Moved successfully", "success");
+            showToast(t("toast.2"), "success");
         } catch {
-            showToast("Update failed, reverting", "error");
-            setColumns(prevState);
+            showToast(t("toast.3"), "error");
+            setColumnsWithCacheUpdate(prevState);
         }
     };
 
@@ -193,7 +221,7 @@ export default function useKanban() {
         const stateBefore = item.previousKanbanStatus;
         if (!targetColumnId) return;
 
-        setColumns((prev) => ({
+        setColumnsWithCacheUpdate((prev) => ({
             ...prev,
             emails: {
                 ...prev.emails,
@@ -221,24 +249,20 @@ export default function useKanban() {
         gmailLabelName: string
     ) => {
         if (name.trim() === "") {
-            showToast("Column name cannot be empty", "error");
             return;
         }
         if (
             color.trim() === "" ||
             !/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)
         ) {
-            showToast("Column color cannot be empty", "error");
             return;
         }
 
         if (icon.trim() === "") {
-            showToast("Column icon cannot be empty", "error");
             return;
         }
 
         if (gmailLabelName.trim() === "") {
-            showToast("Gmail label name cannot be empty", "error");
             return;
         }
 
@@ -246,7 +270,7 @@ export default function useKanban() {
 
         const tempId = `temp-${Date.now()}`;
 
-        setColumns((prev) => {
+        setColumnsWithCacheUpdate((prev) => {
             snapshot = prev;
             return {
                 ...prev,
@@ -277,7 +301,7 @@ export default function useKanban() {
                 gmailLabelName,
             });
 
-            setColumns((prev) => {
+            setColumnsWithCacheUpdate((prev) => {
                 const { [tempId]: _, ...restEmails } = prev.emails;
 
                 return {
@@ -294,7 +318,7 @@ export default function useKanban() {
                 };
             });
         } catch (error) {
-            if (snapshot) setColumns(snapshot);
+            if (snapshot) setColumnsWithCacheUpdate(snapshot);
             showToast(
                 (error as any).data.message || "Create failed, reverting",
                 "error",
@@ -312,25 +336,22 @@ export default function useKanban() {
         gmailLabelName: string
     ) => {
         if (name.trim() === "") {
-            showToast("Column name cannot be empty", "error");
             return;
         }
         if (
             color.trim() === "" ||
             !/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(color)
         ) {
-            showToast("Column color cannot be empty", "error");
             return;
         }
 
         if (icon.trim() === "") {
-            showToast("Column icon cannot be empty", "error");
             return;
         }
 
         let snapshot: KanbanBoardData | null = null;
 
-        setColumns((prev) => {
+        setColumnsWithCacheUpdate((prev) => {
             snapshot = prev;
             return {
                 ...prev,
@@ -345,7 +366,7 @@ export default function useKanban() {
                 body: { name, color, icon, gmailLabelName },
             });
 
-            setColumns((prev) => ({
+            setColumnsWithCacheUpdate((prev) => ({
                 ...prev,
                 columns: prev.columns.map((col) =>
                     col.id === id
@@ -354,7 +375,7 @@ export default function useKanban() {
                 ),
             }));
         } catch (error) {
-            if (snapshot) setColumns(snapshot);
+            if (snapshot) setColumnsWithCacheUpdate(snapshot);
             showToast(
                 (error as any).data.message || "Update failed, reverting",
                 "error",
@@ -371,14 +392,13 @@ export default function useKanban() {
             (c) => c.key === InBoxConstant.KANBAN_INBOX_KEY
         );
         if (!inboxColumn) {
-            showToast("Inbox column not found, cannot delete", "error");
             return;
         }
 
         const inboxId = inboxColumn.id;
         const itemsToMove = [...(columns.emails[id] ?? [])];
 
-        setColumns((prev) => {
+        setColumnsWithCacheUpdate((prev) => {
             snapshot = prev;
 
             const { [id]: _, ...restEmails } = prev.emails;
@@ -396,9 +416,36 @@ export default function useKanban() {
         const result = await deleteColumnMutation.Delete({ id });
 
         if (!result) {
-            if (snapshot) setColumns(snapshot);
-            showToast("Delete failed, reverting", "error");
+            if (snapshot) setColumnsWithCacheUpdate(snapshot);
+            showToast(t("toast.3"), "error");
         }
+    };
+    const setColumnsWithCacheUpdate = (
+        newColumnsOrUpdater:
+            | KanbanBoardData
+            | ((prev: KanbanBoardData) => KanbanBoardData)
+    ) => {
+        setColumns((prev) => {
+            const newColumns =
+                typeof newColumnsOrUpdater === "function"
+                    ? newColumnsOrUpdater(prev)
+                    : newColumnsOrUpdater;
+
+            const sortedColumns = {
+                ...newColumns,
+                emails: Object.fromEntries(
+                    Object.entries(newColumns.emails).map(
+                        ([columnId, emails]) => [
+                            columnId,
+                            sortEmails(emails, sortBy),
+                        ]
+                    )
+                ),
+            };
+
+            updateCachedKanbanItemMutation.Update(sortedColumns);
+            return sortedColumns;
+        });
     };
 
     return {

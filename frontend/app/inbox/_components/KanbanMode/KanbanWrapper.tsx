@@ -27,6 +27,7 @@ import isFrozenColumnById from "@/helper/is-fronzen";
 import FreezeSelector from "./FreezeSelector";
 import { KanbanRefetchContext } from "../../_hooks/KanbanRefetchContext";
 import { useToast } from "@/components/ui/toast-provider";
+import { useTranslation } from "react-i18next";
 
 interface KanbanWrapperProps {
     columns: KanbanBoardData;
@@ -66,6 +67,7 @@ export default function KanbanWrapper({
     refetch,
     moveToColumnFromFrozen,
 }: KanbanWrapperProps) {
+    const { t } = useTranslation();
     const { showToast } = useToast();
     // 🔥 Overlay state — item đang được kéo
     const [activeItem, setActiveItem] = useState<KanbanItem | null>(null);
@@ -95,7 +97,7 @@ export default function KanbanWrapper({
             ) {
                 const selectedDate = new Date(timeoutDuration.customDateTime);
                 if (selectedDate <= now) {
-                    showToast("Please select a future date and time.", "error");
+                    showToast(t("toast.1"), "error");
                     setTimeoutDuration(null);
                     eventRef.current = null;
                     return;

@@ -8,6 +8,7 @@ import { useCountdown } from "../../_hooks/useCountdown";
 import { useKanbanRefetch } from "../../_hooks/KanbanRefetchContext";
 import { useEffect, useState } from "react";
 import { useSummaryModal } from "./SummaryModalContext";
+import { useTranslation } from "react-i18next";
 
 interface CardItemProps {
     item: KanbanItem;
@@ -15,6 +16,7 @@ interface CardItemProps {
 }
 
 export default function CardItem({ item, isOverlay }: CardItemProps) {
+    const { t } = useTranslation();
     const countdown = useCountdown(item.snoozedUntil);
     const { moveToColumnFromFrozen } = useKanbanRefetch();
     const { openModal } = useSummaryModal();
@@ -99,7 +101,8 @@ export default function CardItem({ item, isOverlay }: CardItemProps) {
 
                     {/* From */}
                     <p className="text-[10px] sm:text-xs text-white/60 truncate">
-                        From: <span className="text-white/75">{item.from}</span>
+                        {t("card_item.1")}:{" "}
+                        <span className="text-white/75">{item.from}</span>
                     </p>
 
                     {/* AI Summary */}
@@ -119,7 +122,7 @@ export default function CardItem({ item, isOverlay }: CardItemProps) {
                     {/* Snooze countdown */}
                     {item.snoozedUntil && countdown !== "Đã hết hạn" && (
                         <p className="text-[10px] sm:text-xs mt-1 text-cyan-300 font-medium">
-                            Snoozing: {countdown}
+                            {t("card_item.3")}: {countdown}
                         </p>
                     )}
                 </div>

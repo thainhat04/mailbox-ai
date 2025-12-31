@@ -1,10 +1,9 @@
 "use client";
 import { useState } from "react";
 import { useSelector, useDispatch } from "@/store";
-import { logout } from "@/store/slice/auth.slice";
 import { setLanguage } from "@/store/slice/language.slice";
 import { useTranslation } from "react-i18next";
-
+import { performLogout } from "@/store/slice/auth.slice";
 import { useRouter } from "next/navigation";
 
 export default function UserDropdown({
@@ -63,7 +62,7 @@ export default function UserDropdown({
                     <div className="border-t border-neutral-700"></div>
                     <button
                         className="w-full cursor-pointer text-left px-4 py-2 text-sm text-red-500 hover:bg-neutral-800 transition"
-                        onClick={() => dispatch(logout())}
+                        onClick={() => performLogout(true)}
                     >
                         {t("user.1")}
                     </button>
