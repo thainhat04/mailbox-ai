@@ -80,3 +80,4 @@ prisma/dev.db
 
 # Docker
 .dockerignore
+CLAUDE.md

@@ -20,9 +20,9 @@ import {
   ApiQuery,
   ApiResponse,
 } from "@nestjs/swagger";
-import { EmailService } from "./email.service";
-import { KanbanService } from "./services/kanban.service";
-import { SummaryService } from "./services/summary.service";
+import { EmailService } from "../services/email.service";
+import { KanbanService } from "../services/kanban.service";
+import { SummaryService } from "../services/summary.service";
 import {
   EmailDto,
   EmailListQueryDto,
@@ -36,20 +36,20 @@ import {
   SuggestionType,
   SemanticSearchQueryDto,
   SemanticSearchResponseDto,
-} from "./dto";
-import { ResponseDto } from "../../common/dtos/response.dto";
-import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
-import { CurrentUser } from "../../common/decorators/current-user.decorator";
-import type { JwtPayload } from "../../common/decorators/current-user.decorator";
-import { SendEmailDto } from "./dto/send-email.dto";
-import { ReplyEmailDto } from "./dto/reply-emai.dto";
-import { ModifyEmailDto } from "./dto/modify.dto";
-import { SendEmailResponse } from "./dto/send-email-response";
+} from "../dto";
+import { ResponseDto } from "../../../common/dtos/response.dto";
+import { JwtAuthGuard } from "../../../common/guards/jwt-auth.guard";
+import { CurrentUser } from "../../../common/decorators/current-user.decorator";
+import type { JwtPayload } from "../../../common/decorators/current-user.decorator";
+import { SendEmailDto } from "../dto/send-email.dto";
+import { ReplyEmailDto } from "../dto/reply-emai.dto";
+import { ModifyEmailDto } from "../dto/modify.dto";
+import { SendEmailResponse } from "../dto/send-email-response";
 import {
   UpdateKanbanStatusDto,
   UpdateKanbanColDto,
   SnoozeEmailDto,
-} from "./dto/kanban.dto";
+} from "../dto/kanban.dto";
 
 @ApiTags("Email")
 @Controller()
