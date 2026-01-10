@@ -16,8 +16,9 @@ COPY . .
 # Remove any Windows node_modules that might have been copied
 RUN rm -rf node_modules/.cache
 
-ARG NEXT_PUBLIC_API_BASE_URL
-ARG NEXT_PUBLIC_DOMAIN_NAME
+# Build arguments with default values for CI/CD
+ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
+ARG NEXT_PUBLIC_DOMAIN_NAME=localhost
 
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_DOMAIN_NAME=$NEXT_PUBLIC_DOMAIN_NAME
