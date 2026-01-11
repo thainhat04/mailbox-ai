@@ -53,13 +53,6 @@ export const baseQueryWithInterceptors: BaseQueryFn<
                 const refreshToken = localStorage.getItem(
                     constantServices.refreshToken
                 );
-                if (!refreshToken) {
-                    localStorage.removeItem(SERVICES.accessToken);
-                    if (typeof window !== "undefined") {
-                        window.location.href = "/auth/login?expired=true";
-                    }
-                    return result;
-                }
 
                 if (refreshToken) {
                     const refreshResult = await rawBaseQuery(
