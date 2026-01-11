@@ -4,15 +4,15 @@ import {
   Logger,
   BadRequestException,
 } from "@nestjs/common";
-import { PrismaService } from "../../database/prisma.service";
-import { Email } from "./entities";
-import { SendEmailDto } from "./dto/send-email.dto";
-import { ReplyEmailDto } from "./dto/reply-emai.dto";
-import { OAuth2TokenService } from "./services/oauth2-token.service";
-import { MailProviderRegistry } from "./providers/provider.registry";
-import { EmailMessageRepository } from "./repositories/email-message.repository";
-import { EmailListQueryDto } from "./dto";
-import { SearchVectorService } from "./services/search-vector.service";
+import { PrismaService } from "../../../database/prisma.service";
+import { Email } from "../entities";
+import { SendEmailDto } from "../dto/send-email.dto";
+import { ReplyEmailDto } from "../dto/reply-emai.dto";
+import { OAuth2TokenService } from "./oauth2-token.service";
+import { MailProviderRegistry } from "../providers/provider.registry";
+import { EmailMessageRepository } from "../repositories/email-message.repository";
+import { EmailListQueryDto } from "../dto";
+import { SearchVectorService } from "./search-vector.service";
 
 @Injectable()
 export class EmailService {
@@ -24,7 +24,7 @@ export class EmailService {
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
     private readonly searchVectorService: SearchVectorService,
-  ) { }
+  ) {}
 
   async getLabelById(labelId: string, userId: string): Promise<any> {
     if (!userId) {
@@ -311,10 +311,14 @@ export class EmailService {
     };
   }
 
-  async semanticSearchEmails(query: string, userId: string, options?: {
-    page?: number;
-    limit?: number;
-  }): Promise<{
+  async semanticSearchEmails(
+    query: string,
+    userId: string,
+    options?: {
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<{
     emails: Array<Email & { relevanceScore: number }>;
     page: number;
     limit: number;
@@ -330,27 +334,31 @@ export class EmailService {
     );
 
     // Generate embedding for the query
-    const embedding = await this.searchVectorService.createVectorEmbedding(query);
+    const embedding =
+      await this.searchVectorService.createVectorEmbedding(query);
 
     // Validate embedding
     if (!embedding || embedding.length === 0) {
       this.logger.error(`Failed to generate embedding for query: "${query}"`);
       throw new BadRequestException(
-        'Failed to generate search embedding. Please try again or check AI service.',
+        "Failed to generate search embedding. Please try again or check AI service.",
       );
     }
 
-    this.logger.debug(`Generated embedding with ${embedding.length} dimensions`);
-
-    const { results, total } = await this.messageRepository.semanticSearchEmails(
-      userId,
-      query,
-      embedding,
-      {
-        limit,
-        offset,
-      },
+    this.logger.debug(
+      `Generated embedding with ${embedding.length} dimensions`,
     );
+
+    const { results, total } =
+      await this.messageRepository.semanticSearchEmails(
+        userId,
+        query,
+        embedding,
+        {
+          limit,
+          offset,
+        },
+      );
 
     const emails = results.map((msg) => ({
       ...this.convertToEmail(msg),
