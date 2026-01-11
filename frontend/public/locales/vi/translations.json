@@ -219,5 +219,21 @@
         "1": "Vui lòng chọn ngày và giờ trong tương lai.",
         "2": "Di ch chuyển email thành công.",
         "3": "Cập nhật thất bại, đang hoàn tác."
+    },
+    "keyboard_shortcuts_help": {
+        "title": "Phím tắt bàn phím",
+        "close": "Nhấn {{key}} để đóng",
+        "previous_email": "Email trước",
+        "next_email": "Email tiếp theo",
+        "a": "Chọn/bỏ chọn tất cả",
+        "f": "Làm mới email",
+        "o": "Mở email",
+        "s": "Đánh dấu/ bỏ đánh dấu",
+        "x": "Chọn/bỏ chọn",
+        "c": "Soạn email",
+        "u": "Đánh dấu là chưa đọc",
+        "r": "Đánh dấu là đã đọc",
+        "d": "Xóa email",
+        "help": "Hiển thị trợ giúp này"
     }
 }

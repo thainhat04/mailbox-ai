@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "@/store";
 import { setLanguage } from "@/store/slice/language.slice";
 import { useTranslation } from "react-i18next";
@@ -26,7 +26,6 @@ export default function UserDropdown({
     if (!isLoggedIn) {
         return null;
     }
-
     return (
         <div
             style={{ alignSelf: "start" }}

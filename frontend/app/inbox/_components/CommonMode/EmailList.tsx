@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import type { PreviewEmail } from "../../_types";
 import EmailRow from "./EmailRow";
 import EmailToolbar from "./EmailToolbar";
+import KeyboardShortcutsHelp from "./KeyboardShortcutsHelp";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
 import {
@@ -44,6 +45,7 @@ export default function EmailList({
         Set<string>
     >(new Set());
     const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+    const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
     const emailListRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +88,7 @@ export default function EmailList({
 
     // --------- KEYBOARD NAVIGATION ----------
     useKeyboardNavigation({
+        // Navigation with arrow keys
         onArrowUp: () => {
             if (previewEmails.length === 0) return;
             setFocusedIndex((prev) =>
@@ -102,10 +105,105 @@ export default function EmailList({
                     : prev + 1
             );
         },
-        onEnter: () => {
-            if (focusedIndex >= 0) {
+        // Navigation with j/k (vim-style)
+        onJ: () => {
+            if (previewEmails.length === 0) return;
+            setFocusedIndex((prev) =>
+                prev === -1
+                    ? 0
+                    : prev >= previewEmails.length - 1
+                    ? 0
+                    : prev + 1
+            );
+        },
+        onK: () => {
+            if (previewEmails.length === 0) return;
+            setFocusedIndex((prev) =>
+                prev <= 0 ? previewEmails.length - 1 : prev - 1
+            );
+        },
+        // Open email with Enter
+        onO: () => {
+            if (focusedIndex >= 0 && previewEmails[focusedIndex]) {
                 onSelectPreviewEmail(previewEmails[focusedIndex]);
             }
+        },
+        // Star/unstar with 's'
+        onS: () => {
+            if (focusedIndex >= 0 && previewEmails[focusedIndex]) {
+                toggleStar(previewEmails[focusedIndex].id);
+            }
+        },
+        // Compose with 'c'
+        onC: () => {
+            setIsComposeOpen(true);
+        },
+        // Select/deselect with 'x'
+        onX: () => {
+            if (focusedIndex >= 0 && previewEmails[focusedIndex]) {
+                toggleSelectPreviewEmail(previewEmails[focusedIndex].id);
+            }
+        },
+        // Mark as unread with 'u'
+        onU: () => {
+            if (focusedIndex >= 0 && previewEmails[focusedIndex]) {
+                const email = previewEmails[focusedIndex];
+                modifyEmail.ModifyEmail({
+                    emailId: email.id,
+                    mailBox: email.labelId || [],
+                    flags: { read: false },
+                });
+            }
+        },
+        // Mark as read with 'r'
+        onR: () => {
+            if (focusedIndex >= 0 && previewEmails[focusedIndex]) {
+                const email = previewEmails[focusedIndex];
+                modifyEmail.ModifyEmail({
+                    emailId: email.id,
+                    mailBox: email.labelId || [],
+                    flags: { read: true },
+                });
+            }
+        },
+        // Delete with '#' or Delete key
+        onHash: () => {
+            if (focusedIndex >= 0 && previewEmails[focusedIndex]) {
+                const emailId = previewEmails[focusedIndex].id;
+                modifyEmail.ModifyEmail({
+                    emailId,
+                    mailBox:
+                        previewEmails.find((e) => e.id === emailId)?.labelId ||
+                        [],
+                    flags: { delete: true },
+                });
+            }
+        },
+        onD: () => {
+            if (selectedPreviewEmails.size > 0) {
+                deleteSelected();
+            } else if (focusedIndex >= 0 && previewEmails[focusedIndex]) {
+                const emailId = previewEmails[focusedIndex].id;
+                modifyEmail.ModifyEmail({
+                    emailId,
+                    mailBox:
+                        previewEmails.find((e) => e.id === emailId)?.labelId ||
+                        [],
+                    flags: { delete: true },
+                });
+            }
+        },
+        onA: () => {
+            //select All
+            selectAll();
+        },
+        onF: () => {
+            refreshEmails();
+        },
+
+        // Show keyboard shortcuts help with ?
+        onQuestion: () => {
+            setShowShortcutsHelp((prev) => !prev);
         },
         enabled: !isComposeOpen,
     });
@@ -136,10 +234,17 @@ export default function EmailList({
     };
 
     const refreshEmails = () => {
+        if (!selectedFolder) return;
+        if (isFetching || isLoading) return;
         refetch();
     };
 
     const selectAll = () => {
+        if (selectedPreviewEmails.size === previewEmails.length) {
+            //deselect all
+            setSelectedPreviewEmails(new Set());
+            return;
+        }
         setSelectedPreviewEmails(new Set(previewEmails.map((e) => e.id)));
     };
 
@@ -255,10 +360,15 @@ export default function EmailList({
     ];
 
     return (
-        <section className="flex-[0_0_30rem] h-full flex flex-col border-r border-white/10 bg-white/5">
+        <section className="flex-[0_0_30rem] h-full flex flex-col border-r border-white/10 bg-white/5 col-gap-">
+            <KeyboardShortcutsHelp
+                isOpen={showShortcutsHelp}
+                onClose={() => setShowShortcutsHelp(false)}
+            />
             <EmailToolbar
                 selectedFolder={selectedFolder}
                 actions={toolbarActions}
+                onShowShortcuts={() => setShowShortcutsHelp(true)}
             />
             {(isFetching || isLoading) && (
                 <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-10"></div>
@@ -276,10 +386,15 @@ export default function EmailList({
                         {t("inbox.8")}
                     </div>
                 ) : (
-                    previewEmails.map((email) => (
+                    previewEmails.map((email, index) => (
                         <div
                             key={email.id}
                             data-email-row
+                            className={
+                                focusedIndex === index
+                                    ? "ring-2 ring-cyan-400/50 ring-inset"
+                                    : ""
+                            }
                             onClick={() => handleSelectPreviewEmail(email)}
                         >
                             <EmailRow

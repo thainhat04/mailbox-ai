@@ -15,7 +15,6 @@ interface Props {
 }
 
 export default function ComposeModal({ isOpen, onClose }: Props) {
-    if (!isOpen) return null;
     const sendEmailMutation = useMutationHandler(
         useSendEmailMutation,
         "SendEmail"
@@ -71,9 +70,26 @@ export default function ComposeModal({ isOpen, onClose }: Props) {
             showToast(t("inbox.compose.emailSent"), "success");
         }
     }, [sendEmailMutation.result]);
+
+    useEffect(() => {
+        const header_inbox = document.querySelector(
+            ".header_inbox"
+        ) as HTMLElement;
+
+        if (isOpen) {
+            if (header_inbox) {
+                header_inbox.style.zIndex = "1";
+            }
+        } else {
+            if (header_inbox) {
+                header_inbox.style.zIndex = "100";
+            }
+        }
+    }, [isOpen]);
+    if (!isOpen) return null;
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center"
+            className="fixed compose_modal inset-0 z-50 flex items-center justify-center"
             role="dialog"
             aria-modal="true"
             onClick={handleOverlayClick}

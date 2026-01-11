@@ -81,10 +81,35 @@ export default function ReplyModal({ isOpen, onClose, email }: Props) {
             document
                 .querySelector(".backdrop__need")
                 ?.classList.remove("backdrop-blur-2xl");
+
+            const item = document.querySelector(".email_detail") as HTMLElement;
+
+            const header_inbox = document.querySelector(
+                ".header_inbox"
+            ) as HTMLElement;
+
+            if (header_inbox) {
+                header_inbox.style.zIndex = "1";
+            }
+            if (item) {
+                item.style.overflow = "hidden";
+                //scroll to top
+                item.scrollTop = 0;
+            }
         } else {
             document
                 .querySelector(".backdrop__need")
                 ?.classList.add("backdrop-blur-2xl");
+            const item = document.querySelector(".email_detail") as HTMLElement;
+            const header_inbox = document.querySelector(
+                ".header_inbox"
+            ) as HTMLElement;
+            if (header_inbox) {
+                header_inbox.style.zIndex = "100";
+            }
+            if (item) {
+                item.style.overflow = "visible";
+            }
         }
     }, [isOpen]);
     if (!isOpen || !email) return null;
@@ -104,6 +129,9 @@ export default function ReplyModal({ isOpen, onClose, email }: Props) {
 
             {/* Panel */}
             <div
+                style={{
+                    maxHeight: "90%",
+                }}
                 className="relative mx-4 w-full max-w-xl origin-center rounded-2xl border border-white/12 bg-white/10 shadow-2xl backdrop-blur-xl overflow-auto custom-scroll max-h-[90vh]"
                 onClick={stop}
             >

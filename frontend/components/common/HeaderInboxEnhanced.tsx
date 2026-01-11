@@ -190,7 +190,17 @@ function HeaderInbox({
     };
 
     return (
-        <header className="sticky top-0 z-100 border-b border-white/10 backdrop-blur-md bg-linear-to-r from-slate-900/80 via-slate-900/60 to-slate-900/80 py-3">
+        <header
+            onClick={() => {
+                const header_inbox = document.querySelector(
+                    ".header_inbox"
+                ) as HTMLElement;
+                if (header_inbox) {
+                    header_inbox.style.zIndex = "100";
+                }
+            }}
+            className="sticky header_inbox top-0 z-1 border-b border-white/10 backdrop-blur-md bg-linear-to-r from-slate-900/80 via-slate-900/60 to-slate-900/80 py-3"
+        >
             <div className="px-6 flex items-center justify-between gap-4">
                 {/* Left: Logo + Brand */}
                 <div className="flex items-center gap-3 shrink-0">
