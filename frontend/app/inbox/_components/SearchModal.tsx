@@ -66,10 +66,20 @@ export default function SearchModal({
     }, [result]);
 
     useEffect(() => {
+        const header_inbox = document.querySelector(
+            ".header_inbox"
+        ) as HTMLElement;
+
         if (isOpen) {
             document.body.style.overflow = "hidden";
+            if (header_inbox) {
+                header_inbox.style.zIndex = "1";
+            }
         } else {
             document.body.style.overflow = "unset";
+            if (header_inbox) {
+                header_inbox.style.zIndex = "100";
+            }
         }
         return () => {
             document.body.style.overflow = "unset";

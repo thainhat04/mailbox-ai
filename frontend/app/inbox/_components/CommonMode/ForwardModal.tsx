@@ -80,17 +80,11 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
     useEffect(() => {
         const item = document.querySelector(".email_detail") as HTMLElement;
 
-        const header_inbox = document.querySelector(
-            ".header_inbox"
-        ) as HTMLElement;
         if (isOpen) {
             document
                 .querySelector(".backdrop__need")
                 ?.classList.remove("backdrop-blur-2xl");
 
-            if (header_inbox) {
-                header_inbox.style.zIndex = "1";
-            }
             if (item) {
                 item.style.overflow = "hidden";
                 //scroll to top
@@ -101,9 +95,6 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
                 .querySelector(".backdrop__need")
                 ?.classList.add("backdrop-blur-2xl");
 
-            if (header_inbox) {
-                header_inbox.style.zIndex = "100";
-            }
             if (item) {
                 item.style.overflow = "visible";
             }

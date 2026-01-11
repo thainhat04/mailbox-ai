@@ -84,13 +84,6 @@ export default function ReplyModal({ isOpen, onClose, email }: Props) {
 
             const item = document.querySelector(".email_detail") as HTMLElement;
 
-            const header_inbox = document.querySelector(
-                ".header_inbox"
-            ) as HTMLElement;
-
-            if (header_inbox) {
-                header_inbox.style.zIndex = "1";
-            }
             if (item) {
                 item.style.overflow = "hidden";
                 //scroll to top
@@ -101,12 +94,7 @@ export default function ReplyModal({ isOpen, onClose, email }: Props) {
                 .querySelector(".backdrop__need")
                 ?.classList.add("backdrop-blur-2xl");
             const item = document.querySelector(".email_detail") as HTMLElement;
-            const header_inbox = document.querySelector(
-                ".header_inbox"
-            ) as HTMLElement;
-            if (header_inbox) {
-                header_inbox.style.zIndex = "100";
-            }
+
             if (item) {
                 item.style.overflow = "visible";
             }
