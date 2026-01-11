@@ -37,7 +37,7 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     if (typeof args === "object" && "body" in args && args.body) {
         processedArgs = {
             ...args,
-            body: convertCase("camelToSnake", args.body),
+            body: convertCase("", args.body),
         };
     }
 
@@ -104,7 +104,7 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     if ("data" in result && result.data) {
         result = {
             ...result,
-            data: convertCase("snakeToCamel", result.data),
+            data: convertCase("", result.data),
         };
     }
     return result;

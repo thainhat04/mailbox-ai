@@ -38,12 +38,14 @@ export const snakeToCamel = (obj: any): any => {
 };
 
 export const convertCase = (
-    type: "camelToSnake" | "snakeToCamel",
+    type: "camelToSnake" | "snakeToCamel" | "",
     data: any
 ): any => {
     if (type === "camelToSnake") {
         return camelToSnake(data);
-    } else {
+    } else if (type === "snakeToCamel") {
         return snakeToCamel(data);
+    } else {
+        return data;
     }
 };
