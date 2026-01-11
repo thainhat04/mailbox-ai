@@ -44,8 +44,9 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     let result = await rawBaseQuery(processedArgs, api, extraOptions);
 
     if (
-        isError(result) &&
-        result.error.status === constantServices.STATUS_UNAUTHORIZED
+        (isError(result) &&
+            result.error.status === constantServices.STATUS_UNAUTHORIZED) ||
+        localStorage.getItem(constantServices.refreshToken)
     ) {
         if (!mutex.isLocked()) {
             const release = await mutex.acquire();
@@ -54,38 +55,33 @@ export const baseQueryWithInterceptors: BaseQueryFn<
                     constantServices.refreshToken
                 );
 
-                if (refreshToken) {
-                    const refreshResult = await rawBaseQuery(
-                        {
-                            url: constantServices.URL_REFRESH_TOKEN,
-                            method: HTTP_METHOD.POST,
-                            body: { refreshToken },
-                        },
-                        api,
-                        extraOptions
-                    );
+                const refreshResult = await rawBaseQuery(
+                    {
+                        url: constantServices.URL_REFRESH_TOKEN,
+                        method: HTTP_METHOD.POST,
+                        body: { refreshToken },
+                    },
+                    api,
+                    extraOptions
+                );
 
-                    if ("data" in refreshResult && refreshResult.data) {
-                        // Lưu token mới
-                        const {
-                            accessToken: newAccessToken,
-                            refreshToken: newRefreshToken,
-                        } = (refreshResult.data as any).data;
+                if ("data" in refreshResult && refreshResult.data) {
+                    // Lưu token mới
+                    const {
+                        accessToken: newAccessToken,
+                        refreshToken: newRefreshToken,
+                    } = (refreshResult.data as any).data;
 
+                    localStorage.setItem(SERVICES.accessToken, newAccessToken);
+                    if (newRefreshToken) {
                         localStorage.setItem(
-                            SERVICES.accessToken,
-                            newAccessToken
+                            SERVICES.refreshToken,
+                            newRefreshToken
                         );
-                        if (newRefreshToken) {
-                            localStorage.setItem(
-                                SERVICES.refreshToken,
-                                newRefreshToken
-                            );
-                        }
-
-                        // Retry request gốc
-                        result = await rawBaseQuery(args, api, extraOptions);
                     }
+
+                    // Retry request gốc
+                    result = await rawBaseQuery(args, api, extraOptions);
                 }
             } finally {
                 release();
