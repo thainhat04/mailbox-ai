@@ -9,7 +9,7 @@ import {
     type FetchArgs,
     type FetchBaseQueryError,
 } from "@reduxjs/toolkit/query/react";
-
+import { convertCase } from "@/helper/convert/case-convert";
 import { Mutex } from "async-mutex";
 
 const mutex = new Mutex();
@@ -33,7 +33,15 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     // Đợi nếu đang refresh token
     await mutex.waitForUnlock();
 
-    let result = await rawBaseQuery(args, api, extraOptions);
+    let processedArgs = args;
+    if (typeof args === "object" && "body" in args && args.body) {
+        processedArgs = {
+            ...args,
+            body: convertCase("camelToSnake", args.body),
+        };
+    }
+
+    let result = await rawBaseQuery(processedArgs, api, extraOptions);
 
     if (
         isError(result) &&
@@ -71,11 +79,6 @@ export const baseQueryWithInterceptors: BaseQueryFn<
                             refreshToken: newRefreshToken,
                         } = (refreshResult.data as any).data;
 
-                        console.log(
-                            "Token refreshed",
-                            newAccessToken,
-                            newRefreshToken
-                        );
                         localStorage.setItem(
                             SERVICES.accessToken,
                             newAccessToken
@@ -89,14 +92,6 @@ export const baseQueryWithInterceptors: BaseQueryFn<
 
                         // Retry request gốc
                         result = await rawBaseQuery(args, api, extraOptions);
-                    } else {
-                        localStorage.removeItem(SERVICES.accessToken);
-                        localStorage.removeItem(SERVICES.refreshToken);
-
-                        // Redirect to login page
-                        if (typeof window !== "undefined") {
-                            window.location.href = "/auth/login?expired=true";
-                        }
                     }
                 }
             } finally {
@@ -112,6 +107,12 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     if (isError(result)) {
         result.error = customError(result.error);
     }
-
+    // convert case response data
+    if ("data" in result && result.data) {
+        result = {
+            ...result,
+            data: convertCase("snakeToCamel", result.data),
+        };
+    }
     return result;
 };
