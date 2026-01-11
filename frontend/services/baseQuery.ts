@@ -44,8 +44,8 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     let result = await rawBaseQuery(processedArgs, api, extraOptions);
 
     if (
-        (isError(result) &&
-            result.error.status === constantServices.STATUS_UNAUTHORIZED) ||
+        isError(result) &&
+        result.error.status === constantServices.STATUS_UNAUTHORIZED &&
         localStorage.getItem(constantServices.refreshToken)
     ) {
         if (!mutex.isLocked()) {
