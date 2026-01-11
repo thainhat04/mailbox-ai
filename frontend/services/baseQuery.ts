@@ -81,14 +81,18 @@ export const baseQueryWithInterceptors: BaseQueryFn<
                     }
 
                     // Retry request gốc
-                    result = await rawBaseQuery(args, api, extraOptions);
+                    result = await rawBaseQuery(
+                        processedArgs,
+                        api,
+                        extraOptions
+                    );
                 }
             } finally {
                 release();
             }
         } else {
             await mutex.waitForUnlock();
-            result = await rawBaseQuery(args, api, extraOptions);
+            result = await rawBaseQuery(processedArgs, api, extraOptions);
         }
     }
 
