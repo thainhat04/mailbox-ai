@@ -52,14 +52,11 @@ function LoginPage() {
         if (signInMutation.result) {
             const user = signInMutation.result.data.user;
 
-            dispatch(login(user));
-            localStorage.setItem(
-                SERVICES.accessToken,
-                signInMutation.result.data.accessToken
-            );
-            localStorage.setItem(
-                SERVICES.refreshToken,
-                signInMutation.result.data.refreshToken
+            dispatch(
+                login({
+                    user,
+                    accessToken: signInMutation.result.data.accessToken,
+                })
             );
 
             router.push(constants.URL_LOGIN_REDIRECT);

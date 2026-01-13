@@ -6,7 +6,10 @@ import constants, { HTTP_METHOD } from "@/constants/services";
 
 export const userApi = api.injectEndpoints({
     endpoints: (build) => ({
-        getUser: build.query<SuccessResponse<User>, void>({
+        getUser: build.query<
+            SuccessResponse<{ user: User; accessToken: string }>,
+            void
+        >({
             query: () => ({
                 url: constants.URL_GET_PROFILE,
                 method: HTTP_METHOD.GET,
