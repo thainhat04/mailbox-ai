@@ -9,7 +9,7 @@ import {
     type FetchArgs,
     type FetchBaseQueryError,
 } from "@reduxjs/toolkit/query/react";
-import { convertCase } from "@/helper/convert/case-convert";
+import { convertArgBase } from "@/helper/convert/case-convert";
 import { Mutex } from "async-mutex";
 
 const mutex = new Mutex();
@@ -37,7 +37,7 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     if (typeof args === "object" && "body" in args && args.body) {
         processedArgs = {
             ...args,
-            body: convertCase("", args.body),
+            body: convertArgBase(args.body),
         };
     }
 
@@ -54,12 +54,12 @@ export const baseQueryWithInterceptors: BaseQueryFn<
                 const refreshToken = localStorage.getItem(
                     constantServices.refreshToken
                 );
-
+                const data = convertArgBase({ refreshToken });
                 const refreshResult = await rawBaseQuery(
                     {
                         url: constantServices.URL_REFRESH_TOKEN,
                         method: HTTP_METHOD.POST,
-                        body: { refreshToken },
+                        body: data,
                     },
                     api,
                     extraOptions
@@ -104,7 +104,7 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     if ("data" in result && result.data) {
         result = {
             ...result,
-            data: convertCase("", result.data),
+            data: convertArgBase(result.data),
         };
     }
     return result;

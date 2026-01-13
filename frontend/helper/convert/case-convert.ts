@@ -49,3 +49,7 @@ export const convertCase = (
         return data;
     }
 };
+
+export const convertArgBase = (obj: any): any => {
+    return convertCase("", obj);
+};
