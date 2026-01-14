@@ -56,9 +56,14 @@ export class AuthController {
   @ApiResponse({ status: 400, description: "Email already exists" })
   async register(
     @Body() registerDto: RegisterDto,
-  ): Promise<ResponseDto<TokenResponseDto>> {
+    @Res() res: FastifyReply,
+  ): Promise<void> {
     const data = await this.authService.register(registerDto);
-    return ResponseDto.success(data, "User registered successfully");
+
+    // Set cookies
+    this.setAuthCookies(res, data.accessToken, data.refreshToken);
+
+    res.status(201).send(ResponseDto.success(data, "User registered successfully"));
   }
 
   @Public()
@@ -72,9 +77,14 @@ export class AuthController {
   @ApiResponse({ status: 400, description: "Invalid credentials" })
   async login(
     @Body() loginDto: LoginDto,
-  ): Promise<ResponseDto<TokenResponseDto>> {
+    @Res() res: FastifyReply,
+  ): Promise<void> {
     const data = await this.authService.login(loginDto);
-    return ResponseDto.success(data, "Login successful");
+
+    // Set cookies
+    this.setAuthCookies(res, data.accessToken, data.refreshToken);
+
+    res.status(200).send(ResponseDto.success(data, "Login successful"));
   }
 
   @Public()
@@ -88,11 +98,25 @@ export class AuthController {
   @ApiResponse({ status: 400, description: "Invalid or expired refresh token" })
   async refreshToken(
     @Body() refreshTokenDto: RefreshTokenDto,
-  ): Promise<ResponseDto<TokenResponseDto>> {
-    const data = await this.authService.refreshToken(
-      refreshTokenDto.refreshToken,
-    );
-    return ResponseDto.success(data, "Token refreshed successfully");
+    @Res() res: FastifyReply,
+  ): Promise<void> {
+    // Try to get refresh token from cookie if not in body
+    const refreshToken = refreshTokenDto.refreshToken ||
+      (res.request.cookies?.refresh_token as string | undefined);
+
+    if (!refreshToken) {
+      res.status(400).send(
+        ResponseDto.error("Refresh token is required", "REFRESH_TOKEN_MISSING")
+      );
+      return;
+    }
+
+    const data = await this.authService.refreshToken(refreshToken);
+
+    // Set new cookies
+    this.setAuthCookies(res, data.accessToken, data.refreshToken);
+
+    res.status(200).send(ResponseDto.success(data, "Token refreshed successfully"));
   }
 
   @Public()
@@ -101,9 +125,20 @@ export class AuthController {
   @ApiResponse({ status: 200, description: "User successfully logged out" })
   async logout(
     @Body() refreshTokenDto: RefreshTokenDto,
-  ): Promise<ResponseDto<null>> {
-    await this.authService.logout(refreshTokenDto.refreshToken);
-    return ResponseDto.success(null, "Logout successful");
+    @Res() res: FastifyReply,
+  ): Promise<void> {
+    // Try to get refresh token from cookie if not in body
+    const refreshToken = refreshTokenDto.refreshToken ||
+      (res.request.cookies?.refresh_token as string | undefined);
+
+    if (refreshToken) {
+      await this.authService.logout(refreshToken);
+    }
+
+    // Clear cookies
+    this.clearAuthCookies(res);
+
+    res.status(200).send(ResponseDto.success(null, "Logout successful"));
   }
 
   @Get("me")
@@ -195,5 +230,46 @@ export class AuthController {
   ) {
     const redirectUrl = `${domain}?error=${encodeURIComponent(error)}`;
     return res.status(302).redirect(redirectUrl);
+  }
+
+  /**
+   * Set authentication cookies
+   */
+  private setAuthCookies(
+    res: FastifyReply,
+    accessToken: string,
+    refreshToken: string,
+  ): void {
+    const isProduction = process.env.NODE_ENV === "production";
+    const secureFlag = isProduction ? "Secure; " : "";
+    const sameSite = "SameSite=Lax";
+
+    // Access token cookie (60 minutes)
+    const accessTokenMaxAge = 60 * 60; // 60 minutes
+    res.header(
+      "Set-Cookie",
+      `access_token=${accessToken}; HttpOnly; ${secureFlag}Path=/; ${sameSite}; Max-Age=${accessTokenMaxAge}`,
+    );
+
+    // Refresh token cookie (30 days)
+    const refreshTokenMaxAge = 60 * 60 * 24 * 30; // 30 days
+    res.header(
+      "Set-Cookie",
+      `refresh_token=${refreshToken}; HttpOnly; ${secureFlag}Path=/; ${sameSite}; Max-Age=${refreshTokenMaxAge}`,
+    );
+  }
+
+  /**
+   * Clear authentication cookies
+   */
+  private clearAuthCookies(res: FastifyReply): void {
+    res.header(
+      "Set-Cookie",
+      "access_token=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0",
+    );
+    res.header(
+      "Set-Cookie",
+      "refresh_token=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0",
+    );
   }
 }

@@ -19,7 +19,7 @@ export class JwtAuthGuard implements CanActivate {
     private jwtService: JwtService,
     private reflector: Reflector,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // Check if route is public
@@ -58,12 +58,22 @@ export class JwtAuthGuard implements CanActivate {
   }
 
   private extractTokenFromHeader(request: FastifyRequest): string | undefined {
+    // First, try to get token from Authorization header
     const authHeader = request.headers.authorization;
-    if (!authHeader) {
-      return undefined;
+    if (authHeader) {
+      const [type, token] = authHeader.split(" ");
+      if (type === "Bearer" && token) {
+        return token;
+      }
     }
 
-    const [type, token] = authHeader.split(" ");
-    return type === "Bearer" ? token : undefined;
+    // Fallback: try to get token from cookie
+    const cookies = request.cookies || {};
+    const accessToken = cookies.access_token as string | undefined;
+    if (accessToken) {
+      return accessToken;
+    }
+
+    return undefined;
   }
 }

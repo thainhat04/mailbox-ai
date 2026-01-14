@@ -69,4 +69,4 @@ import { EmailMessageRepository } from "./repositories/email-message.repository"
     MailProviderRegistry,
   ],
 })
-export class EmailModule {}
+export class EmailModule { }
