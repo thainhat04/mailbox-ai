@@ -23,7 +23,7 @@ export const customError = (error: any): FetchBaseQueryError => {
             //dữ liệu lỗi nằm trong data
             data: error.isErrorAuth
                 ? error
-                : convertArgBase(error.data) || null,
+                : convertArgBase("domain", error.data) || null,
             error: error.error || serviceConstants.DEFAULT_ERROR_MESSAGE,
         };
     }

@@ -37,7 +37,7 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     if (typeof args === "object" && "body" in args && args.body) {
         processedArgs = {
             ...args,
-            body: convertArgBase(args.body),
+            body: convertArgBase("dto", args.body),
         };
     }
 
@@ -54,7 +54,7 @@ export const baseQueryWithInterceptors: BaseQueryFn<
                 const refreshToken = localStorage.getItem(
                     constantServices.refreshToken
                 );
-                const data = convertArgBase({ refreshToken });
+                const data = convertArgBase("dto", { refreshToken });
                 const refreshResult = await rawBaseQuery(
                     {
                         url: constantServices.URL_REFRESH_TOKEN,
@@ -104,7 +104,7 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     if ("data" in result && result.data) {
         result = {
             ...result,
-            data: convertArgBase(result.data),
+            data: convertArgBase("domain", result.data),
         };
     }
     return result;
