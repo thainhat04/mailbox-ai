@@ -50,6 +50,10 @@ export const convertCase = (
     }
 };
 
-export const convertArgBase = (obj: any): any => {
-    return convertCase("", obj);
+export const convertArgBase = (typeObj: "dto" | "domain", obj: any): any => {
+    if (typeObj === "dto") {
+        return convertCase("", obj);
+    } else if (typeObj === "domain") {
+        return convertCase("", obj);
+    }
 };

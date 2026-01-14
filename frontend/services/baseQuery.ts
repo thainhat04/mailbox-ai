@@ -38,7 +38,7 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     if (typeof args === "object" && "body" in args && args.body) {
         processedArgs = {
             ...args,
-            body: convertArgBase(args.body),
+            body: convertArgBase("dto", args.body),
         };
     }
 
@@ -52,7 +52,7 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     if ("data" in result && result.data) {
         result = {
             ...result,
-            data: convertArgBase(result.data),
+            data: convertArgBase("domain", result.data),
         };
     }
     return result;
