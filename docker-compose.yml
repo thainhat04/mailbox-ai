@@ -1,86 +1,115 @@
 version: "3.8"
 
+# =============================================================================
+# Docker Compose for VM Deployment (Backend + AI Service only)
+# Frontend is deployed separately (Vercel/Netlify)
+#
+# Usage on VM:
+#   export GITHUB_REPOSITORY="your-username/mailbox"
+#   export TAG="latest"
+#   docker compose pull
+#   docker compose up -d
+# =============================================================================
+
 services:
+  # ===========================================================================
+  # Backend API Service (Node.js/Express)
+  # ===========================================================================
   backend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-mailbox-ai}/backend:${TAG:-latest}
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    # Image to pull from GitHub Container Registry
+    # Format: ghcr.io/username/repo/backend:tag
+    image: ghcr.io/${GITHUB_REPOSITORY}/backend:${TAG:-latest}
+
+    # Container name for easy identification
     container_name: mailbox-backend
+
+    # Restart policy: always restart unless manually stopped
     restart: unless-stopped
+
+    # Load environment variables from file
+    # You must create /app/backend/.env on VM
     env_file:
       - ./backend/.env
+
+    # Additional environment variables (override .env if needed)
     environment:
       - NODE_ENV=production
       - PORT=8080
+      # Connect to ai-service using Docker network (not localhost)
       - AI_SERVICE_URL=http://ai-service:8000
+
+    # Expose port 8080 on VM
+    # Access via: http://VM_IP:8080
     ports:
       - "8080:8080"
+
+    # Wait for ai-service to be healthy before starting
     depends_on:
       ai-service:
         condition: service_healthy
+
+    # Connect to internal network
     networks:
       - mailbox-network
+
+    # Health check: Docker will monitor if service is healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 30s      # Check every 30 seconds
+      timeout: 10s       # Wait max 10 seconds for response
+      retries: 3         # Mark unhealthy after 3 failures
+      start_period: 40s  # Wait 40s before first check (app startup time)
 
-  frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-mailbox-ai}/frontend:${TAG:-latest}
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080/api/v1}
-        - NEXT_PUBLIC_DOMAIN_NAME=${NEXT_PUBLIC_DOMAIN_NAME:-http://localhost:4300}
-    container_name: mailbox-frontend
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - PORT=4300
-    ports:
-      - "4300:4300"
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - mailbox-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:4300"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
+  # ===========================================================================
+  # AI Service (Python/FastAPI)
+  # ===========================================================================
   ai-service:
-    image: ghcr.io/${GITHUB_REPOSITORY:-mailbox-ai}/ai-service:${TAG:-latest}
-    build:
-      context: ./ai-service
-      dockerfile: Dockerfile
+    # Image to pull from GitHub Container Registry
+    image: ghcr.io/${GITHUB_REPOSITORY}/ai-service:${TAG:-latest}
+
+    # Container name for easy identification
     container_name: mailbox-ai-service
+
+    # Restart policy
     restart: unless-stopped
+
+    # Load environment variables from file
+    # You must create /app/ai-service/.env on VM
     env_file:
       - ./ai-service/.env
+
+    # Expose port 8000 on VM (optional, only if you need direct access)
+    # Backend connects via internal network, not this port
     ports:
       - "8000:8000"
+
+    # Connect to internal network
     networks:
       - mailbox-network
+
+    # Health check for AI service
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 60s  # AI service needs more time to load models
+
+    # Persist HuggingFace model cache
+    # Models are downloaded once and reused across container restarts
     volumes:
       - model-cache:/root/.cache/huggingface
 
+# =============================================================================
+# Networks
+# =============================================================================
 networks:
   mailbox-network:
-    driver: bridge
+    driver: bridge  # Default Docker network, containers can communicate by name
 
+# =============================================================================
+# Volumes
+# =============================================================================
 volumes:
   model-cache:
-    driver: local
+    driver: local  # Store on VM's disk
