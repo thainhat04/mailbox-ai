@@ -76,7 +76,7 @@ export default function InboxLayout({
                 </div>
 
                 {/* Email Detail */}
-                <div className="flex-1 h-full backdrop-blur-md overflow-x-auto custom-scroll">
+                <div className="flex-1 email_detail h-full backdrop-blur-md overflow-x-auto custom-scroll">
                     <EmailDetail
                         previewEmail={selectedPreviewEmail}
                         setPreviewEmail={setSelectedPreviewEmail}
@@ -125,7 +125,7 @@ export default function InboxLayout({
                 )}
 
                 {view === "detail" && (
-                    <div className="flex-1 overflow-hidden flex flex-col">
+                    <div className="flex-1 email_detail overflow-hidden flex flex-col">
                         <EmailDetail
                             previewEmail={selectedPreviewEmail}
                             onBack={handleBackFromDetail}

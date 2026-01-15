@@ -273,6 +273,7 @@ const inboxApi = api.injectEndpoints({
 
                 const hasDelete = arg.flags.delete !== undefined;
                 const hasStarred = arg.flags.starred !== undefined;
+                const hasRead = arg.flags.read !== undefined;
 
                 // Nếu update STARRED
                 if (hasStarred) {
@@ -285,7 +286,10 @@ const inboxApi = api.injectEndpoints({
                 }
 
                 // Mặc định
-                return [{ type: "Emails", id: arg.emailId }];
+                if (!hasRead) {
+                    return [{ type: "Emails", id: arg.emailId }];
+                }
+                return [];
             },
         }),
 
@@ -363,6 +367,26 @@ const inboxApi = api.injectEndpoints({
                 } catch (err) {}
             },
         }),
+        updateCachedKanbanItem: builder.mutation<
+            KanbanBoardData,
+            KanbanBoardData
+        >({
+            queryFn: async (body) => {
+                // Không gọi API, chỉ trả về data để cập nhật cache
+                return { data: body };
+            },
+            async onQueryStarted(arg, { dispatch }) {
+                dispatch(
+                    inboxApi.util.updateQueryData(
+                        "getAllKanBan",
+                        undefined,
+                        (draft) => {
+                            draft.data = arg;
+                        }
+                    )
+                );
+            },
+        }),
         summarizeEmail: builder.query<
             SuccessResponse<EmailSummaryData>,
             { emailId: string }
@@ -412,7 +436,7 @@ const inboxApi = api.injectEndpoints({
             providesTags: (_, __, arg) => [
                 {
                     type: "Emails",
-                    id: `PUZZLE-${arg.q}-${arg.page}`,
+                    id: `SEARCH-${arg.q}-${arg.page}`,
                 },
             ],
         }),
@@ -541,4 +565,5 @@ export const {
     useUpdateKanBanColumnMutation,
     useDeleteKanBanColumnMutation,
     useGetAllColumnDetailsQuery,
+    useUpdateCachedKanbanItemMutation,
 } = inboxApi;

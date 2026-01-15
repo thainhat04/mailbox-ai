@@ -1,6 +1,8 @@
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import serviceConstants from "@/constants/services";
 import i18n from "@/lib/i18n";
+import { convertArgBase } from "@/helper/convert/case-convert";
+
 export const customError = (error: any): FetchBaseQueryError => {
     const t = i18n.t.bind(i18n);
     //bắt backend và auth error
@@ -19,7 +21,9 @@ export const customError = (error: any): FetchBaseQueryError => {
         return {
             status: error.status,
             //dữ liệu lỗi nằm trong data
-            data: error.isErrorAuth ? error : error.data || null,
+            data: error.isErrorAuth
+                ? error
+                : convertArgBase("domain", error.data) || null,
             error: error.error || serviceConstants.DEFAULT_ERROR_MESSAGE,
         };
     }

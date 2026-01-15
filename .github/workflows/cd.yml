@@ -1,0 +1,54 @@
+name: CD - Deploy to VM via SSH
+
+on:
+  workflow_run:
+    workflows: ["CI - Build and Push Docker Images"]
+    types:
+      - completed
+    branches:
+      - main
+
+  # Allow manual deployment
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Only run if CI succeeded (for workflow_run trigger)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Set image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "TAG=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy 
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          port: ${{ secrets.VM_PORT || 22 }}
+          script: |
+            cd /app
+            export GITHUB_REPOSITORY=${{ github.repository }}
+            export TAG=${{ steps.tag.outputs.TAG }}
+            docker compose pull
+            docker compose up -d
+            docker image prune -f
+
+      - name: Verify deployment
+        run: |
+          echo "✅ Deployment completed"
+          echo "📦 Tag: ${{ steps.tag.outputs.TAG }}"
+          echo "🏠 Repository: ${{ github.repository }}"

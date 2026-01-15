@@ -6,6 +6,7 @@ import ColumnManagementModal from "./ColumnManagementModal";
 import type { KanbanColumnDetails } from "../../_types";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useGetAllColumnDetailsQuery } from "../../_services";
+import { useTranslation } from "react-i18next";
 
 interface Props {
     onCreateColumn: (
@@ -33,6 +34,7 @@ export default function ColumnManagerButton({
     isRefresh,
     setIsRefresh,
 }: Props) {
+    const { t } = useTranslation();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [columns, setColumn] = useState<KanbanColumnDetails[]>([]);
     const { result, isFetching, refetch } = useQueryHandler(
@@ -127,7 +129,7 @@ export default function ColumnManagerButton({
                             className="fixed inset-0 z-10"
                             onClick={() => setIsMenuOpen(false)}
                         />
-                        <div className="absolute  right-0 mt-2 w-72 bg-gray-900 rounded-lg shadow-2xl border border-white/10 z-20 overflow-hidden">
+                        <div className="absolute right-0 mt-2 w-72 bg-gray-900 rounded-lg shadow-2xl border border-white/10 z-40 overflow-hidden">
                             {/* Create Button */}
                             <button
                                 onClick={() => {
@@ -140,7 +142,7 @@ export default function ColumnManagerButton({
                             >
                                 <Plus size={18} className="text-green-400" />
                                 <span className="font-medium">
-                                    Create New Column
+                                    {t("kanban_config.1")}
                                 </span>
                             </button>
 
@@ -160,7 +162,7 @@ export default function ColumnManagerButton({
                                             </div>
                                             {/* Loading Text */}
                                             <p className="text-white text-sm font-medium">
-                                                Loading...
+                                                {t("kanban_config.4")}
                                             </p>
                                         </div>
                                     </div>
@@ -178,13 +180,10 @@ export default function ColumnManagerButton({
                                                 <p className="text-white font-medium text-sm">
                                                     {column.name}
                                                 </p>
-                                                <p className="text-white/50 text-xs">
-                                                    {column.emailCount} emails
-                                                </p>
                                             </div>
                                             {column.isSystemProtected && (
                                                 <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">
-                                                    Protected
+                                                    {t("kanban_config.5")}
                                                 </span>
                                             )}
                                         </div>
@@ -203,7 +202,7 @@ export default function ColumnManagerButton({
                                                 className="flex-1 cursor-pointer px-3 py-1.5 flex items-center justify-center gap-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 <Edit size={14} />
-                                                Edit
+                                                {t("kanban_config.2")}
                                             </button>
                                             <button
                                                 onClick={() => {
@@ -219,7 +218,7 @@ export default function ColumnManagerButton({
                                                 className="flex-1 cursor-pointer px-3 py-1.5 flex items-center justify-center gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 <Trash2 size={14} />
-                                                Delete
+                                                {t("kanban_config.3")}
                                             </button>
                                         </div>
                                     </div>

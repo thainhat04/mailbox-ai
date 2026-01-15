@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SortOption } from "../../_types/kanban";
 import { Filter, SortAsc, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface FilterSortControlsProps {
     onFilterChange: (filters: {
@@ -25,6 +26,7 @@ export default function FilterSortControls({
     currentFilters,
     currentSort,
 }: FilterSortControlsProps) {
+    const { t } = useTranslation();
     const [showFilters, setShowFilters] = useState(false);
     const [localFromEmail, setLocalFromEmail] = useState(
         currentFilters.fromEmail
@@ -87,16 +89,19 @@ export default function FilterSortControls({
                     >
                         <Filter className="w-4 h-4" />
                         <span className="text-xs sm:text-sm font-medium">
-                            Filters {hasActiveFilters && `(Active)`}
+                            {t("filter.1")}{" "}
+                            {hasActiveFilters && `(${t("filter.2")})`}
                         </span>
                     </button>
                     {hasActiveFilters && (
                         <button
                             onClick={clearFilters}
-                            className="flex items-center justify-center gap-1 px-3 py-2 text-xs sm:text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                            className="flex cursor-pointer items-center justify-center gap-1 px-3 py-2 text-xs sm:text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
                         >
                             <X className="w-4 h-4" />
-                            <span className="hidden sm:inline">Clear</span>
+                            <span className="hidden sm:inline">
+                                {t("filter.7")}
+                            </span>
                         </button>
                     )}
                 </div>
@@ -115,19 +120,19 @@ export default function FilterSortControls({
                             value="date_desc"
                             className="bg-gray-800 text-gray-300 cursor-pointer"
                         >
-                            Date: Newest First
+                            {t("filter.date_desc")}
                         </option>
                         <option
                             value="date_asc"
                             className="bg-gray-800 text-gray-300 cursor-pointer"
                         >
-                            Date: Oldest First
+                            {t("filter.date_asc")}
                         </option>
                         <option
                             value="sender"
                             className="bg-gray-800 text-gray-300 cursor-pointer"
                         >
-                            Sender (A-Z)
+                            {t("filter.sender")}
                         </option>
                     </select>
                 </div>
@@ -148,8 +153,8 @@ export default function FilterSortControls({
                                     : "bg-gray-700/50 text-gray-400 hover:bg-gray-700 border border-gray-600"
                             }`}
                         >
-                            {currentFilters.unreadOnly ? "✓" : ""} Show Only
-                            Unread
+                            {currentFilters.unreadOnly ? "✓" : ""}{" "}
+                            {t("filter.3")}
                         </button>
 
                         <button
@@ -162,19 +167,19 @@ export default function FilterSortControls({
                                     : "bg-gray-700/50 text-gray-400 hover:bg-gray-700 border border-gray-600"
                             }`}
                         >
-                            {currentFilters.hasAttachmentsOnly ? "✓" : ""} Has
-                            Attachments
+                            {currentFilters.hasAttachmentsOnly ? "✓" : ""}{" "}
+                            {t("filter.4")}
                         </button>
                     </div>
 
                     {/* From Email Filter */}
                     <div>
                         <label className="block text-xs text-gray-400 mb-1">
-                            Filter by Sender
+                            {t("filter.5")}
                         </label>
                         <input
                             type="text"
-                            placeholder="Enter sender email..."
+                            placeholder={t("filter.6")}
                             value={localFromEmail}
                             onChange={(e) =>
                                 handleFromEmailChange(e.target.value)

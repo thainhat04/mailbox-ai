@@ -122,7 +122,8 @@
             "10": "Download",
             "11": "Open",
             "12": "Unread",
-            "13": "Processing..."
+            "13": "Processing...",
+            "14": "Open in Gmail"
         },
         "reply": {
             "1": "Reply to Email",
@@ -136,5 +137,101 @@
         "prev": "Previous",
         "next": "Next",
         "page": "Page"
+    },
+    "inbox_header": {
+        "1": "Search emails, contacts, or keywords...",
+        "2": "Sender",
+        "3": "Keywords",
+        "4": "Use ↑↓ to navigate",
+        "5": "Press ESC to close",
+        "6": ""
+    },
+    "search_modal": {
+        "1": "Search Results",
+        "2": "Found <strong>{{count}}</strong> results for <highlight>{{query}}</highlight>",
+        "3": "Searching...",
+        "4": "No results found",
+        "5": "Error occurred while searching. Please try again.",
+        "6": "Try different keywords",
+        "7": "Page {{current}} of {{total}}",
+        "8": "Previous",
+        "9": "Next",
+        "10": "Back to Results"
+    },
+    "card_item": {
+        "1": "From",
+        "2": "Relevance Score",
+        "3": "Snoozing"
+    },
+    "kanban": {
+        "1": "Refresh"
+    },
+    "filter": {
+        "1": "Filter",
+        "2": "Active",
+        "3": "Unread",
+        "4": "Has Attachments",
+        "5": "Filter by Sender",
+        "6": "Enter sender name",
+        "7": "Clear",
+        "date_desc": "Date: Newest First",
+        "date_asc": "Date: Oldest First",
+        "sender": "Sender (A-Z)"
+    },
+    "kanban_config": {
+        "1": "Create New Column",
+        "2": "Edit",
+        "3": "Delete",
+        "4": "Loading...",
+        "5": "Protected"
+    },
+    "kanban_column_modal": {
+        "1": "Column Name",
+        "2": "e.g., In Progress",
+        "3": "Gmail Label Name",
+        "4": "e.g., IN_PROGRESS",
+        "5": "Icon",
+        "6": "Color",
+        "7": "Cancel",
+        "8": "Create",
+        "9": "⚠️ This is a system-protected column and cannot be",
+        "10": "Update",
+        "11": "Deleted",
+        "12": "Are you sure you want to delete this column?",
+        "13": "⚠️ All emails in this column will be moved back to the inbox.",
+        "14": "The Gmail label to sync with this column",
+        "15": "Processing...",
+        "errors": {
+            "nameRequired": "Column name is required",
+            "nameMinLength": "Column name must be at least {{count}} characters",
+            "labelMinLength": "Gmail label name must be at least 2 characters.",
+            "labelRequired": "Gmail label name is required"
+        },
+        "mode": {
+            "1": "Create New Column",
+            "2": "Update Column",
+            "3": "Delete Column"
+        }
+    },
+    "toast": {
+        "1": "Please select a future date and time.",
+        "2": "Moved successfully.",
+        "3": "Update failed, reverting."
+    },
+    "keyboard_shortcuts_help": {
+        "title": "Keyboard Shortcuts",
+        "close": "Press {{key}} to close",
+        "previous_email": "Previous email",
+        "next_email": "Next email",
+        "a": "Select/deselect all",
+        "f": "Refresh emails",
+        "o": "Open email",
+        "s": "Star/unstar",
+        "x": "Select/deselect",
+        "c": "Compose email",
+        "u": "Mark as unread",
+        "r": "Mark as read",
+        "d": "Delete email",
+        "help": "Show this help"
     }
 }

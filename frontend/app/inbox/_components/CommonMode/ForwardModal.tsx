@@ -78,21 +78,33 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
         }
     }, [sendEmailMutation.result]);
     useEffect(() => {
+        const item = document.querySelector(".email_detail") as HTMLElement;
+
         if (isOpen) {
             document
                 .querySelector(".backdrop__need")
                 ?.classList.remove("backdrop-blur-2xl");
+
+            if (item) {
+                item.style.overflow = "hidden";
+                //scroll to top
+                item.scrollTop = 0;
+            }
         } else {
             document
                 .querySelector(".backdrop__need")
                 ?.classList.add("backdrop-blur-2xl");
+
+            if (item) {
+                item.style.overflow = "visible";
+            }
         }
     }, [isOpen]);
     if (!isOpen || !email) return null;
 
     return (
         <div
-            className="fixed inset-0 z-999999999 flex items-center justify-center"
+            className="fixed inset-0 z-99999 flex items-center justify-center"
             role="dialog"
             aria-modal="true"
             onClick={handleOverlayClick}
@@ -106,6 +118,9 @@ export default function ForwardModal({ isOpen, onClose, email }: Props) {
 
             {/* Panel */}
             <div
+                style={{
+                    maxHeight: "90%",
+                }}
                 className="relative mx-4 w-full max-w-xl origin-center rounded-2xl border border-white/12 bg-white/10 shadow-2xl backdrop-blur-xl overflow-auto custom-scroll max-h-[90vh]"
                 onClick={stop}
             >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { SearchEmail } from "@/app/inbox/_types";
 import { formatEmailDate } from "@/helper/dateFormatter";
@@ -11,6 +11,7 @@ interface SimpleCardItemProps {
 }
 
 export default function SimpleCardItem({ item, onClick }: SimpleCardItemProps) {
+    const { t } = useTranslation();
     return (
         <>
             <div
@@ -31,7 +32,7 @@ export default function SimpleCardItem({ item, onClick }: SimpleCardItemProps) {
                     {/* From */}
                     <div className="flex items-center justify-between">
                         <p className="text-xs text-white/60">
-                            From:{" "}
+                            {t("card_item.1")}:{" "}
                             <span className="text-white/75">
                                 {item.from.email}
                             </span>
@@ -51,7 +52,7 @@ export default function SimpleCardItem({ item, onClick }: SimpleCardItemProps) {
                     {/* Relevance Score */}
                     {item.relevanceScore && (
                         <p className="text-xs text-cyan-300 font-medium">
-                            Relevance Score: {item.relevanceScore.toFixed(2)}
+                            {t("card_item.2")}: {item.relevanceScore.toFixed(2)}
                         </p>
                     )}
                 </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import type { KanbanColumnDetails } from "../../_types";
+import { useTranslation } from "react-i18next";
 
 interface Props {
     isOpen: boolean;
@@ -60,6 +61,7 @@ export default function ColumnManagementModal({
     column,
     onSubmit,
 }: Props) {
+    const { t } = useTranslation();
     const [name, setName] = useState("");
     const [color, setColor] = useState("#3b82f6");
     const [icon, setIcon] = useState("📧");
@@ -91,28 +93,34 @@ export default function ColumnManagementModal({
         };
 
         if (!name.trim()) {
-            newErrors.name = "Column name is required";
+            newErrors.name = t("kanban_column_modal.errors.nameRequired");
         } else if (name.trim().length < 2) {
-            newErrors.name = "Column name must be at least 2 characters";
+            newErrors.name = t("kanban_column_modal.errors.nameMinLength", {
+                count: 2,
+            });
         }
 
         if (!icon.trim()) {
-            newErrors.icon = "Icon is required";
+            newErrors.icon = t("kanban_column_modal.errors.iconRequired");
         } else if (!PRESET_ICONS.includes(icon)) {
-            newErrors.icon = "Please select an icon from the provided options";
+            newErrors.icon = t("kanban_column_modal.errors.iconInvalid");
         }
 
         if (!color.trim()) {
-            newErrors.color = "Color is required";
+            newErrors.color = t("kanban_column_modal.errors.colorRequired");
         } else if (!isValidHexColor(color)) {
-            newErrors.color = "Invalid color format (use #RRGGBB or #RGB)";
+            newErrors.color = t("kanban_column_modal.errors.colorInvalid");
         }
 
         if (!gmailLabelName.trim()) {
-            newErrors.gmailLabelName = "Gmail label name is required";
+            newErrors.gmailLabelName = t(
+                "kanban_column_modal.errors.labelRequired"
+            );
         } else if (gmailLabelName.trim().length < 2) {
-            newErrors.gmailLabelName =
-                "Gmail label name must be at least 2 characters";
+            newErrors.gmailLabelName = t(
+                "kanban_column_modal.errors.labelMinLength",
+                { count: 2 }
+            );
         }
 
         setErrors(newErrors);
@@ -184,9 +192,9 @@ export default function ColumnManagementModal({
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-white/10 shrink-0">
                     <h2 className="text-xl font-bold text-white">
-                        {mode === "create" && "Create New Column"}
-                        {mode === "update" && "Update Column"}
-                        {mode === "delete" && "Delete Column"}
+                        {mode === "create" && t("kanban_column_modal.mode.1")}
+                        {mode === "update" && t("kanban_column_modal.mode.2")}
+                        {mode === "delete" && t("kanban_column_modal.mode.3")}
                     </h2>
                     <button
                         onClick={onClose}
@@ -204,16 +212,17 @@ export default function ColumnManagementModal({
                     <div className="p-6 space-y-5 overflow-y-auto custom-scroll flex-1">
                         {cannotModify && (
                             <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 text-red-200 text-sm">
-                                ⚠️ This is a system-protected column and cannot
-                                be {mode === "update" ? "updated" : "deleted"}.
+                                {t("kanban_column_modal.9")}{" "}
+                                {mode === "update"
+                                    ? t("kanban_column_modal.mode.10")
+                                    : t("kanban_column_modal.mode.11")}
+                                .
                             </div>
                         )}
 
                         {mode === "delete" ? (
                             <div className="text-white/80 text-sm space-y-2">
-                                <p>
-                                    Are you sure you want to delete this column?
-                                </p>
+                                <p>{t("kanban_column_modal.12")}</p>
                                 <div className="bg-white/5 rounded-lg p-4 flex items-center gap-3">
                                     <span className="text-2xl">
                                         {column?.icon}
@@ -222,14 +231,10 @@ export default function ColumnManagementModal({
                                         <p className="font-semibold text-white">
                                             {column?.name}
                                         </p>
-                                        <p className="text-xs text-white/60">
-                                            {column?.emailCount} emails
-                                        </p>
                                     </div>
                                 </div>
                                 <p className="text-red-400 text-xs">
-                                    ⚠️ All emails in this column will be moved
-                                    to the default column.
+                                    {t("kanban_column_modal.13")}
                                 </p>
                             </div>
                         ) : (
@@ -237,7 +242,7 @@ export default function ColumnManagementModal({
                                 {/* Name */}
                                 <div>
                                     <label className="block text-sm font-medium text-white/80 mb-2">
-                                        Column Name
+                                        {t("kanban_column_modal.1")}
                                     </label>
                                     <input
                                         type="text"
@@ -255,17 +260,22 @@ export default function ColumnManagementModal({
                                             if (!name.trim()) {
                                                 setErrors({
                                                     ...errors,
-                                                    name: "Column name is required",
+                                                    name: t(
+                                                        "kanban_column_modal.errors.nameRequired"
+                                                    ),
                                                 });
                                             } else if (name.trim().length < 2) {
                                                 setErrors({
                                                     ...errors,
-                                                    name: "Column name must be at least 2 characters",
+                                                    name: t(
+                                                        "kanban_column_modal.errors.nameMinLength",
+                                                        { count: 2 }
+                                                    ),
                                                 });
                                             }
                                         }}
                                         disabled={cannotModify}
-                                        placeholder="e.g., In Progress"
+                                        placeholder={t("kanban_column_modal.2")}
                                         className={`w-full px-4 py-2.5 bg-white/5 border rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                                             errors.name
                                                 ? "border-red-500 focus:ring-red-500"
@@ -283,7 +293,7 @@ export default function ColumnManagementModal({
                                 {/* Gmail Label Name */}
                                 <div>
                                     <label className="block text-sm font-medium text-white/80 mb-2">
-                                        Gmail Label Name
+                                        {t("kanban_column_modal.3")}
                                     </label>
                                     <input
                                         type="text"
@@ -301,21 +311,24 @@ export default function ColumnManagementModal({
                                             if (!gmailLabelName.trim()) {
                                                 setErrors({
                                                     ...errors,
-                                                    gmailLabelName:
-                                                        "Gmail label name is required",
+                                                    gmailLabelName: t(
+                                                        "kanban_column_modal.errors.labelRequired"
+                                                    ),
                                                 });
                                             } else if (
                                                 gmailLabelName.trim().length < 2
                                             ) {
                                                 setErrors({
                                                     ...errors,
-                                                    gmailLabelName:
-                                                        "Gmail label name must be at least 2 characters",
+                                                    gmailLabelName: t(
+                                                        "kanban_column_modal.errors.labelMinLength",
+                                                        { count: 2 }
+                                                    ),
                                                 });
                                             }
                                         }}
                                         disabled={cannotModify}
-                                        placeholder="e.g., work/in-progress"
+                                        placeholder={t("kanban_column_modal.4")}
                                         className={`w-full px-4 py-2.5 bg-white/5 border rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                                             errors.gmailLabelName
                                                 ? "border-red-500 focus:ring-red-500"
@@ -329,8 +342,7 @@ export default function ColumnManagementModal({
                                         </p>
                                     ) : (
                                         <p className="text-xs text-white/50 mt-1">
-                                            The Gmail label to sync with this
-                                            column
+                                            {t("kanban_column_modal.14")}
                                         </p>
                                     )}
                                 </div>
@@ -338,7 +350,7 @@ export default function ColumnManagementModal({
                                 {/* Icon */}
                                 <div>
                                     <label className="block text-sm font-medium text-white/80 mb-2">
-                                        Icon
+                                        {t("kanban_column_modal.5")}
                                     </label>
                                     <div className="grid grid-cols-6 gap-2">
                                         {PRESET_ICONS.map((presetIcon) => (
@@ -375,7 +387,7 @@ export default function ColumnManagementModal({
                                 {/* Color */}
                                 <div>
                                     <label className="block text-sm font-medium text-white/80 mb-2">
-                                        Color
+                                        {t("kanban_column_modal.6")}
                                     </label>
                                     <div className="grid grid-cols-8 gap-2 mb-2">
                                         {PRESET_COLORS.map((presetColor) => (
@@ -440,14 +452,18 @@ export default function ColumnManagementModal({
                                                 if (!color.trim()) {
                                                     setErrors({
                                                         ...errors,
-                                                        color: "Color is required",
+                                                        color: t(
+                                                            "kanban_column_modal.errors.colorRequired"
+                                                        ),
                                                     });
                                                 } else if (
                                                     !isValidHexColor(color)
                                                 ) {
                                                     setErrors({
                                                         ...errors,
-                                                        color: "Invalid color format (use #RRGGBB or #RGB)",
+                                                        color: t(
+                                                            "kanban_column_modal.errors.colorInvalid"
+                                                        ),
                                                     });
                                                 }
                                             }}
@@ -478,7 +494,7 @@ export default function ColumnManagementModal({
                             disabled={isSubmitting}
                             className="cursor-pointer flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Cancel
+                            {t("kanban_column_modal.7")}
                         </button>
                         <button
                             type="submit"
@@ -494,12 +510,12 @@ export default function ColumnManagementModal({
                             }`}
                         >
                             {isSubmitting
-                                ? "Processing..."
+                                ? t("kanban_column_modal.15")
                                 : mode === "create"
-                                ? "Create"
+                                ? t("kanban_column_modal.8")
                                 : mode === "update"
-                                ? "Update"
-                                : "Delete"}
+                                ? t("kanban_column_modal.10")
+                                : t("kanban_column_modal.11")}
                         </button>
                     </div>
                 </form>
