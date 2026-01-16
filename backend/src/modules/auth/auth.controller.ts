@@ -43,7 +43,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly oidcService: OIDCService,
-  ) { }
+  ) {}
 
   @Public()
   @Post("register")
@@ -63,7 +63,9 @@ export class AuthController {
     // Set cookies
     this.setAuthCookies(res, data.accessToken, data.refreshToken);
 
-    res.status(201).send(ResponseDto.success(data, "User registered successfully"));
+    res
+      .status(201)
+      .send(ResponseDto.success(data, "User registered successfully"));
   }
 
   @Public()
@@ -88,7 +90,7 @@ export class AuthController {
   }
 
   @Public()
-  @Post("refresh")
+  @Get("refresh")
   @ApiOperation({ summary: "Refresh access token using refresh token" })
   @ApiResponse({
     status: 200,
@@ -96,18 +98,21 @@ export class AuthController {
     type: TokenResponseDto,
   })
   @ApiResponse({ status: 400, description: "Invalid or expired refresh token" })
-  async refreshToken(
-    @Body() refreshTokenDto: RefreshTokenDto,
-    @Res() res: FastifyReply,
-  ): Promise<void> {
+  async refreshToken(@Res() res: FastifyReply): Promise<void> {
     // Try to get refresh token from cookie if not in body
-    const refreshToken = refreshTokenDto.refreshToken ||
-      (res.request.cookies?.refresh_token as string | undefined);
+    const refreshToken = res.request.cookies?.refresh_token as
+      | string
+      | undefined;
 
     if (!refreshToken) {
-      res.status(400).send(
-        ResponseDto.error("Refresh token is required", "REFRESH_TOKEN_MISSING")
-      );
+      res
+        .status(400)
+        .send(
+          ResponseDto.error(
+            "Refresh token is required",
+            "REFRESH_TOKEN_MISSING",
+          ),
+        );
       return;
     }
 
@@ -116,20 +121,20 @@ export class AuthController {
     // Set new cookies
     this.setAuthCookies(res, data.accessToken, data.refreshToken);
 
-    res.status(200).send(ResponseDto.success(data, "Token refreshed successfully"));
+    res
+      .status(200)
+      .send(ResponseDto.success(data, "Token refreshed successfully"));
   }
 
   @Public()
-  @Post("logout")
+  @Get("logout")
   @ApiOperation({ summary: "Logout user by invalidating refresh token" })
   @ApiResponse({ status: 200, description: "User successfully logged out" })
-  async logout(
-    @Body() refreshTokenDto: RefreshTokenDto,
-    @Res() res: FastifyReply,
-  ): Promise<void> {
+  async logout(@Res() res: FastifyReply): Promise<void> {
     // Try to get refresh token from cookie if not in body
-    const refreshToken = refreshTokenDto.refreshToken ||
-      (res.request.cookies?.refresh_token as string | undefined);
+    const refreshToken = res.request.cookies?.refresh_token as
+      | string
+      | undefined;
 
     if (refreshToken) {
       await this.authService.logout(refreshToken);
