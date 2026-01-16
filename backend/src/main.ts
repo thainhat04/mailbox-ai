@@ -64,11 +64,15 @@ async function bootstrap() {
 
   const port = configService.get<number>("PORT") || 3001;
 
-  await app.listen(port, "127.0.0.1");
+  if (process.env.NODE_ENV === "production") {
+    await app.listen(port, "0.0.0.0");
+  } else {
+    await app.listen(port, "localhost");
+  }
 
-  logger.log(`Application is running on: http://127.0.0.1:${port}`);
+  logger.log(`Application is running on: http://localhost:${port}`);
   if (swaggerEnabled) {
-    logger.log(`Swagger docs: http://127.0.0.1:${port}/api/docs`);
+    logger.log(`Swagger docs: http://localhost:${port}/api/docs`);
   }
 }
 
