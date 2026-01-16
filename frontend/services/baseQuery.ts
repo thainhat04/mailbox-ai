@@ -43,7 +43,48 @@ export const baseQueryWithInterceptors: BaseQueryFn<
     }
 
     let result = await rawBaseQuery(processedArgs, api, extraOptions);
+    if (
+        isError(result) &&
+        result.error.status === constantServices.STATUS_UNAUTHORIZED
+    ) {
+        if (!mutex.isLocked()) {
+            const release = await mutex.acquire();
+            try {
+                const refreshResult = await rawBaseQuery(
+                    {
+                        url: constantServices.URL_REFRESH_TOKEN,
+                        method: HTTP_METHOD.GET,
+                        credentials: "include", // Gửi cookie cùng yêu cầu
+                    },
+                    api,
+                    extraOptions
+                );
 
+                if ("data" in refreshResult && refreshResult.data) {
+                    // Lưu token mới
+                    const { accessToken: newAccessToken } = (
+                        refreshResult.data as any
+                    ).data;
+
+                    api.dispatch({
+                        type: "auth/setAccessToken",
+                        payload: newAccessToken,
+                    });
+                    // Retry request gốc
+                    result = await rawBaseQuery(
+                        processedArgs,
+                        api,
+                        extraOptions
+                    );
+                }
+            } finally {
+                release();
+            }
+        } else {
+            await mutex.waitForUnlock();
+            result = await rawBaseQuery(processedArgs, api, extraOptions);
+        }
+    }
     // custom error (giữ nguyên)
     if (isError(result)) {
         result.error = customError(result.error);

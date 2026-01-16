@@ -14,15 +14,17 @@ export const userApi = api.injectEndpoints({
             query: () => ({
                 url: constants.URL_GET_PROFILE,
                 method: HTTP_METHOD.GET,
+                credentials: "include", // Gửi cookie cùng yêu cầu
             }),
         }),
         logout: build.mutation<SuccessResponse<null>, void>({
             query: () => ({
                 url: constants.URL_LOGOUT,
-                method: HTTP_METHOD.POST,
+                method: HTTP_METHOD.GET,
+                credentials: "include",
             }),
         }),
     }),
 });
 
-export const { useGetUserQuery } = userApi;
+export const { useGetUserQuery, useLogoutMutation } = userApi;

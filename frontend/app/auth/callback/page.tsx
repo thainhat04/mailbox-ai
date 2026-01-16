@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 
 import { useDispatch } from "@/store";
-import { login } from "@/store/slice/auth.slice";
+import { performLogin } from "@/store/slice/auth.slice";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useGetUserQuery } from "@/services/User";
 import SERVICES from "@/constants/services";
@@ -39,7 +39,7 @@ function CallbackPage() {
         if (isSaved) {
             if (result) {
                 const data = result.data;
-                dispatch(login(data));
+                performLogin(data);
                 router.push(constants.URL_LOGIN_REDIRECT);
                 showToast(t("auth.login.8"), "success", constants.TIME_TOAST);
             }

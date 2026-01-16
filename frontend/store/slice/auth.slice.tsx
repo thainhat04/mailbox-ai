@@ -68,16 +68,22 @@ const authSlice = createSlice({
                 state.user = { ...state.user, ...action.payload };
             }
         },
+        setAccessToken: (state, action: PayloadAction<string>) => {
+            state.accessToken = action.payload;
+        },
     },
 });
 
-export const { login, logout, updateUser } = authSlice.actions;
-
+export const { login, logout, updateUser, setAccessToken } = authSlice.actions;
 export function performLogout(broadcast = true) {
     store.dispatch(logout());
     if (broadcast) {
         authChannel.postMessage({ type: SERVICES.LOGOUT_MESSAGE });
     }
+}
+export function performLogin(loginData: { user: User; accessToken: string }) {
+    store.dispatch(login(loginData));
+    authChannel.postMessage({ type: SERVICES.LOGIN_MESSAGE });
 }
 /**
  * Thunk: initAuth

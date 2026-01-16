@@ -36,6 +36,7 @@ import {
 import type { FastifyReply } from "fastify";
 import { GenerateUtil } from "../../common/utils";
 import { OIDCProviderConfig } from "../oidc/dto/oidc.dto";
+import { ConfigService } from "@nestjs/config/dist/config.service";
 
 @ApiTags("Auth")
 @Controller("auth")
@@ -43,6 +44,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly oidcService: OIDCService,
+    private readonly config: ConfigService,
   ) {}
 
   @Public()
@@ -97,7 +99,7 @@ export class AuthController {
     description: "Access token successfully refreshed",
     type: TokenResponseDto,
   })
-  @ApiResponse({ status: 400, description: "Invalid or expired refresh token" })
+  @ApiResponse({ status: 401, description: "Invalid or expired refresh token" })
   async refreshToken(@Res() res: FastifyReply): Promise<void> {
     // Try to get refresh token from cookie if not in body
     const refreshToken = res.request.cookies?.refresh_token as
@@ -106,7 +108,7 @@ export class AuthController {
 
     if (!refreshToken) {
       res
-        .status(400)
+        .status(401)
         .send(
           ResponseDto.error(
             "Refresh token is required",
@@ -116,7 +118,7 @@ export class AuthController {
       return;
     }
 
-    const data = await this.authService.refreshToken(refreshToken);
+    const data = await this.authService.refreshToken(refreshToken, true);
 
     // Set new cookies
     this.setAuthCookies(res, data.accessToken, data.refreshToken);
@@ -145,15 +147,44 @@ export class AuthController {
 
     res.status(200).send(ResponseDto.success(null, "Logout successful"));
   }
-
+  @Public()
   @Get("me")
-  @ApiBearerAuth("JWT-auth")
   @ApiOperation({ summary: "Get current user information" })
   @ApiResponse({ status: 200, description: "User information retrieved" })
   @ApiResponse({ status: 401, description: "Unauthorized" })
-  async getCurrentUser(@CurrentUser("sub") userId: string) {
-    const data = await this.authService.getCurrentUser(userId);
-    return ResponseDto.success(data, "User information retrieved");
+  async getCurrentUser(@Res() res: FastifyReply) {
+    const refreshToken = res.request.cookies?.refresh_token as
+      | string
+      | undefined;
+
+    if (!refreshToken) {
+      return res
+        .status(401)
+        .send(
+          ResponseDto.error(
+            "Refresh token is required",
+            "REFRESH_TOKEN_MISSING",
+          ),
+        );
+    }
+
+    try {
+      // Refresh to get new access token and user info
+      const data = await this.authService.refreshToken(refreshToken, false);
+
+      return res
+        .status(200)
+        .send(ResponseDto.success(data, "User information retrieved"));
+    } catch (error) {
+      return res
+        .status(401)
+        .send(
+          ResponseDto.error(
+            error instanceof Error ? error.message : "Invalid token",
+            "TOKEN_INVALID",
+          ),
+        );
+    }
   }
 
   @Public()

@@ -13,7 +13,7 @@ import useInput from "@/hooks/useInput";
 import { useMutationHandler } from "@/hooks/useMutationHandler";
 import { useSignInMutation, useOAuthSignInMutation } from "./_services";
 import { useDispatch } from "@/store";
-import { login } from "@/store/slice/auth.slice";
+import { performLogin } from "@/store/slice/auth.slice";
 import SERVICES from "@/constants/services";
 import constants from "./_constants";
 import { useToast } from "@/components/ui/toast-provider";
@@ -52,12 +52,10 @@ function LoginPage() {
         if (signInMutation.result) {
             const user = signInMutation.result.data.user;
 
-            dispatch(
-                login({
-                    user,
-                    accessToken: signInMutation.result.data.accessToken,
-                })
-            );
+            performLogin({
+                user,
+                accessToken: signInMutation.result.data.accessToken,
+            });
 
             router.push(constants.URL_LOGIN_REDIRECT);
             showToast(t("auth.login.8"), "success", constants.TIME_TOAST);
