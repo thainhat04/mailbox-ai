@@ -17,6 +17,10 @@ export default function AuthBroadcastProvider({
         const handler = (event: MessageEvent) => {
             if (event.data?.type === SERVICES.LOGOUT_MESSAGE) {
                 dispatch(logout());
+            } else if (event.data?.type === SERVICES.LOGIN_MESSAGE) {
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             }
         };
 

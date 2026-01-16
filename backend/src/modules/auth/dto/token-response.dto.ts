@@ -34,3 +34,20 @@ export class TokenResponseDto {
   @ApiProperty({ type: UserResponseDto })
   user: UserResponseDto;
 }
+
+export class RefreshTokenResponseDto {
+  @ApiProperty({
+    description: "JWT access token (expires in 60 minutes)",
+    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  })
+  accessToken: string;
+
+  @ApiPropertyOptional({
+    description: "JWT refresh token (optional, only when rotating)",
+    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  })
+  refreshToken?: string;
+
+  @ApiProperty({ type: UserResponseDto })
+  user: UserResponseDto;
+}

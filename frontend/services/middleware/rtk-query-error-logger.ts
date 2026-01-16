@@ -16,7 +16,7 @@ export const rtkQueryErrorLogger: Middleware =
             }
 
             if (error.status === serviceConstants.STATUS_UNAUTHORIZED) {
-                if (localStorage.getItem(serviceConstants.refreshToken)) {
+                if (localStorage.getItem(serviceConstants.isLoggedIn)) {
                     toastManager.show(error.data as string, "error");
                     storeAPI.dispatch(logout());
                     error.status = serviceConstants.STATUS_NOT_CLIENT_ERROR;

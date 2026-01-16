@@ -20,20 +20,34 @@ export interface User {
 interface AuthState {
     user: User | null;
     isLoggedIn: boolean;
+    accessToken: string;
 }
 
 const initialState: AuthState = {
     user: null,
     isLoggedIn: false,
+    accessToken: "",
 };
 
 const authSlice = createSlice({
     name: "auth",
     initialState,
     reducers: {
-        login: (state, action: PayloadAction<User>) => {
-            state.user = action.payload;
-            state.isLoggedIn = true;
+        login: {
+            reducer: (
+                state,
+                action: PayloadAction<{ user: User; accessToken: string }>
+            ) => {
+                state.user = action.payload.user;
+                state.isLoggedIn = true;
+                state.accessToken = action.payload.accessToken;
+            },
+            prepare: (data: { user: User; accessToken: string }) => {
+                if (typeof window !== "undefined") {
+                    localStorage.setItem(SERVICES.isLoggedIn, "true");
+                }
+                return { payload: data };
+            },
         },
         logout: {
             reducer: (state) => {
@@ -43,8 +57,7 @@ const authSlice = createSlice({
             },
             prepare: () => {
                 if (typeof window !== "undefined") {
-                    localStorage.removeItem(SERVICES.accessToken);
-                    localStorage.removeItem(SERVICES.refreshToken);
+                    localStorage.removeItem(SERVICES.isLoggedIn);
                 }
 
                 return { payload: undefined };
@@ -55,16 +68,22 @@ const authSlice = createSlice({
                 state.user = { ...state.user, ...action.payload };
             }
         },
+        setAccessToken: (state, action: PayloadAction<string>) => {
+            state.accessToken = action.payload;
+        },
     },
 });
 
-export const { login, logout, updateUser } = authSlice.actions;
-
+export const { login, logout, updateUser, setAccessToken } = authSlice.actions;
 export function performLogout(broadcast = true) {
     store.dispatch(logout());
     if (broadcast) {
         authChannel.postMessage({ type: SERVICES.LOGOUT_MESSAGE });
     }
+}
+export function performLogin(loginData: { user: User; accessToken: string }) {
+    store.dispatch(login(loginData));
+    authChannel.postMessage({ type: SERVICES.LOGIN_MESSAGE });
 }
 /**
  * Thunk: initAuth
@@ -81,8 +100,8 @@ export const initAuth = () => async (dispatch: AppDispatch) => {
             return;
         }
 
-        const accessToken = localStorage.getItem(SERVICES.accessToken);
-        if (accessToken) {
+        const isLoggedIn = localStorage.getItem(SERVICES.isLoggedIn);
+        if (isLoggedIn === "true") {
             try {
                 const result = await dispatch(
                     userApi.endpoints.getUser.initiate()
@@ -96,10 +115,7 @@ export const initAuth = () => async (dispatch: AppDispatch) => {
                 ) {
                     const status = result.error.status;
 
-                    if (status === SERVICES.STATUS_UNAUTHORIZED) {
-                        localStorage.removeItem(SERVICES.accessToken);
-                        localStorage.removeItem(SERVICES.refreshToken);
-                    } else {
+                    if (status !== SERVICES.STATUS_UNAUTHORIZED) {
                         throw new Error("retry");
                     }
                 } else throw new Error("retry");
@@ -129,8 +145,6 @@ export const initAuth = () => async (dispatch: AppDispatch) => {
                         const status = retryResult.error.status;
 
                         if (status === SERVICES.STATUS_UNAUTHORIZED) {
-                            localStorage.removeItem(SERVICES.accessToken);
-                            localStorage.removeItem(SERVICES.refreshToken);
                             break;
                         }
                     }
