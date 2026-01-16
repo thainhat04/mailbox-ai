@@ -83,53 +83,87 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  async refreshToken(refreshToken: string): Promise<TokenResponseDto> {
+  async refreshToken(
+    refreshToken: string,
+    rotateRefreshToken = false,
+  ): Promise<TokenResponseDto> {
     try {
-      // Verify refresh token
-      const payload = this.jwtService.verify(refreshToken, {
+      this.jwtService.verify(refreshToken, {
         secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
       });
 
-      // Check if session with this refresh token exists in database
       const session = await this.prisma.session.findUnique({
         where: { sessionToken: refreshToken },
         include: { user: true },
       });
 
       if (!session) {
-        throw new BaseException("Invalid refresh token", CODES.TOKEN_INVALID);
+        throw new BaseException(
+          "Invalid refresh token",
+          CODES.TOKEN_INVALID,
+          401,
+        );
       }
 
-      // Check if session is expired
       if (session.expires < new Date()) {
         await this.prisma.session.delete({
           where: { id: session.id },
         });
 
-        throw new BaseException("Refresh token expired", CODES.TOKEN_EXPIRED);
+        throw new BaseException(
+          "Refresh token expired",
+          CODES.TOKEN_EXPIRED,
+          401,
+        );
       }
 
-      // Check if user is active
       if (!session.user.isActive) {
-        throw new BaseException("Account is deactivated", CODES.USER_INACTIVE);
+        throw new BaseException(
+          "Account is deactivated",
+          CODES.USER_INACTIVE,
+          401,
+        );
       }
 
-      // Delete old session
-      await this.prisma.session.delete({
-        where: { id: session.id },
+      // ==========================
+      // 🔁 FLOW CŨ – rotate refresh token
+      // ==========================
+      if (rotateRefreshToken) {
+        await this.prisma.session.delete({
+          where: { id: session.id },
+        });
+
+        return this.generateTokens(session.user);
+      }
+
+      // ==========================
+      // 🚀 FLOW MỚI – giữ refresh token
+      // ==========================
+      const tokenPayload = {
+        sub: session.user.id,
+        email: session.user.email,
+        role: session.user.role,
+      };
+
+      const accessToken = this.jwtService.sign(tokenPayload, {
+        expiresIn: (this.configService.get<string>("JWT_ACCESS_EXPIRATION") ||
+          "60m") as any,
       });
 
-      // Generate new tokens
-      return this.generateTokens(session.user);
+      return {
+        accessToken,
+        refreshToken,
+        user: this.mapUserToResponse(session.user),
+      };
     } catch (error) {
-      // Re-throw BaseException to preserve error details
       if (error instanceof BaseException) {
         throw error;
       }
-      // Generic error for JWT verification failures
+
       throw new BaseException(
         "Invalid or expired refresh token",
         CODES.TOKEN_INVALID,
+        401,
       );
     }
   }
