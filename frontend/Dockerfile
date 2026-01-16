@@ -24,7 +24,8 @@ ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_DOMAIN_NAME=$NEXT_PUBLIC_DOMAIN_NAME
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN npm run build
+# Disable Turbopack for build (fixes Google Fonts compatibility issue with Next.js 16)
+RUN npx next build --no-turbopack
 
 # ===========================================
 # Stage 2: Production

@@ -4,6 +4,7 @@ const SERVICES = {
     STATUS_INTERNAL_ERROR: 500,
     STATUS_UNAUTHORIZED: 401,
     isLoggedIn: "isLoggedIn",
+    accessToken: "accessToken",
     URL_GET_PROFILE: "/auth/me",
     URL_REFRESH_TOKEN: "/auth/refresh",
     URL_LOGIN: "/auth/login",
