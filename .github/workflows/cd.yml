@@ -44,6 +44,7 @@ jobs:
           port: ${{ secrets.VM_PORT || 22 }}
           source: "docker-compose.yml"
           target: "/app/app/mail-box-ai/"
+          overwrite: true
 
       - name: Deploy
         uses: appleboy/ssh-action@v1.2.0
