@@ -64,11 +64,7 @@ async function bootstrap() {
 
   const port = configService.get<number>("PORT") || 3001;
 
-  if (process.env.NODE_ENV === "production") {
-    await app.listen(port, "0.0.0.0");
-  } else {
-    await app.listen(port);
-  }
+  await app.listen(port, "localhost");
 
   logger.log(`Application is running on: http://localhost:${port}`);
   if (swaggerEnabled) {
