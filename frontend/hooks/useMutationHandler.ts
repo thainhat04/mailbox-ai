@@ -57,6 +57,12 @@ export function useMutationHandler<
                             };
                         }
                     }
+                    if (resultWithError) {
+                        return {
+                            data: null,
+                            error: null,
+                        };
+                    }
                     if (throwOnError) throw e;
                 }
                 return null;
