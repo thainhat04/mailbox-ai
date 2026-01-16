@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 
 import { useDispatch } from "@/store";
-import { login } from "@/store/slice/auth.slice";
+import { performLogin } from "@/store/slice/auth.slice";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import { useGetUserQuery } from "@/services/User";
 import SERVICES from "@/constants/services";
@@ -24,25 +24,22 @@ function CallbackPage() {
 
     const searchParams = useSearchParams();
     const accessToken = searchParams.get(constants.accessTokenParam) || "";
-    const refreshToken = searchParams.get(constants.refreshTokenParam) || "";
     const [isSaved, setIsSaved] = useState(false);
     const { result, error, raw } = useQueryHandler(useGetUserQuery, undefined, {
         skip: !isSaved,
     });
 
     useEffect(() => {
-        //call dispatch to save tokens to localStorage
-        if (accessToken && refreshToken) {
-            localStorage.setItem(SERVICES.accessToken, accessToken);
-            localStorage.setItem(SERVICES.refreshToken, refreshToken);
+        if (accessToken) {
+            localStorage.setItem(SERVICES.isLoggedIn, "true");
             setIsSaved(true);
         } else router.push(constants.URL_LOGIN);
     }, []);
     useEffect(() => {
         if (isSaved) {
             if (result) {
-                const user = result.data;
-                dispatch(login(user));
+                const data = result.data;
+                performLogin(data);
                 router.push(constants.URL_LOGIN_REDIRECT);
                 showToast(t("auth.login.8"), "success", constants.TIME_TOAST);
             }
