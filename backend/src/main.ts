@@ -8,6 +8,7 @@ import { ConfigService } from "@nestjs/config";
 import { AppModule } from "./app.module";
 import { setupSwagger } from "./common/configs/swagger.config";
 import { AllExceptionsFilter } from "./common/filters/http-exception.filter";
+import fastifyCookie from "@fastify/cookie";
 
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
@@ -19,6 +20,11 @@ async function bootstrap() {
       maxParamLength: 1000,
     }),
   );
+
+  // Register cookie plugin
+  await app.register(fastifyCookie, {
+    secret: process.env.COOKIE_SECRET || "your-secret-key-change-in-production",
+  });
 
   // Set global prefix
   app.setGlobalPrefix("api/v1");
