@@ -56,6 +56,20 @@ services:
 
     volumes:
       - model-cache:/root/.cache/huggingface
+  
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY}/frontend:${TAG:-latest}
+    container_name: mailbox-frontend
+    restart: unless-stopped
+    env_file:
+      - ./frontend/.env
+    ports:
+      - "4300:4300"
+    networks:
+      - mailbox-network
+    depends_on:
+      backend:
+        condition: service_healthy
 
 networks:
   mailbox-network:
