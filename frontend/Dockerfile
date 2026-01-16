@@ -5,15 +5,15 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Only copy package.json, ignore package-lock.json to get fresh native bindings
+# Only copy package.json to get fresh native bindings
 COPY package.json ./
 
 # Fresh install to get correct native bindings for Linux
-RUN npm install
+RUN yarn install
 
 COPY . .
 
-# Remove any Windows node_modules that might have been copied
+# Remove any cache that might have been copied
 RUN rm -rf node_modules/.cache
 
 # Build arguments with default values for CI/CD
@@ -25,7 +25,8 @@ ENV NEXT_PUBLIC_DOMAIN_NAME=$NEXT_PUBLIC_DOMAIN_NAME
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Disable Turbopack for build (fixes Google Fonts compatibility issue with Next.js 16)
-RUN npx next build --no-turbopack
+ENV TURBOPACK=0
+RUN yarn build
 
 # ===========================================
 # Stage 2: Production
