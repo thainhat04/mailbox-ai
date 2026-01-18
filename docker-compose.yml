@@ -73,7 +73,7 @@ services:
 
 networks:
   mailbox-network:
-    driver: bridge
+    external: true
 
 volumes:
   model-cache:
