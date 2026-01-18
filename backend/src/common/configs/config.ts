@@ -9,6 +9,8 @@ export const validationSchema = Joi.object({
 
   // Database
   DATABASE_URL: Joi.string().required(),
+  DB_CONNECTION_LIMIT: Joi.number().default(20),
+  DB_POOL_TIMEOUT: Joi.number().default(20),
 
   // JWT
   JWT_SECRET: Joi.string().required(),
@@ -38,6 +40,8 @@ export interface EnvironmentVariables {
   PORT: number;
   APP_NAME: string;
   DATABASE_URL: string;
+  DB_CONNECTION_LIMIT: number;
+  DB_POOL_TIMEOUT: number;
   JWT_SECRET: string;
   JWT_ACCESS_EXPIRATION: string;
   JWT_REFRESH_SECRET: string;
