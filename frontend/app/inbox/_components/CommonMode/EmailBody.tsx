@@ -17,7 +17,7 @@ function EmailBody({ htmlContent }: { htmlContent: string }) {
                         <head>
                             <meta charset="utf-8">
                             <style>
-                                body { margin: 0; padding: 16px; font-family: inherit; }
+                                body { margin: 0; padding: 16px; font-family: inherit; color: white }
                             </style>
                         </head>
                         <body>${htmlContent}</body>
@@ -35,7 +35,7 @@ function EmailBody({ htmlContent }: { htmlContent: string }) {
             style={{
                 width: "100%",
                 border: "none",
-                minHeight: "400px",
+                flex: 1,
             }}
             sandbox="allow-same-origin"
             title="Email content"

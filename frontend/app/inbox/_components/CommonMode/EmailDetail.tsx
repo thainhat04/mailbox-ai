@@ -65,12 +65,12 @@ export default function EmailDetail({
         },
         {
             skip: !previewEmail?.id,
-        }
+        },
     );
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
     const modifyEmail = useMutationHandler(
         useModifyEmailMutation,
-        "ModifyEmail"
+        "ModifyEmail",
     );
 
     useEffect(() => {
@@ -118,7 +118,7 @@ export default function EmailDetail({
     const handleViewAttachment = async (
         url: string,
         filename: string,
-        mimeType: string
+        mimeType: string,
     ) => {
         try {
             const token = localStorage.getItem(SERVICES.accessToken);
@@ -258,7 +258,7 @@ export default function EmailDetail({
                     </header>
 
                     {/* Body */}
-                    <div className="custom-scroll flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 text-xs sm:text-sm leading-relaxed space-y-4">
+                    <div className="custom-scroll flex-1 flex flex-col overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 text-xs sm:text-sm leading-relaxed space-y-4">
                         {isHtml ? (
                             <EmailBody htmlContent={email.body} />
                         ) : (
@@ -306,7 +306,7 @@ export default function EmailDetail({
                                                     onClick={() =>
                                                         handleDownloadAttachment(
                                                             att.url,
-                                                            att.filename
+                                                            att.filename,
                                                         )
                                                     }
                                                     className="flex-1 sm:flex-none inline-flex items-center justify-center sm:justify-start gap-1 rounded-md bg-white/8 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white hover:bg-white/[0.14] transition"
@@ -323,7 +323,7 @@ export default function EmailDetail({
                                                         handleViewAttachment(
                                                             att.url,
                                                             att.filename,
-                                                            att.mimeType
+                                                            att.mimeType,
                                                         )
                                                     }
                                                     className="flex-1 sm:flex-none inline-flex items-center justify-center rounded-md border border-white/15 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white/85 hover:bg-white/8 transition"
