@@ -19,6 +19,8 @@ import {
 export class EmailSyncService {
   private readonly logger = new Logger(EmailSyncService.name);
   private readonly syncingAccounts = new Set<string>();
+  private isEmailSyncRunning = false;
+  private isLabelSyncRunning = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -27,9 +29,17 @@ export class EmailSyncService {
     private readonly searchVectorService: SearchVectorService,
   ) { }
 
-  @Cron(CronExpression.EVERY_5_HOURS)
-  //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
+  //@Cron(CronExpression.EVERY_5_HOURS) // Production: every 5 hours
+  @Cron(CronExpression.EVERY_10_SECONDS) // Testing: every 10 seconds
+  //@Cron(CronExpression.EVERY_5_SECONDS) // Testing: every 5 seconds (more aggressive)
   async syncAllEmails(): Promise<void> {
+    // Prevent overlapping cron executions
+    if (this.isEmailSyncRunning) {
+      this.logger.debug("[EMAILS] Sync already in progress, skipping this run");
+      return;
+    }
+
+    this.isEmailSyncRunning = true;
     this.logger.log("[EMAILS] Starting scheduled email sync");
 
     try {
@@ -41,33 +51,32 @@ export class EmailSyncService {
         return;
       }
 
-      let synced = 0;
-      let failed = 0;
-
-      for (const account of emailAccounts) {
-        try {
-          const result = await this.syncAccount(account.id);
-          if (result.success) synced++;
-        } catch (error) {
-          this.logger.error(
-            `[EMAILS] Failed for ${account.id}:`,
-            error.message,
-          );
-          failed++;
-        }
-      }
+      // Use controlled concurrency to prevent connection pool exhaustion
+      const result = await this.syncAccountsWithConcurrency(
+        emailAccounts.map((acc) => acc.id),
+        SyncConfig.CONCURRENT_ACCOUNTS,
+      );
 
       this.logger.log(
-        `[EMAILS] Sync completed: ${synced} success, ${failed} failed`,
+        `[EMAILS] Sync completed: ${result.synced} success, ${result.failed} failed`,
       );
     } catch (error) {
       this.logger.error("[EMAILS] Sync failed:", error);
+    } finally {
+      this.isEmailSyncRunning = false;
     }
   }
 
   @Cron(CronExpression.EVERY_5_HOURS)
   //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
   async syncAllLabels(): Promise<void> {
+    // Prevent overlapping cron executions
+    if (this.isLabelSyncRunning) {
+      this.logger.debug("[LABELS] Sync already in progress, skipping this run");
+      return;
+    }
+
+    this.isLabelSyncRunning = true;
     this.logger.log("[LABELS] Starting scheduled label sync");
 
     try {
@@ -79,27 +88,19 @@ export class EmailSyncService {
         return;
       }
 
-      let totalSynced = 0;
-      let failed = 0;
-
-      for (const account of emailAccounts) {
-        try {
-          const count = await this.syncLabels(account.id);
-          totalSynced += count;
-        } catch (error) {
-          this.logger.error(
-            `[LABELS] Failed for ${account.id}:`,
-            error.message,
-          );
-          failed++;
-        }
-      }
+      // Use controlled concurrency
+      const result = await this.syncLabelsWithConcurrency(
+        emailAccounts.map((acc) => acc.id),
+        SyncConfig.CONCURRENT_ACCOUNTS,
+      );
 
       this.logger.log(
-        `[LABELS] Sync completed: ${totalSynced} labels synced, ${failed} failed`,
+        `[LABELS] Sync completed: ${result.totalSynced} labels synced, ${result.failed} failed`,
       );
     } catch (error) {
       this.logger.error("[LABELS] Sync failed:", error);
+    } finally {
+      this.isLabelSyncRunning = false;
     }
   }
 
@@ -328,24 +329,16 @@ export class EmailSyncService {
       return { total: 0, synced: 0, failed: 0 };
     }
 
-    const results = await Promise.allSettled(
-      emailAccounts.map((acc) => this.syncAccount(acc.id)),
+    // Use controlled concurrency for manual sync too
+    const result = await this.syncAccountsWithConcurrency(
+      emailAccounts.map((acc) => acc.id),
+      SyncConfig.CONCURRENT_ACCOUNTS,
     );
-
-    const synced = results.filter(
-      (r) => r.status === "fulfilled" && r.value.success,
-    ).length;
-
-    const failed = results.filter(
-      (r) =>
-        r.status === "rejected" ||
-        (r.status === "fulfilled" && !r.value.success),
-    ).length;
 
     return {
       total: emailAccounts.length,
-      synced,
-      failed,
+      synced: result.synced,
+      failed: result.failed,
     };
   }
 
@@ -658,5 +651,104 @@ export class EmailSyncService {
         isInline: att.isInline,
       })),
     };
+  }
+
+  /**
+   * Sync multiple accounts with controlled concurrency
+   * Prevents connection pool exhaustion by limiting parallel operations
+   */
+  private async syncAccountsWithConcurrency(
+    accountIds: string[],
+    concurrency: number,
+  ): Promise<{ synced: number; failed: number }> {
+    let synced = 0;
+    let failed = 0;
+
+    // Process accounts in batches
+    for (let i = 0; i < accountIds.length; i += concurrency) {
+      const batch = accountIds.slice(i, i + concurrency);
+
+      this.logger.debug(
+        `Processing batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(accountIds.length / concurrency)}: ${batch.length} accounts`,
+      );
+
+      // Process batch in parallel
+      const results = await Promise.allSettled(
+        batch.map((accountId) =>
+          this.syncAccount(accountId).catch((error) => {
+            this.logger.error(
+              `[EMAILS] Failed for ${accountId}:`,
+              error.message,
+            );
+            return { success: false, messagesAdded: 0, messagesDeleted: 0 };
+          }),
+        ),
+      );
+
+      // Count results
+      for (const result of results) {
+        if (result.status === "fulfilled" && result.value.success) {
+          synced++;
+        } else {
+          failed++;
+        }
+      }
+
+      // Small delay between batches to allow connection pool to stabilize
+      if (i + concurrency < accountIds.length) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+
+    return { synced, failed };
+  }
+
+  /**
+   * Sync labels for multiple accounts with controlled concurrency
+   */
+  private async syncLabelsWithConcurrency(
+    accountIds: string[],
+    concurrency: number,
+  ): Promise<{ totalSynced: number; failed: number }> {
+    let totalSynced = 0;
+    let failed = 0;
+
+    // Process accounts in batches
+    for (let i = 0; i < accountIds.length; i += concurrency) {
+      const batch = accountIds.slice(i, i + concurrency);
+
+      this.logger.debug(
+        `Processing label batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(accountIds.length / concurrency)}: ${batch.length} accounts`,
+      );
+
+      // Process batch in parallel
+      const results = await Promise.allSettled(
+        batch.map((accountId) =>
+          this.syncLabels(accountId).catch((error) => {
+            this.logger.error(
+              `[LABELS] Failed for ${accountId}:`,
+              error.message,
+            );
+            return 0;
+          }),
+        ),
+      );
+
+      // Count results
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          totalSynced += result.value;
+        } else {
+          failed++;
+        }
+      }
+
+      // Small delay between batches
+      if (i + concurrency < accountIds.length) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+
+    return { totalSynced, failed };
   }
 }
