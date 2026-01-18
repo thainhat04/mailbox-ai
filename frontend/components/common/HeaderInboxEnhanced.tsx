@@ -7,6 +7,7 @@ import UserMenu from "@/components/ui/UserMenu";
 import { User, Hash } from "lucide-react";
 import { ModeSearch } from "@/app/inbox/_types";
 import { useTranslation } from "react-i18next";
+import { useSelector } from "@/store";
 
 interface HeaderInboxProps {
     isCommondMode: boolean;
@@ -26,6 +27,7 @@ function HeaderInbox({
     const { t } = useTranslation();
     const [searchQuery, setSearchQuery] = useState("");
     const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+    const accessToken = useSelector((state) => state.auth.accessToken);
 
     const [isFocused, setIsFocused] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -50,18 +52,18 @@ function HeaderInbox({
 
             setIsLoadingSuggestions(true);
             try {
-                const token = localStorage.getItem("accessToken");
+                const token = accessToken;
                 const response = await fetch(
                     `${
                         process.env.NEXT_PUBLIC_API_BASE_URL
                     }/emails/suggestions?q=${encodeURIComponent(
-                        debouncedQuery
+                        debouncedQuery,
                     )}&limit=5`,
                     {
                         headers: {
                             Authorization: `Bearer ${token}`,
                         },
-                    }
+                    },
                 );
 
                 if (response.ok) {
@@ -83,7 +85,7 @@ function HeaderInbox({
         };
 
         fetchSuggestions();
-    }, [debouncedQuery]);
+    }, [debouncedQuery, accessToken]);
 
     // Keyboard shortcut: Ctrl+K to focus search
     useEffect(() => {
@@ -110,7 +112,7 @@ function HeaderInbox({
             case "ArrowDown":
                 e.preventDefault();
                 setSelectedIndex((prev) =>
-                    prev < suggestions.length - 1 ? prev + 1 : prev
+                    prev < suggestions.length - 1 ? prev + 1 : prev,
                 );
                 break;
 
@@ -193,7 +195,7 @@ function HeaderInbox({
         <header
             onClick={() => {
                 const header_inbox = document.querySelector(
-                    ".header_inbox"
+                    ".header_inbox",
                 ) as HTMLElement;
                 if (header_inbox) {
                     header_inbox.style.zIndex = "100";
@@ -394,7 +396,7 @@ function HeaderInbox({
                                     ref={dropdownRef}
                                     className="absolute top-full left-0 right-0 mt-2 bg-slate-800/95 backdrop-blur-lg border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50"
                                 >
-                                    <div className="max-h-[300px] overflow-y-auto">
+                                    <div className="max-h-[300px] overflow-y-auto custom-scroll">
                                         {suggestions.map(
                                             (suggestion, index) => (
                                                 <div
@@ -407,7 +409,7 @@ function HeaderInbox({
                                                     onMouseDown={(e) => {
                                                         e.preventDefault();
                                                         selectSuggestion(
-                                                            suggestion
+                                                            suggestion,
                                                         );
                                                     }}
                                                     className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-all ${
@@ -418,7 +420,7 @@ function HeaderInbox({
                                                 >
                                                     <div className="shrink-0">
                                                         {getSuggestionIcon(
-                                                            suggestion.type
+                                                            suggestion.type,
                                                         )}
                                                     </div>
                                                     <div className="flex-1 min-w-0">
@@ -429,10 +431,10 @@ function HeaderInbox({
                                                             {suggestion.type ===
                                                             SuggestionType.SENDER
                                                                 ? t(
-                                                                      "inbox_header.2"
+                                                                      "inbox_header.2",
                                                                   )
                                                                 : t(
-                                                                      "inbox_header.3"
+                                                                      "inbox_header.3",
                                                                   )}
                                                         </p>
                                                     </div>
@@ -443,7 +445,7 @@ function HeaderInbox({
                                                         </kbd>
                                                     )}
                                                 </div>
-                                            )
+                                            ),
                                         )}
                                     </div>
                                     <div className="px-4 py-2 bg-slate-900/50 border-t border-white/5 flex items-center justify-between text-[10px] text-white/30">
@@ -585,7 +587,7 @@ function HeaderInbox({
                                         >
                                             <div className="shrink-0">
                                                 {getSuggestionIcon(
-                                                    suggestion.type
+                                                    suggestion.type,
                                                 )}
                                             </div>
                                             <div className="flex-1 min-w-0">
