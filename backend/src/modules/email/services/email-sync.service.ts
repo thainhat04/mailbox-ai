@@ -10,7 +10,7 @@ import {
   retryWithBackoff,
   isTokenExpiredError,
 } from "../../../common/utils/retry.util";
-
+import { OAuthReauthRequiredException } from "../../../common/exceptions";
 /**
  * Email Sync Service
  * Handles periodic email synchronization for all accounts using cron jobs
@@ -43,9 +43,30 @@ export class EmailSyncService {
     this.logger.log("[EMAILS] Starting scheduled email sync");
 
     try {
+      // Only sync accounts with valid auth status (skip NEEDS_REAUTH)
       const emailAccounts = await this.prisma.emailAccount.findMany({
+        where: {
+          account: {
+            authStatus: "VALID",
+          },
+        },
         select: { id: true },
       });
+
+      // Also count skipped accounts for logging
+      const skippedAccounts = await this.prisma.emailAccount.count({
+        where: {
+          account: {
+            authStatus: "NEEDS_REAUTH",
+          },
+        },
+      });
+
+      if (skippedAccounts > 0) {
+        this.logger.warn(
+          `[EMAILS] Skipping ${skippedAccounts} account(s) that need re-authentication`,
+        );
+      }
 
       if (emailAccounts.length === 0) {
         return;
@@ -80,7 +101,13 @@ export class EmailSyncService {
     this.logger.log("[LABELS] Starting scheduled label sync");
 
     try {
+      // Only sync accounts with valid auth status (skip NEEDS_REAUTH)
       const emailAccounts = await this.prisma.emailAccount.findMany({
+        where: {
+          account: {
+            authStatus: "VALID",
+          },
+        },
         select: { id: true },
       });
 
@@ -225,7 +252,22 @@ export class EmailSyncService {
     } catch (error) {
       this.logger.error(`Failed to sync account ${emailAccountId}:`, error);
 
-      // Handle token expiration errors
+      // Handle permanent OAuth errors requiring re-authentication
+      if (error instanceof OAuthReauthRequiredException) {
+        this.logger.warn(
+          `Account ${emailAccountId} requires re-authentication. Marking as NEEDS_REAUTH.`,
+        );
+        await this.markAccountNeedsReauth(emailAccountId, error.message);
+        // Clear provider cache to prevent using invalid credentials
+        this.providerRegistry.clearCache(emailAccountId);
+        return {
+          messagesAdded: 0,
+          messagesDeleted: 0,
+          success: false,
+        };
+      }
+
+      // Handle token expiration errors (temporary, can be refreshed)
       if (isTokenExpiredError(error)) {
         this.logger.warn(
           `Token expired for account ${emailAccountId}, will refresh on next sync`,
@@ -239,6 +281,38 @@ export class EmailSyncService {
       };
     } finally {
       this.syncingAccounts.delete(emailAccountId);
+    }
+  }
+
+  /**
+   * Mark an account as needing re-authentication
+   */
+  private async markAccountNeedsReauth(
+    emailAccountId: string,
+    errorMessage: string,
+  ): Promise<void> {
+    try {
+      const emailAccount = await this.prisma.emailAccount.findUnique({
+        where: { id: emailAccountId },
+        include: { account: true },
+      });
+
+      if (emailAccount?.account?.id) {
+        await this.prisma.account.update({
+          where: { id: emailAccount.account.id },
+          data: {
+            authStatus: "NEEDS_REAUTH",
+          },
+        });
+        this.logger.log(
+          `Marked account ${emailAccountId} as NEEDS_REAUTH`,
+        );
+      }
+    } catch (updateError) {
+      this.logger.error(
+        `Failed to update authStatus for account ${emailAccountId}:`,
+        updateError,
+      );
     }
   }
 
