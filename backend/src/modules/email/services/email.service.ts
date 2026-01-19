@@ -416,10 +416,16 @@ export class EmailService {
       subject: `Re: ${original.subject || "(no subject)"}`,
       bodyHtml: dto.replyHtml,
       bodyText: dto.replyText,
-      inReplyTo: original.id,
+      inReplyTo: original.internetMessageId || original.id,
       references: original.references
-        ? [...original.references, original.id]
-        : [original.id],
+        ? [...original.references, original.internetMessageId || original.id]
+        : [original.internetMessageId || original.id],
+      attachments: dto.attachments?.map((att) => ({
+        filename: att.filename,
+        mimeType: att.mimeType,
+        content: Buffer.from(att.contentBase64 || "", "base64"),
+      })),
+      threadId: original.threadId,
     });
 
     return {

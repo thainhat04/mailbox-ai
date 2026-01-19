@@ -18,6 +18,7 @@ async function bootstrap() {
     new FastifyAdapter({
       logger: true,
       maxParamLength: 1000,
+      bodyLimit: 100 * 1024 * 1024, // 100MB
     }),
   );
 

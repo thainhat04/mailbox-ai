@@ -206,6 +206,7 @@ export class AuthController {
 
   @Public()
   @Get("callback/:provider")
+  @ApiOperation({ summary: "OAuth callback for provider authentication" })
   async oauthCallback(
     @Query() query: OAuthCallbackDto,
     @Param("provider") provider: OAuthProvider,

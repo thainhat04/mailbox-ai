@@ -179,7 +179,10 @@ export class GmailProvider extends BaseMailProvider {
       .replace(/\//g, "_")
       .replace(/=+$/, "");
 
-    const response = await this.apiClient.sendMessage({ raw: encodedMessage });
+    const response = await this.apiClient.sendMessage({
+      raw: encodedMessage,
+      threadId: request.threadId,
+    });
 
     // Fetch the sent message details
     return this.getMessage(response.id);
@@ -668,6 +671,7 @@ export class GmailProvider extends BaseMailProvider {
 
     return {
       id: gmailMessage.id,
+      internetMessageId: headers["message-id"],
       threadId: gmailMessage.threadId,
       from: this.parseGmailEmailAddress(headers.from),
       to: this.parseEmailAddresses(headers.to),
