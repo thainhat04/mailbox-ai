@@ -76,7 +76,7 @@ export default function InboxLayout({
                 </div>
 
                 {/* Email Detail */}
-                <div className="flex-1 email_detail h-full backdrop-blur-md overflow-x-auto custom-scroll">
+                <div className="max-w-2/5 flex-1 email_detail h-full backdrop-blur-md overflow-x-auto custom-scroll">
                     <EmailDetail
                         previewEmail={selectedPreviewEmail}
                         setPreviewEmail={setSelectedPreviewEmail}
