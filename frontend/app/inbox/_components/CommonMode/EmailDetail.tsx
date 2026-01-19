@@ -25,6 +25,7 @@ import { useMutationHandler } from "@/hooks/useMutationHandler";
 import { useQueryHandler } from "@/hooks/useQueryHandler";
 import LoadingOverlay from "@/components/ui/LoadingOverlay";
 import { useToast } from "@/components/ui/toast-provider";
+import { useSelector } from "@/store";
 
 interface EmailDetailWithBackProps {
     previewEmail: PreviewEmail | null;
@@ -89,7 +90,7 @@ export default function EmailDetail({
     const handleDownloadAttachment = async (url: string, filename: string) => {
         try {
             url = url.replace("/api/v1/", "/");
-            const token = localStorage.getItem(SERVICES.accessToken);
+            const token = useSelector((state) => state.auth.accessToken);
             const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -121,7 +122,7 @@ export default function EmailDetail({
         mimeType: string,
     ) => {
         try {
-            const token = localStorage.getItem(SERVICES.accessToken);
+            const token = useSelector((state) => state.auth.accessToken);
             url = url.replace("/api/v1/", "/");
             const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
                 headers: {
