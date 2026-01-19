@@ -68,6 +68,7 @@ export default function EmailDetail({
             skip: !previewEmail?.id,
         },
     );
+    const token = useSelector((state) => state.auth.accessToken);
     const isHtml = !!email?.body && /<[a-z][\s\S]*>/i.test(email.body);
     const modifyEmail = useMutationHandler(
         useModifyEmailMutation,
@@ -90,7 +91,6 @@ export default function EmailDetail({
     const handleDownloadAttachment = async (url: string, filename: string) => {
         try {
             url = url.replace("/api/v1/", "/");
-            const token = useSelector((state) => state.auth.accessToken);
             const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -122,7 +122,6 @@ export default function EmailDetail({
         mimeType: string,
     ) => {
         try {
-            const token = useSelector((state) => state.auth.accessToken);
             url = url.replace("/api/v1/", "/");
             const response = await fetch(`${AppConfig.apiBaseUrl}${url}`, {
                 headers: {
@@ -293,9 +292,16 @@ export default function EmailDetail({
                                                     />
                                                 </span>
                                                 <div className="min-w-0">
-                                                    <p className="truncate text-xs sm:text-sm text-white">
-                                                        {att.filename}
-                                                    </p>
+                                                    <div className="relative group">
+                                                        <p className="truncate text-xs sm:text-sm text-white">
+                                                            {att.filename}
+                                                        </p>
+                                                        <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none">
+                                                            <div className="bg-gray-900 text-white text-[10px] px-2 py-1 rounded shadow-lg whitespace-nowrap max-w-xs wrap-break-word ">
+                                                                {att.filename}
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                     <p className="text-[10px] sm:text-[11px] text-white/50">
                                                         {att.mimeType} •{" "}
                                                         {formatBytes(att.size)}
@@ -310,7 +316,7 @@ export default function EmailDetail({
                                                             att.filename,
                                                         )
                                                     }
-                                                    className="flex-1 sm:flex-none inline-flex items-center justify-center sm:justify-start gap-1 rounded-md bg-white/8 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white hover:bg-white/[0.14] transition"
+                                                    className="flex-1 cursor-pointer sm:flex-none inline-flex items-center justify-center sm:justify-start gap-1 rounded-md bg-white/8 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white hover:bg-white/[0.14] transition"
                                                     aria-label={`Download ${att.filename}`}
                                                 >
                                                     <Download
@@ -327,7 +333,7 @@ export default function EmailDetail({
                                                             att.mimeType,
                                                         )
                                                     }
-                                                    className="flex-1 sm:flex-none inline-flex items-center justify-center rounded-md border border-white/15 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white/85 hover:bg-white/8 transition"
+                                                    className="flex-1 cursor-pointer sm:flex-none inline-flex items-center justify-center rounded-md border border-white/15 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-white/85 hover:bg-white/8 transition"
                                                 >
                                                     {t("inbox.detail.11")}
                                                 </button>
