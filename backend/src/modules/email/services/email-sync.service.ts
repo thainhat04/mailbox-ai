@@ -27,7 +27,7 @@ export class EmailSyncService {
     private readonly providerRegistry: MailProviderRegistry,
     private readonly messageRepository: EmailMessageRepository,
     private readonly searchVectorService: SearchVectorService,
-  ) { }
+  ) {}
 
   //@Cron(CronExpression.EVERY_5_HOURS) // Production: every 5 hours
   @Cron(CronExpression.EVERY_10_SECONDS) // Testing: every 10 seconds
@@ -88,8 +88,8 @@ export class EmailSyncService {
     }
   }
 
-  @Cron(CronExpression.EVERY_5_HOURS)
-  //@Cron(CronExpression.EVERY_5_SECONDS) // For testing
+  //@Cron(CronExpression.EVERY_5_HOURS)
+  @Cron(CronExpression.EVERY_5_SECONDS) // For testing
   async syncAllLabels(): Promise<void> {
     // Prevent overlapping cron executions
     if (this.isLabelSyncRunning) {
@@ -183,9 +183,9 @@ export class EmailSyncService {
       // Convert SyncStateData to SyncState
       const syncState = syncStateData
         ? {
-          historyId: syncStateData.lastSyncedHistoryId,
-          deltaLink: syncStateData.lastDeltaLink,
-        }
+            historyId: syncStateData.lastSyncedHistoryId,
+            deltaLink: syncStateData.lastDeltaLink,
+          }
         : {};
 
       // Perform sync with retry logic
