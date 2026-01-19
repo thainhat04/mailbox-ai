@@ -24,6 +24,10 @@ export const CODES = {
   // Business Logic
   PERMISSION_DENIED: "PERMISSION_DENIED",
 
+  // OAuth / Email Account
+  OAUTH_REAUTH_REQUIRED: "OAUTH_REAUTH_REQUIRED",
+  OAUTH_TOKEN_REVOKED: "OAUTH_TOKEN_REVOKED",
+
   SUCCESS: "SUCCESS",
 } as const;
 

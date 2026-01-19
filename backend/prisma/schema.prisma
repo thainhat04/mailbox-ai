@@ -58,6 +58,11 @@ model Account {
 
   emailAccountId String? @unique
 
+  // Auth status for handling OAuth errors
+  authStatus     AuthStatus @default(VALID)
+  authError      String?    // Error message when authStatus is not VALID
+  authErrorAt    DateTime?  // When the auth error occurred
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -276,4 +281,10 @@ model KanbanColumn {
 enum UserRole {
   ADMIN
   USER
+}
+
+enum AuthStatus {
+  VALID          // Token is valid and working
+  NEEDS_REAUTH   // Token has been revoked, user needs to re-authenticate
+  EXPIRED        // Token expired but may be refreshable
 }
