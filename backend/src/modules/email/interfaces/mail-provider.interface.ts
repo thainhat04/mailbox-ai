@@ -1,4 +1,4 @@
-import { MailProviderType } from '../types/mail-provider.types';
+import { MailProviderType } from "../types/mail-provider.types";
 
 // -------------------------------------------------------------
 // CORE TYPES & INTERFACES
@@ -26,6 +26,7 @@ export interface EmailAttachment {
 
 export interface EmailMessage {
   id: string;
+  internetMessageId?: string;
   threadId: string;
   from: EmailAddress;
   to: EmailAddress[];
@@ -54,7 +55,7 @@ export interface EmailThread {
 export interface Label {
   id: string;
   name: string;
-  type: 'system' | 'user';
+  type: "system" | "user";
   color?: string;
   labelListVisibility?: string;
   messageListVisibility?: string;
@@ -100,6 +101,7 @@ export interface SendEmailRequest {
   }[];
   inReplyTo?: string;
   references?: string[];
+  threadId?: string;
 }
 
 export interface ModifyEmailRequest {
@@ -135,7 +137,9 @@ export interface IMailProvider {
   /**
    * Set callback for when credentials are updated (e.g., after refresh)
    */
-  setCredentialsUpdateCallback?(callback: (credentials: ProviderCredentials) => Promise<void>): void;
+  setCredentialsUpdateCallback?(
+    callback: (credentials: ProviderCredentials) => Promise<void>,
+  ): void;
 
   /**
    * Refresh access token if needed
@@ -230,7 +234,10 @@ export interface IMailProvider {
   /**
    * Modify message labels (add/remove multiple labels at once)
    */
-  modifyLabels(messageId: string, request: ModifyEmailRequest): Promise<EmailMessage>;
+  modifyLabels(
+    messageId: string,
+    request: ModifyEmailRequest,
+  ): Promise<EmailMessage>;
 
   // ----------------- Attachment Operations -----------------
 

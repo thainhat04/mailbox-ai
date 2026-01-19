@@ -74,7 +74,7 @@ export class GmailApiClient {
     return response.data;
   }
 
-  async sendMessage(data: { raw: string }) {
+  async sendMessage(data: { raw: string; threadId?: string }) {
     const response = await this.client.post("/users/me/messages/send", data);
     return response.data;
   }
