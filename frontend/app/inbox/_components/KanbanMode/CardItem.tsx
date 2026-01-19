@@ -66,7 +66,9 @@ export default function CardItem({ item, isOverlay }: CardItemProps) {
             });
         }
     };
-
+    if (item.id == "52f638ce-e728-4a8b-a430-8d4b8f22d219") {
+        return <div></div>;
+    }
     return (
         <>
             <div
