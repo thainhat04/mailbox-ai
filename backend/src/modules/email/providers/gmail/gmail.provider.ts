@@ -17,6 +17,10 @@ import {
   SyncState,
 } from "../../interfaces/mail-provider.interface";
 import { GmailApiClient } from "./gmail-api.client";
+import {
+  OAuthReauthRequiredException,
+  isPermanentOAuthError,
+} from "../../../../common/exceptions";
 
 /**
  * Gmail Provider Implementation
@@ -62,9 +66,21 @@ export class GmailProvider extends BaseMailProvider {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(
-          `Failed to refresh token: ${errorData.error || response.statusText}`,
-        );
+        const errorMessage = `Failed to refresh token: ${errorData.error || response.statusText}`;
+
+        // Check if this is a permanent OAuth error requiring re-authentication
+        if (isPermanentOAuthError(errorMessage)) {
+          this.logger.error(
+            `Permanent OAuth error detected: ${errorData.error}. User needs to re-authenticate.`,
+          );
+          throw new OAuthReauthRequiredException(
+            "unknown", // Account ID will be set by the caller
+            "google",
+            `Your Google account access has been revoked. Please reconnect your account.`,
+          );
+        }
+
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

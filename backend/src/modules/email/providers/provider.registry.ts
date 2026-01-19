@@ -6,6 +6,7 @@ import {
 } from '../interfaces/mail-provider.interface';
 import { MailProviderFactory } from './provider.factory';
 import { MailProviderType } from '../types/mail-provider.types';
+import { OAuthReauthRequiredException } from '../../../common/exceptions';
 
 /**
  * Provider Registry
@@ -50,6 +51,15 @@ export class MailProviderRegistry {
     if (!emailAccount.account) {
       throw new Error(
         `Email account ${emailAccountId} has no linked OAuth account`,
+      );
+    }
+
+    // Check if account needs re-authentication
+    if (emailAccount.account.authStatus === 'NEEDS_REAUTH') {
+      throw new OAuthReauthRequiredException(
+        emailAccountId,
+        emailAccount.account.provider,
+        emailAccount.account.authError || 'Account requires re-authentication',
       );
     }
 
@@ -212,6 +222,31 @@ export class MailProviderRegistry {
     this.clearCache(emailAccountId);
 
     this.logger.log(`Token refreshed for account: ${emailAccountId}`);
+  }
+
+  /**
+   * Reset account auth status to VALID after successful re-authentication
+   */
+  async resetAuthStatus(emailAccountId: string): Promise<void> {
+    const emailAccount = await this.prisma.emailAccount.findUnique({
+      where: { id: emailAccountId },
+      include: { account: true },
+    });
+
+    if (emailAccount?.account?.id) {
+      await this.prisma.account.update({
+        where: { id: emailAccount.account.id },
+        data: {
+          authStatus: 'VALID',
+          authError: null,
+          authErrorAt: null,
+        },
+      });
+      this.logger.log(`Reset auth status to VALID for account: ${emailAccountId}`);
+    }
+
+    // Clear cache to force fresh provider initialization
+    this.clearCache(emailAccountId);
   }
 
   /**

@@ -58,6 +58,8 @@ jobs:
             export GITHUB_REPOSITORY=thainhat04/mailbox-ai
             export TAG=${{ steps.tag.outputs.TAG }}
             docker compose pull
+            # Run database migrations before starting the new containers
+            docker compose run --rm backend npx prisma db push --accept-data-loss
             docker compose up -d
             docker image prune -f
 
