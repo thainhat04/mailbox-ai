@@ -42,7 +42,6 @@ export function useForwardEmail(originalEmail: Email | null) {
             // Build forwarded message with original email content
             const forwardedContent = buildForwardedContent(originalEmail);
             setMessage(forwardedContent);
-            setAttachments(originalEmail.attachments || []);
         }
     }, [originalEmail]);
 

@@ -46,12 +46,19 @@ export default function FreezeSelector({
         }
     }, [isOpen]);
     if (!isOpen) return null;
+
     const handleConfirm = () => {
         if (selected === "CUSTOM" && !customDate) {
             alert("Please select a date and time.");
             return;
         }
-        onConfirm(selected, customDate || undefined);
+
+        const finalDate =
+            selected === "CUSTOM"
+                ? new Date(customDate).toISOString()
+                : undefined;
+
+        onConfirm(selected, finalDate);
         onClose();
     };
 
