@@ -211,7 +211,9 @@ export class GmailProvider extends BaseMailProvider {
       );
     }
 
-    messageParts.push(`Subject: ${request.subject || "(no subject)"}`);
+    messageParts.push(
+      `Subject: ${this.encodeHeaderValue(request.subject || "(no subject)")}`,
+    );
 
     if (request.inReplyTo) {
       messageParts.push(`In-Reply-To: ${request.inReplyTo}`);
@@ -253,7 +255,9 @@ export class GmailProvider extends BaseMailProvider {
       );
     }
 
-    messageParts.push(`Subject: ${request.subject || "(no subject)"}`);
+    messageParts.push(
+      `Subject: ${this.encodeHeaderValue(request.subject || "(no subject)")}`,
+    );
 
     if (request.inReplyTo) {
       messageParts.push(`In-Reply-To: ${request.inReplyTo}`);
@@ -660,6 +664,19 @@ export class GmailProvider extends BaseMailProvider {
   }
 
   // ----------------- Helper Methods -----------------
+
+  /**
+   * Encode header value using RFC 2047 (UTF-8 Base64) if it contains non-ASCII characters
+   */
+  private encodeHeaderValue(value: string): string {
+    // Check if value contains any non-ASCII characters
+    if (!/[^\x00-\x7F]/.test(value)) {
+      return value;
+    }
+
+    const encoded = Buffer.from(value, "utf-8").toString("base64");
+    return `=?UTF-8?B?${encoded}?=`;
+  }
 
   /**
    * Parse Gmail message to EmailMessage interface
