@@ -47,10 +47,15 @@ export function useForwardEmail(originalEmail: Email | null) {
 
     const buildForwardedContent = (email: Email): string => {
         const from = email.from?.email || email.from?.name || "Unknown";
-        const date = email.timestamp ? formatEmailDate(email.timestamp) : "Unknown date";
+        const date = email.timestamp
+            ? formatEmailDate(email.timestamp)
+            : "Unknown date";
         const subject = email.subject || "(No subject)";
         const to = Array.isArray(email.to)
-            ? email.to.map(addr => addr.email || addr.name || "").filter(Boolean).join(", ")
+            ? email.to
+                  .map((addr) => addr.email || addr.name || "")
+                  .filter(Boolean)
+                  .join(", ")
             : "";
 
         return `
@@ -82,7 +87,7 @@ ${email.body || ""}`;
                         name: file.name,
                         size: constant.FILE_MAX_SIZE_MB,
                     }),
-                    "error"
+                    "error",
                 );
                 continue;
             }
