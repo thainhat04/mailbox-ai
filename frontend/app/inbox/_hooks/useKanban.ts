@@ -27,7 +27,7 @@ import { useTranslation } from "react-i18next";
 
 function findColumnIdByItem(
     board: KanbanBoardData,
-    itemId: string
+    itemId: string,
 ): string | null {
     for (const [key, items] of Object.entries(board.emails)) {
         if (items.some((i) => i.id === itemId)) return key;
@@ -42,12 +42,12 @@ function sortEmails(emails: KanbanItem[], sortBy: SortOption): KanbanItem[] {
         case "date_desc":
             return sorted.sort(
                 (a, b) =>
-                    new Date(b.date).getTime() - new Date(a.date).getTime()
+                    new Date(b.date).getTime() - new Date(a.date).getTime(),
             );
         case "date_asc":
             return sorted.sort(
                 (a, b) =>
-                    new Date(a.date).getTime() - new Date(b.date).getTime()
+                    new Date(a.date).getTime() - new Date(b.date).getTime(),
             );
         case "sender":
             return sorted.sort((a, b) => a.from.localeCompare(b.from));
@@ -84,36 +84,36 @@ export default function useKanban() {
         },
         {
             refetchOnMountOrArgChange: true,
-        }
+        },
     );
     const frozenStatusMutation = useMutationHandler(
         useUpdateFrozenStatusMutation,
-        "Update"
+        "Update",
     );
 
     const updateStatusMutation = useMutationHandler(
         useUpdateKanBanStatusMutation,
-        "Update"
+        "Update",
     );
 
     const createColumnMutation = useMutationHandler(
         useCreateKanbanColumnMutation,
-        "Create"
+        "Create",
     );
 
     const updateColumnMutation = useMutationHandler(
         useUpdateKanBanColumnMutation,
-        "Update"
+        "Update",
     );
 
     const deleteColumnMutation = useMutationHandler(
         useDeleteKanBanColumnMutation,
-        "Delete"
+        "Delete",
     );
 
     const updateCachedKanbanItemMutation = useMutationHandler(
         useUpdateCachedKanbanItemMutation,
-        "Update"
+        "Update",
     );
 
     useEffect(() => {
@@ -122,7 +122,7 @@ export default function useKanban() {
 
     const onDragEnd = async (
         { active, over }: DragEndEvent,
-        timeoutDuration?: { duration: FrozenTimeouts; customDateTime?: string }
+        timeoutDuration?: { duration: FrozenTimeouts; customDateTime?: string },
     ) => {
         if (!over) return;
 
@@ -155,14 +155,15 @@ export default function useKanban() {
 
         // 🧊 FROZEN nghiệp vụ
         if (isFrozenColumn(columns, toColumnId)) {
-            const fromKey = columns.columns.find((c) => c.id === fromColumnId)
-                ?.key!!;
+            const fromKey = columns.columns.find(
+                (c) => c.id === fromColumnId,
+            )?.key!!;
             updatedItem.previousKanbanStatus = fromKey;
 
             const ms = getTimeoutMs(timeoutDuration);
             if (ms) {
                 updatedItem.snoozedUntil = new Date(
-                    Date.now() + ms
+                    Date.now() + ms,
                 ).toISOString();
             }
         }
@@ -216,17 +217,25 @@ export default function useKanban() {
         if (!item || !item.previousKanbanStatus) return;
 
         const targetColumnId = columns.columns.find(
-            (c) => c.key === item.previousKanbanStatus
+            (c) => c.key === item.previousKanbanStatus,
         )?.id;
         const stateBefore = item.previousKanbanStatus;
         if (!targetColumnId) return;
 
         setColumnsWithCacheUpdate((prev) => ({
-            ...prev,
+            //điều chỉnh emailCount của các cột
+            columns: prev.columns.map((col) => {
+                if (col.id === frozenColumn.id) {
+                    return { ...col, emailCount: col.emailCount - 1 };
+                } else if (col.id === targetColumnId) {
+                    return { ...col, emailCount: col.emailCount + 1 };
+                }
+                return col;
+            }),
             emails: {
                 ...prev.emails,
                 [frozenColumn.id]: prev.emails[frozenColumn.id].filter(
-                    (i) => i.id !== id
+                    (i) => i.id !== id,
                 ),
                 [targetColumnId]: [
                     {
@@ -246,7 +255,7 @@ export default function useKanban() {
         name: string,
         color: string,
         icon: string,
-        gmailLabelName: string
+        gmailLabelName: string,
     ) => {
         if (name.trim() === "") {
             return;
@@ -309,7 +318,7 @@ export default function useKanban() {
                     columns: prev.columns.map((col) =>
                         col.id === tempId
                             ? { ...result.data, emailCount: 0 }
-                            : col
+                            : col,
                     ),
                     emails: {
                         ...restEmails,
@@ -322,7 +331,7 @@ export default function useKanban() {
             showToast(
                 (error as any).data.message || "Create failed, reverting",
                 "error",
-                InBoxConstant.TOAST_TIME_MS
+                InBoxConstant.TOAST_TIME_MS,
             );
             return;
         }
@@ -333,7 +342,7 @@ export default function useKanban() {
         name: string,
         color: string,
         icon: string,
-        gmailLabelName: string
+        gmailLabelName: string,
     ) => {
         if (name.trim() === "") {
             return;
@@ -356,7 +365,7 @@ export default function useKanban() {
             return {
                 ...prev,
                 columns: prev.columns.map((col) =>
-                    col.id === id ? { ...col, name, color, icon } : col
+                    col.id === id ? { ...col, name, color, icon } : col,
                 ),
             };
         });
@@ -371,7 +380,7 @@ export default function useKanban() {
                 columns: prev.columns.map((col) =>
                     col.id === id
                         ? { ...result.data, emailCount: col.emailCount }
-                        : col
+                        : col,
                 ),
             }));
         } catch (error) {
@@ -379,7 +388,7 @@ export default function useKanban() {
             showToast(
                 (error as any).data.message || "Update failed, reverting",
                 "error",
-                InBoxConstant.TOAST_TIME_MS
+                InBoxConstant.TOAST_TIME_MS,
             );
             return;
         }
@@ -389,7 +398,7 @@ export default function useKanban() {
         let snapshot: KanbanBoardData | null = null;
 
         const inboxColumn = columns.columns.find(
-            (c) => c.key === InBoxConstant.KANBAN_INBOX_KEY
+            (c) => c.key === InBoxConstant.KANBAN_INBOX_KEY,
         );
         if (!inboxColumn) {
             return;
@@ -423,7 +432,7 @@ export default function useKanban() {
     const setColumnsWithCacheUpdate = (
         newColumnsOrUpdater:
             | KanbanBoardData
-            | ((prev: KanbanBoardData) => KanbanBoardData)
+            | ((prev: KanbanBoardData) => KanbanBoardData),
     ) => {
         setColumns((prev) => {
             const newColumns =
@@ -438,8 +447,8 @@ export default function useKanban() {
                         ([columnId, emails]) => [
                             columnId,
                             sortEmails(emails, sortBy),
-                        ]
-                    )
+                        ],
+                    ),
                 ),
             };
 
